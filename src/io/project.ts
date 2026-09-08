@@ -3,6 +3,7 @@ import { fromHex, toHex } from '../core/color'
 import { Sprite, Layer, genId, seedIds, type Slice, type Tag } from '../core/document'
 import { Palette } from '../core/palette'
 import type { BlendMode } from '../core/blend'
+import { newEffectId, type LayerEffect } from '../core/effects'
 import { emptyRig, seedBoneIds, type Bone } from '../smart/rig'
 
 export const PROJECT_EXT = 'pixelforge'
@@ -17,7 +18,15 @@ interface LayerJson {
   reference: boolean
   opacity: number
   blendMode: BlendMode
+  /** Absent dans les projets enregistres avant les effets de calque. */
+  effects?: EffectJson[]
   cels: (CelJson | null)[]
+}
+
+/** Un effet, couleurs en hexadecimal pour rester lisible dans le fichier. */
+type EffectJson = Omit<LayerEffect, 'id' | 'color' | 'color2'> & {
+  color: string
+  color2: string
 }
 interface RigPartJson {
   /** Rang du calque relie dans la pile. */
@@ -83,6 +92,11 @@ export function serializeSprite(sprite: Sprite): string {
       reference: l.reference,
       opacity: l.opacity,
       blendMode: l.blendMode,
+      effects: l.effects.map((e) => {
+        const { id: _id, color, color2, ...reste } = e
+        void _id
+        return { ...reste, color: toHex(color, true), color2: toHex(color2, true) }
+      }),
       cels: l.cels.map((c) =>
         c && !c.bitmap.isEmpty()
           ? { opacity: c.opacity, png: c.bitmap.toCanvas().toDataURL('image/png') }
@@ -130,6 +144,12 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
     layer.reference = lj.reference ?? false
     layer.opacity = lj.opacity
     layer.blendMode = lj.blendMode
+    layer.effects = (lj.effects ?? []).map((e) => ({
+      ...e,
+      id: newEffectId(),
+      color: fromHex(e.color),
+      color2: fromHex(e.color2),
+    }))
     layer.cels = await Promise.all(
       lj.cels.map(async (cj) =>
         cj ? { opacity: cj.opacity, bitmap: await decodePng(cj.png, data.width, data.height) } : null,

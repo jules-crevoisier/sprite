@@ -1,7 +1,13 @@
 import type { Editor } from '../core/editor'
+import type { Layer } from '../core/document'
 import { BLEND_MODES, type BlendMode } from '../core/blend'
+import { fromHex, toHex, toCss } from '../core/color'
+import {
+  EFFECT_KINDS, createEffect, effectInfo,
+  type Falloff, type LayerEffect, type StrokeSide,
+} from '../core/effects'
 import { compositeFrame } from '../render/composite'
-import { el, clear, iconButton, select, slider } from './dom'
+import { el, clear, iconButton, segmented, select, slider } from './dom'
 import { icon } from './icons'
 import { openMenu, confirmDialog } from './overlay'
 
@@ -13,6 +19,10 @@ export class LayersPanel {
   private list = el('div', { class: 'layer-list' })
   private footer = el('div', { class: 'layer-foot' })
   private dragIndex: number | null = null
+  /** Effet dont les reglages sont deplies, par identifiant. */
+  private ouvert: number | null = null
+  /** Etat des effets avant le geste de curseur en cours. */
+  private geste: { layer: Layer; avant: LayerEffect[] } | null = null
 
   constructor(editor: Editor) {
     this.ed = editor
@@ -125,6 +135,201 @@ export class LayersPanel {
           (v: BlendMode) => ed.run('Mode de fusion', () => { layer.blendMode = v }),
         ),
       ),
+    )
+    const effets = el('div', { class: 'fx-panel' })
+    this.renderEffects(effets)
+    this.footer.appendChild(effets)
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Effets de calque                                                  */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Les effets se reglent ici plutot que dans une boite de dialogue :
+   * ils sont recalcules a la volee, on veut donc voir le sprite bouger
+   * pendant qu'on tire le curseur.
+   */
+  private renderEffects(hote: HTMLElement): void {
+    const ed = this.ed
+    const layer = ed.layer
+    if (!layer) return
+
+    const titre = el('div', { class: 'fx-head' },
+      el('span', { class: 'fx-title' }, 'Effets'),
+      iconButton(icon('plus', 13), 'Ajouter un effet', (e) => this.menuAjout(e), {
+        className: 'ghost sm icon-only',
+      }),
+    )
+    hote.appendChild(titre)
+
+    if (!layer.effects.length) {
+      hote.appendChild(el('p', { class: 'fx-vide' },
+        'Ombre portee, contour, biseau, teinte… reglables en direct, sans toucher aux pixels.'))
+      return
+    }
+
+    layer.effects.forEach((fx, index) => {
+      const info = effectInfo(fx.kind)
+      const ligne = el('div', { class: `fx-row ${fx.enabled ? '' : 'off'}` },
+        el('button', {
+          class: `mini ${fx.enabled ? 'on' : ''}`,
+          title: fx.enabled ? 'Desactiver' : 'Activer',
+          html: icon(fx.enabled ? 'eye' : 'eye-off', 13),
+          onclick: () => ed.run(fx.enabled ? 'Desactiver l\'effet' : 'Activer l\'effet',
+            () => { fx.enabled = !fx.enabled }),
+        }),
+        el('span', {
+          class: 'fx-name',
+          title: info.hint,
+          onclick: () => { this.ouvert = this.ouvert === fx.id ? null : fx.id; this.renderFooter() },
+        }, info.label),
+        el('span', { class: 'fx-puce', style: { background: toCss(fx.color) } }),
+        iconButton(icon('trash', 12), 'Retirer l\'effet', () => {
+          ed.run('Retirer l\'effet', () => { layer.effects.splice(index, 1) })
+        }, { className: 'ghost sm icon-only' }),
+      )
+      hote.appendChild(ligne)
+      if (this.ouvert === fx.id) hote.appendChild(this.reglages(fx))
+    })
+  }
+
+  private menuAjout(e: MouseEvent): void {
+    const ed = this.ed
+    const layer = ed.layer
+    openMenu(e.currentTarget as HTMLElement, EFFECT_KINDS.map((k) => ({
+      label: k.label,
+      title: k.hint,
+      onClick: () => {
+        const fx = createEffect(k.id)
+        ed.run(`Ajouter : ${k.label.toLowerCase()}`, () => { layer.effects.push(fx) })
+        this.ouvert = fx.id
+        this.renderFooter()
+      },
+    })), 'right')
+  }
+
+  /** Un champ visible seulement si l'effet s'en sert. */
+  private reglages(fx: LayerEffect): HTMLElement {
+    const ed = this.ed
+    const champs = new Set(effectInfo(fx.kind).fields)
+    const corps = el('div', { class: 'fx-body' })
+
+    // Un geste de curseur donne une seule entree d'historique : on retient
+    // l'etat d'avant au premier mouvement, on la publie au relachement.
+    const vivant = (): void => {
+      this.ouvrirGeste()
+      ed.history.touch()
+      ed.events.emit('doc', undefined)
+    }
+    const fige = (label: string): void => this.fermerGeste(label)
+
+    const rangee = (label: string, ...contenu: (Node | string)[]): HTMLElement =>
+      el('div', { class: 'fx-field' }, el('label', null, label), ...contenu)
+
+    if (champs.has('color')) corps.appendChild(rangee(
+      fx.kind === 'biseau' ? 'Lumiere' : fx.kind === 'degrade' ? 'Depart' : 'Couleur',
+      this.champCouleur(fx.color, (c) => { fx.color = c; vivant() }, () => fige('Couleur de l\'effet')),
+    ))
+    if (champs.has('color2')) corps.appendChild(rangee(
+      fx.kind === 'biseau' ? 'Ombre' : 'Arrivee',
+      this.champCouleur(fx.color2, (c) => { fx.color2 = c; vivant() }, () => fige('Couleur de l\'effet')),
+    ))
+    if (champs.has('opacity')) corps.appendChild(rangee('Opacite',
+      slider(0, 100, Math.round(fx.opacity * 100), 1,
+        (v) => { fx.opacity = v / 100; vivant() }, (v) => `${v}%`,
+        () => fige('Opacite de l\'effet'))))
+    if (champs.has('angle')) corps.appendChild(rangee('Angle',
+      slider(0, 350, fx.angle, 10, (v) => { fx.angle = v; vivant() }, (v) => `${v}°`,
+        () => fige('Angle de l\'effet'))))
+    if (champs.has('distance')) corps.appendChild(rangee('Distance',
+      slider(0, 16, fx.distance, 1, (v) => { fx.distance = v; vivant() }, (v) => `${v} px`,
+        () => fige('Distance de l\'effet'))))
+    if (champs.has('spread')) corps.appendChild(rangee('Diffusion',
+      slider(0, 12, fx.spread, 1, (v) => { fx.spread = v; vivant() }, (v) => `${v} px`,
+        () => fige('Diffusion de l\'effet'))))
+    if (champs.has('inset')) corps.appendChild(rangee('Retrait',
+      slider(0, 6, fx.inset, 1, (v) => { fx.inset = v; vivant() }, (v) => `${v} px`,
+        () => fige('Retrait de l\'effet'))))
+    if (champs.has('size')) corps.appendChild(rangee(fx.kind === 'contour' ? 'Epaisseur' : 'Etendue',
+      slider(fx.kind === 'contour' ? 1 : 0, 16, fx.size, 1,
+        (v) => { fx.size = v; vivant() }, (v) => `${v} px`,
+        () => fige('Etendue de l\'effet'))))
+    if (champs.has('position')) corps.appendChild(rangee('Cote',
+      segmented<StrokeSide>([
+        { value: 'dehors', label: 'Dehors' },
+        { value: 'centre', label: 'Centre' },
+        { value: 'dedans', label: 'Dedans' },
+      ], fx.position, (v) => ed.run('Cote du contour', () => { fx.position = v }))))
+    if (champs.has('falloff')) corps.appendChild(rangee('Bord',
+      segmented<Falloff>([
+        { value: 'net', label: 'Net', title: 'Une seule couleur, bord franc' },
+        { value: 'paliers', label: 'Paliers', title: 'Quelques niveaux d\'opacite' },
+        { value: 'tramage', label: 'Trame', title: 'Motif regulier : le degrade sans nouvelles couleurs' },
+      ], fx.falloff, (v) => ed.run('Bord de l\'effet', () => { fx.falloff = v }))))
+    if (champs.has('steps') && fx.falloff === 'paliers') corps.appendChild(rangee('Paliers',
+      slider(1, 6, fx.steps, 1, (v) => { fx.steps = v; vivant() }, undefined,
+        () => fige('Paliers de l\'effet'))))
+    if (champs.has('steps') && fx.kind === 'degrade' && fx.falloff !== 'paliers') {
+      corps.appendChild(rangee('Tons',
+        slider(2, 8, fx.steps, 1, (v) => { fx.steps = v; vivant() }, undefined,
+          () => fige('Tons du degrade'))))
+    }
+    if (champs.has('blend')) corps.appendChild(rangee('Fusion',
+      select(BLEND_MODES.map((m) => ({ value: m.id, label: m.label, group: m.group })), fx.blend,
+        (v: BlendMode) => ed.run('Fusion de l\'effet', () => { fx.blend = v }))))
+
+    corps.appendChild(el('p', { class: 'fx-hint' }, effectInfo(fx.kind).hint))
+    return corps
+  }
+
+  private ouvrirGeste(): void {
+    const layer = this.ed.layer
+    if (!layer || this.geste?.layer === layer) return
+    this.geste = { layer, avant: layer.effects.map((e) => ({ ...e })) }
+  }
+
+  /**
+   * Publie le geste en cours dans l'historique. Sans cela, regler une ombre
+   * ne serait pas annulable : les modifications se font sur place pour que
+   * l'apercu suive le curseur.
+   */
+  private fermerGeste(label: string): void {
+    const g = this.geste
+    this.geste = null
+    if (!g) return
+    const apres = g.layer.effects.map((e) => ({ ...e }))
+    if (JSON.stringify(g.avant) === JSON.stringify(apres)) return
+    const ed = this.ed
+    ed.history.push({
+      label,
+      undo: () => { g.layer.effects = g.avant.map((e) => ({ ...e })); ed.events.emit('doc', undefined) },
+      redo: () => { g.layer.effects = apres.map((e) => ({ ...e })); ed.events.emit('doc', undefined) },
+    })
+  }
+
+  /** Pastille de couleur, doublee d'un bouton qui prend la couleur active. */
+  private champCouleur(
+    valeur: number,
+    onChange: (c: number) => void,
+    onCommit: () => void,
+  ): HTMLElement {
+    const ed = this.ed
+    const input = el('input', {
+      type: 'color',
+      class: 'fx-color',
+      value: toHex(valeur),
+      oninput: () => { this.ouvrirGeste(); onChange(fromHex(input.value)) },
+      onchange: () => onCommit(),
+    })
+    return el('div', { class: 'fx-color-row' },
+      input,
+      iconButton(icon('eyedropper', 12), 'Prendre la couleur active', () => {
+        this.ouvrirGeste()
+        input.value = toHex(ed.primary)
+        onChange(ed.primary)
+        onCommit()
+      }, { className: 'ghost sm icon-only' }),
     )
   }
 

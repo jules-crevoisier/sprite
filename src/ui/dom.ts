@@ -73,6 +73,8 @@ export function slider(
   min: number, max: number, value: number, step: number,
   onInput: (v: number) => void,
   format: (v: number) => string = (v) => String(v),
+  /** Appele au relachement : un geste complet, pas chaque pixel parcouru. */
+  onCommit?: (v: number) => void,
 ): HTMLElement {
   const badge = el('span', { class: 'num-badge' }, format(value))
   const input = el('input', {
@@ -82,6 +84,7 @@ export function slider(
       badge.textContent = format(v)
       onInput(v)
     },
+    onchange: () => { onCommit?.(Number(input.value)) },
   })
   return el('div', { class: 'opt' }, input, badge)
 }

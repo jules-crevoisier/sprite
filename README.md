@@ -127,6 +127,39 @@ déplacement, main et loupe.
 - **Pelure d'oignon** jusqu'à 3 frames avant et après, teintées rouge/bleu.
 - Lecture en direct sur la toile, limitée au tag courant si besoin.
 
+### Effets de calque
+
+Les effets se posent sur un **calque**, pas sur des pixels : ils sont
+recalculés au moment de composer l'image. On règle donc une ombre en la
+regardant bouger, on la coupe d'un clic, on revient en arrière sans perte —
+et le dessin d'origine reste intact sur toutes les frames.
+
+Huit effets : **ombre portée**, **ombre interne**, **lueur externe**,
+**lueur interne**, **contour**, **biseau**, **teinte**, **dégradé**. La
+section EFFETS du panneau Calques les liste ; le menu Calque les pose aussi
+d'un coup.
+
+Un point les sépare de leurs équivalents en maquette : **il n'y a pas de
+flou gaussien**. Un flou fabriquerait des centaines de couleurs et casserait
+le pixel art. L'atténuation se règle sur trois positions :
+
+| Bord | Ce qu'il fait | Couleurs ajoutées |
+| --- | --- | --- |
+| **Net** | l'effet s'arrête franchement | 1 |
+| **Paliers** | 2 à 6 niveaux d'opacité | autant que de paliers |
+| **Trame** | un motif de Bayer régulier remplace le dégradé | 1 |
+
+La distance au bord est mesurée par une transformée exacte, pas approchée :
+une lueur tramée dessine de vrais anneaux ronds, pas des losanges.
+
+Le **retrait** existe pour les dessins déjà cernés d'un contour sombre : il
+fait démarrer un biseau ou une lueur interne quelques pixels plus loin, sur
+la matière, au lieu de délaver le trait.
+
+Les effets partent tels quels dans la planche, le GIF et les exports moteur.
+`Calque > Graver les effets` les inscrit dans les pixels quand on veut les
+retoucher à la main.
+
 ### Travailler avec l'assistant
 
 Trois fonctions s'appuient sur une analyse du dessin plutôt que sur des
@@ -231,8 +264,8 @@ si vous préférez voir le résultat d'abord.
 
 ![Une leçon en cours dans l'éditeur](docs/tutoriel.png)
 
-Cinq leçons : prise en main, animer, squelette et pose, détail et variantes,
-export vers un moteur.
+Six leçons : prise en main, animer, squelette et pose, détail et variantes,
+effets de calque, export vers un moteur.
 
 La leçon du squelette ne fait rien à votre place : elle attend que vous
 basculiez de mode, que vous posiez le modèle, que vous liiez les pixels et

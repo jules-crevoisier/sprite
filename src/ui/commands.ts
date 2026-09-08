@@ -10,6 +10,7 @@ import { showToast, confirmDialog } from './overlay'
 import { invertColors, desaturate } from '../core/operations'
 import { genId as newSliceId } from '../core/document'
 import { fromHex } from '../core/color'
+import { EFFECT_KINDS, createEffect, renderEffects } from '../core/effects'
 
 export interface Command {
   id: string
@@ -339,6 +340,46 @@ export function buildCommands(app: App): Command[] {
         ed.sprite.layers[0].name = 'Aplati'
       })
       ed.setActiveLayer(0)
+    },
+  })
+  // Les effets se reglent dans le panneau Calques ; ces entrees servent a les
+  // trouver depuis le menu et a les poser d'un geste.
+  for (const kind of EFFECT_KINDS) {
+    add({
+      id: `layer.fx-${kind.id}`,
+      label: `Effet : ${kind.label.toLowerCase()}`,
+      group: 'Calque',
+      icon: 'shading',
+      run: () => {
+        const layer = ed.layer
+        ed.run(`Ajouter : ${kind.label.toLowerCase()}`, () => { layer.effects.push(createEffect(kind.id)) })
+        ed.toast(`${kind.label} ajoutee — reglages dans le panneau Calques`, 'success')
+      },
+    })
+  }
+  add({
+    id: 'layer.fx-clear', label: 'Retirer tous les effets', group: 'Calque', icon: 'trash',
+    enabled: () => ed.layer.effects.length > 0,
+    run: () => {
+      const layer = ed.layer
+      ed.run('Retirer les effets', () => { layer.effects = [] })
+    },
+  })
+  add({
+    id: 'layer.fx-bake', label: 'Graver les effets dans les pixels', group: 'Calque', icon: 'merge',
+    enabled: () => ed.layer.effects.length > 0,
+    run: () => {
+      const layer = ed.layer
+      const cels = layer.cels.filter((c): c is NonNullable<typeof c> => c !== null)
+      if (!cels.length) { ed.toast('Ce calque est vide', 'error'); return }
+      // Graver n'est pas obligatoire — l'export applique deja les effets —
+      // mais c'est ce qu'il faut pour retoucher le resultat a la main.
+      const rendus = cels.map((c) => renderEffects(c.bitmap, layer.effects))
+      ed.runPixels('Graver les effets', cels, () => {
+        cels.forEach((c, i) => { c.bitmap.copyFrom(rendus[i]) })
+      })
+      ed.run('Graver les effets', () => { layer.effects = [] })
+      ed.toast('Effets graves dans le calque', 'success')
     },
   })
   add({
