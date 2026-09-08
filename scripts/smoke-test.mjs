@@ -544,6 +544,149 @@ check('la retouche est rattachee au bon os', allerRetour.osPorteur === 'bras G',
 check('la retouche suit l\'os a la pose suivante, sans reliaison',
   allerRetour.surLaToile > 0, `${allerRetour.surLaToile} px`)
 
+/* --- un menu ouvert pendant une lecon n'est pas grise par le halo --- */
+const halo = await page.evaluate(async () => {
+  const app = window.pixelforge
+  app.tutorial.start(app.lessons().find((l) => l.id === 'rig'))
+  await new Promise((r) => setTimeout(r, 400))
+  document.querySelector('.modal-foot button:last-child')?.click()
+  await new Promise((r) => setTimeout(r, 500))
+  app.setMode('rig')
+  await new Promise((r) => setTimeout(r, 500))
+  const couche = (s) => {
+    const e = document.querySelector(s)
+    return e ? Number(getComputedStyle(e).zIndex) : null
+  }
+  const out = { halo: couche('.tutor-spotlight'), menus: couche('#overlay-root'), carte: couche('.tutor-card') }
+  app.tutorial.stop()
+  return out
+})
+check('le voile du tutoriel passe sous les menus',
+  halo.halo !== null && halo.menus !== null && halo.halo < halo.menus,
+  `halo ${halo.halo}, menus ${halo.menus}`)
+check('la carte du tutoriel reste au-dessus de tout', halo.carte > halo.menus)
+
+/* --- la hierarchie des os se lit sans repeter le parent partout --- */
+const hierarchie = await page.evaluate(async () => {
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const app = window.pixelforge, ed = app.ed
+  ed.loadSprite(demoCharacter())
+  app.setMode('rig')
+  ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
+  await new Promise((r) => setTimeout(r, 200))
+  const panneau = document.querySelector('.panel[data-panel="rig"]')
+  return {
+    lignes: panneau.querySelectorAll('.bone-row').length,
+    selecteurs: panneau.querySelectorAll('.bone-row select').length,
+    traits: panneau.querySelectorAll('.bone-branch:not(.is-root)').length,
+    legende: (panneau.textContent ?? '').includes('est la racine'),
+  }
+})
+check('un seul rattachement affiche, celui de l\'os choisi',
+  hierarchie.selecteurs <= 1, `${hierarchie.selecteurs} selecteurs pour ${hierarchie.lignes} os`)
+check('la hierarchie se lit au trait', hierarchie.traits === hierarchie.lignes - 1,
+  `${hierarchie.traits} traits`)
+check('la racine du squelette est expliquee', hierarchie.legende)
+
+/* --- les bandes de couleurs ne debordent pas de leur vignette --- */
+const bandes = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const app = window.pixelforge
+  app.setMode('draw')
+  app.ed.loadSprite(demoCharacter())
+  app.runCommand('sprite.variants')
+  await new Promise((r) => setTimeout(r, 700))
+  const debords = [...document.querySelectorAll('.modal .preset')].filter((carte) => {
+    const c = carte.getBoundingClientRect()
+    return [...carte.children].some((enfant) => {
+      const r = enfant.getBoundingClientRect()
+      return r.width > c.width + 0.5 || r.left < c.left - 0.5 || r.right > c.right + 0.5
+    })
+  }).length
+  const vignettes = document.querySelectorAll('.modal .preset').length
+  document.querySelector('.modal-foot button')?.click()
+  await new Promise((r) => setTimeout(r, 300))
+  return { debords, vignettes }
+})
+check('aucune bande de couleurs ne deborde de sa vignette',
+  bandes.debords === 0 && bandes.vignettes > 0, `${bandes.debords}/${bandes.vignettes} en debord`)
+
+/* --- tags : deplacement, etirement, empilement, annulation --- */
+const tags = await page.evaluate(async () => {
+  const { genId } = await import('/src/core/document.ts')
+  const { fromHex } = await import('/src/core/color.ts')
+  const app = window.pixelforge, ed = app.ed
+  ed.loadSprite(new (await import('/src/core/document.ts')).Sprite(16, 16))
+  for (let i = 0; i < 9; i++) ed.sprite.addFrame(ed.frameCount)
+  ed.sprite.tags.push(
+    { id: genId(), name: 'idle', from: 0, to: 3, direction: 'forward', color: fromHex('#29adff') },
+    { id: genId(), name: 'attaque', from: 2, to: 6, direction: 'forward', color: fromHex('#ff6b8a') },
+  )
+  ed.events.emit('doc', undefined)
+  await new Promise((r) => setTimeout(r, 250))
+
+  const noeud = (nom) => [...document.querySelectorAll('.tl-tag')].find((n) => n.textContent === nom)
+  const glisser = async (nom, colonnes, cote) => {
+    const n = noeud(nom)
+    const b = n.getBoundingClientRect()
+    const y = b.y + b.height / 2
+    const x = cote === 'start' ? b.x + 3 : cote === 'end' ? b.right - 3 : b.x + b.width / 2
+    const ev = (type, cx) => n.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, clientX: cx, clientY: y, button: 0, pointerId: 1,
+    }))
+    ev('pointerdown', x)
+    for (let i = 1; i <= 6; i++) ev('pointermove', x + (colonnes * 44 * i) / 6)
+    ev('pointerup', x + colonnes * 44)
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  const etat = () => ed.sprite.tags.map((t) => `${t.name}:${t.from}-${t.to}`).join(' ')
+
+  // Deux tags qui se chevauchent doivent occuper deux bandes.
+  const hauts = new Set([...document.querySelectorAll('.tl-tag')].map((n) => n.style.top))
+
+  const depart = etat()
+  await glisser('idle', 2, 'move')
+  const deplace = etat()
+  await glisser('idle', 1, 'end')
+  const etire = etat()
+  await glisser('attaque', 40, 'move')
+  const borne = etat()
+  ed.undo(); ed.undo(); ed.undo()
+  await new Promise((r) => setTimeout(r, 200))
+  return { depart, deplace, etire, borne, bandes: hauts.size, frames: ed.frameCount, annule: etat() }
+})
+check('un tag se deplace a la souris', tags.deplace === 'idle:2-5 attaque:2-6', tags.deplace)
+check('un tag s\'etire par son bord', tags.etire === 'idle:2-6 attaque:2-6', tags.etire)
+check('un tag ne sort pas de l\'animation',
+  tags.borne === 'idle:2-6 attaque:5-9', `${tags.borne} sur ${tags.frames} frames`)
+check('les tags qui se chevauchent s\'empilent', tags.bandes === 2, `${tags.bandes} bande(s)`)
+check('deplacer un tag est annulable', tags.annule === tags.depart, tags.annule)
+
+/* --- une seule cadence pour toute l'animation --- */
+const cadence = await page.evaluate(async () => {
+  const ed = window.pixelforge.ed
+  ed.sprite.frameDurations = ed.sprite.frameDurations.map((_, i) => 60 + i * 30)
+  ed.events.emit('doc', undefined)
+  await new Promise((r) => setTimeout(r, 200))
+  const champ = document.querySelector('.tl-toolbar input[type="number"]')
+  champ.value = '120'
+  champ.dispatchEvent(new Event('change', { bubbles: true }))
+  await new Promise((r) => setTimeout(r, 150))
+  const bouton = document.querySelector('.tl-toolbar button[title^="Appliquer cette duree"]')
+  bouton?.click()
+  await new Promise((r) => setTimeout(r, 200))
+  const toutes = ed.sprite.frameDurations.every((d) => d === 120)
+  ed.undo()
+  await new Promise((r) => setTimeout(r, 150))
+  const apres = ed.sprite.frameDurations.filter((d) => d === 120).length
+  return { bouton: !!bouton, toutes, apres, total: ed.frameCount }
+})
+check('un bouton applique la duree a toutes les frames',
+  cadence.bouton && cadence.toutes, cadence.bouton ? 'appliquee' : 'bouton absent')
+check('l\'application a toutes les frames est annulable',
+  cadence.apres < cadence.total, `${cadence.apres}/${cadence.total} encore a 120 ms`)
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

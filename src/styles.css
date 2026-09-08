@@ -524,6 +524,25 @@ input[type="range"]::-moz-range-thumb {
 .layer-row:hover { background: var(--bg-2); }
 .layer-row.active { background: var(--accent-soft); border-color: #6c8cff44; }
 .layer-row .lname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+
+/* Lignes du panneau Squelette : l'arborescence se lit au trait, pas en
+   repetant le nom du parent sur chaque ligne. */
+.bone-branch { width: 9px; height: 16px; flex: none; position: relative; }
+.bone-branch::before {
+  content: ''; position: absolute;
+  left: 1px; top: -6px; bottom: 8px;
+  border-left: 1px solid var(--line);
+}
+.bone-branch::after {
+  content: ''; position: absolute;
+  left: 1px; bottom: 8px; width: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.bone-branch.is-root::before, .bone-branch.is-root::after { display: none; }
+.bone-parent {
+  display: flex; align-items: center; gap: 4px; flex: none;
+  font-size: 10.5px; color: var(--text-faint);
+}
 .layer-row.hidden-layer .lname { opacity: .42; text-decoration: line-through; }
 .layer-row .mini {
   width: 20px; height: 20px; display: grid; place-items: center;
@@ -616,15 +635,28 @@ input[type="range"]::-moz-range-thumb {
 .tl-cel img { width: 26px; height: 26px; image-rendering: pixelated; border-radius: 3px; }
 
 .tl-tags { display: flex; position: relative; height: 20px; min-width: max-content; background: var(--bg-1); }
+.tl-tag:hover { z-index: 1; }
 .tl-tag {
-  position: absolute; height: 15px; top: 3px;
+  position: absolute; height: 15px;
   border-radius: 7px;
   font-size: 10px; font-weight: 600;
   display: flex; align-items: center; padding: 0 7px;
   color: #0d0f14; white-space: nowrap; overflow: hidden;
   cursor: pointer; border: 0;
+  touch-action: none;
 }
 .tl-tag:hover { filter: brightness(1.15); }
+.tl-tag.dragging { filter: brightness(1.25); box-shadow: 0 0 0 1px #fff8; z-index: 1; }
+.tl-tag-label { overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+/* Poignees d'etirement, revelees au survol : deux traits sur les bords. */
+.tl-tag::before, .tl-tag::after {
+  content: ''; position: absolute; top: 3px; bottom: 3px; width: 2px;
+  background: #0d0f1466; border-radius: 2px; opacity: 0;
+  transition: opacity .12s;
+}
+.tl-tag::before { left: 2px; }
+.tl-tag::after { right: 2px; }
+.tl-tag:hover::before, .tl-tag:hover::after, .tl-tag.dragging::before, .tl-tag.dragging::after { opacity: 1; }
 
 /* ------------------------------------------------------------------
    Barre d'etat
@@ -754,9 +786,33 @@ input[type="range"]::-moz-range-thumb {
   border: 1px solid var(--line); background: var(--bg-2);
   border-radius: var(--radius-sm); padding: 8px 6px;
   color: var(--text-dim); text-align: center; font-size: 12px;
+  /* Rien ne sort de la vignette, quel que soit le nombre de couleurs. */
+  min-width: 0; overflow: hidden;
 }
 .preset:hover { border-color: var(--accent); color: var(--text); }
 .preset b { display: block; font-family: var(--mono); font-size: 11px; color: var(--text-faint); font-weight: 400; }
+
+/*
+   Bande de couleurs d'une rampe ou d'une variante. Les pastilles se
+   partagent la largeur disponible : avec beaucoup de teintes elles
+   s'amincissent, puis passent a la ligne, mais ne debordent jamais de la
+   vignette sur sa voisine.
+*/
+.swatch-row {
+  display: flex; flex-wrap: nowrap; justify-content: center;
+  gap: 2px; min-width: 0; max-width: 100%; flex: 0 1 auto;
+}
+/* Les pastilles s'amincissent au lieu de deborder : une bande de vingt
+   teintes tient dans la meme largeur qu'une bande de quatre. */
+.swatch-row i {
+  flex: 0 1 14px; min-width: 4px; height: 14px;
+  border-radius: 3px; border: 1px solid #0006; display: block;
+}
+.swatch-row .more {
+  flex: none; align-self: center;
+  font-family: var(--mono); font-size: 10px; color: var(--text-faint);
+  padding-left: 2px;
+}
 
 .target-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .target-card {
@@ -892,12 +948,17 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* Le halo laisse passer les clics : on suit la lecon dans l'editeur reel. */
+/*
+   Le voile assombrit l'application autour de la zone montree. Il passe donc
+   sous la couche des menus et des modales (#overlay-root, 100) : un menu
+   ouvert pendant une lecon doit rester lisible, pas etre grise avec le reste.
+*/
 .tutor-spotlight {
   position: fixed;
   border-radius: var(--radius);
   border: 2px solid var(--accent);
   box-shadow: 0 0 0 9999px #05060a99;
   pointer-events: none;
-  z-index: 399;
+  z-index: 90;
   transition: left .18s, top .18s, width .18s, height .18s;
 }

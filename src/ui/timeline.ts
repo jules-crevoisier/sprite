@@ -3,11 +3,13 @@ import { toCss, fromHex } from '../core/color'
 import { genId, type Tag } from '../core/document'
 import { el, clear, iconButton, numberInput } from './dom'
 import { icon } from './icons'
-import { openMenu, promptDialog, openModal } from './overlay'
+import { openMenu, promptDialog, openModal, showToast } from './overlay'
 import type { Playback } from './playback'
 
 const COL_W = 44
 const NAME_W = 148
+/** Hauteur d'une bande de tags, chevauchements empiles. */
+const TAG_H = 17
 
 /**
  * Timeline facon Aseprite : une colonne par frame, une ligne par calque,
@@ -91,7 +93,9 @@ export class TimelinePanel {
   /** Ajuste la hauteur du panneau au nombre de calques, sans exceder 45% de l'ecran. */
   private syncHeight(): void {
     if (!this.container) return
-    const needed = 5 + 36 + 26 + 20 + this.ed.sprite.layers.length * 30 + 14
+    const tags = this.grid.querySelector<HTMLElement>('.tl-tags')
+    const bandes = tags ? tags.getBoundingClientRect().height : 20
+    const needed = 5 + 36 + 26 + Math.max(20, bandes) + this.ed.sprite.layers.length * 30 + 14
     const height = this.manualHeight ?? Math.min(window.innerHeight * 0.45, needed)
     this.container.style.height = `${Math.round(height)}px`
   }
@@ -137,6 +141,9 @@ export class TimelinePanel {
       this.syncToolbar()
     }, { className: 'sm icon-only ghost' })
     const duration = numberInput(100, (v) => this.setDuration(Math.max(1, v)), { min: 1, max: 60000, width: '62px' })
+    const toutes = iconButton(icon('film', 14), 'Appliquer cette duree a toutes les frames',
+      () => this.setDurationForAll(Math.max(1, Number(duration.value) || 100)),
+      { className: 'ghost sm icon-only' })
     const fps = el('span', { style: { color: 'var(--text-faint)' } })
     const total = el('span')
 
@@ -150,7 +157,7 @@ export class TimelinePanel {
       iconButton(icon('frame-empty', 15), 'Nouvelle frame vide (Alt+Maj+N)', () => this.addEmptyFrame(), { className: 'ghost sm icon-only' }),
       iconButton(icon('trash', 15), 'Supprimer la frame', () => this.deleteFrame(), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
-      el('div', { class: 'tl-fps' }, el('span', null, 'Duree'), duration, el('span', null, 'ms'), fps),
+      el('div', { class: 'tl-fps' }, el('span', null, 'Duree'), duration, el('span', null, 'ms'), fps, toutes),
       el('div', { class: 'opt-sep' }),
       onion,
       iconButton(icon('settings', 14), 'Reglages de la pelure d\'oignon', (e) => this.onionMenu(e), { className: 'ghost sm icon-only' }),
@@ -194,6 +201,100 @@ export class TimelinePanel {
   }
 
   private renderToolbar(): void { this.syncToolbar() }
+
+  private tagTitle(tag: Tag): string {
+    return `${tag.name} — frames ${tag.from + 1} a ${tag.to + 1} (${tag.direction})`
+      + ' · glisser pour deplacer, les bords pour rallonger'
+  }
+
+  /**
+   * Deplacement et redimensionnement d'un tag a la souris. Les bords
+   * rallongent l'etendue, le milieu la deplace en bloc ; tout est aimante sur
+   * la colonne de frame, et l'ensemble du geste ne laisse qu'une entree dans
+   * l'historique.
+   */
+  private makeTagDraggable(node: HTMLElement, tag: Tag): void {
+    const ed = this.ed
+    const EDGE = 7
+    const zone = (e: PointerEvent): 'start' | 'end' | 'move' => {
+      const r = node.getBoundingClientRect()
+      // Un tag d'une seule frame est trop etroit pour trois zones : on le
+      // deplace, on le rallonge par la droite.
+      if (r.width < EDGE * 3) return r.right - e.clientX <= EDGE ? 'end' : 'move'
+      if (e.clientX - r.left <= EDGE) return 'start'
+      if (r.right - e.clientX <= EDGE) return 'end'
+      return 'move'
+    }
+
+    let dragging = false
+    node.addEventListener('pointermove', (e) => {
+      if (dragging) return
+      node.style.cursor = zone(e) === 'move' ? 'grab' : 'ew-resize'
+    })
+
+    node.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      const kind = zone(e)
+      const startX = e.clientX
+      const from0 = tag.from, to0 = tag.to
+      const last = ed.sprite.frameCount - 1
+      let bouge = false
+      dragging = true
+      node.classList.add('dragging')
+      node.style.cursor = kind === 'move' ? 'grabbing' : 'ew-resize'
+      node.setPointerCapture(e.pointerId)
+
+      const place = () => {
+        node.style.left = `${tag.from * COL_W + 2}px`
+        node.style.width = `${(tag.to - tag.from + 1) * COL_W - 4}px`
+        node.title = this.tagTitle(tag)
+      }
+
+      const move = (ev: PointerEvent) => {
+        const pas = Math.round((ev.clientX - startX) / COL_W)
+        let from = from0, to = to0
+        if (kind === 'move') {
+          const etendue = to0 - from0
+          from = Math.max(0, Math.min(last - etendue, from0 + pas))
+          to = from + etendue
+        } else if (kind === 'start') {
+          from = Math.max(0, Math.min(to0, from0 + pas))
+        } else {
+          to = Math.min(last, Math.max(from0, to0 + pas))
+        }
+        if (from === tag.from && to === tag.to) return
+        bouge = true
+        tag.from = from
+        tag.to = to
+        place()
+        // La bande jouee suit le tag en direct quand la lecture s'y limite.
+        if (ed.playTagOnly) ed.events.emit('playback', ed.playing)
+      }
+
+      const up = () => {
+        node.removeEventListener('pointermove', move)
+        node.removeEventListener('pointerup', up)
+        node.removeEventListener('pointercancel', up)
+        dragging = false
+        node.classList.remove('dragging')
+        node.style.cursor = ''
+        if (!bouge) { ed.setActiveFrame(tag.from); return }
+        const from1 = tag.from, to1 = tag.to
+        ed.pushCommand({
+          label: kind === 'move' ? 'Deplacer un tag' : 'Etendue d\'un tag',
+          undo: () => { tag.from = from0; tag.to = to0; ed.events.emit('doc', undefined) },
+          redo: () => { tag.from = from1; tag.to = to1; ed.events.emit('doc', undefined) },
+        })
+        ed.events.emit('doc', undefined)
+      }
+
+      node.addEventListener('pointermove', move)
+      node.addEventListener('pointerup', up)
+      node.addEventListener('pointercancel', up)
+    })
+  }
 
   private onionMenu(e: MouseEvent): void {
     const ed = this.ed
@@ -252,18 +353,32 @@ export class TimelinePanel {
       class: 'tl-tags',
       style: { gridColumn: `2 / span ${frames}`, width: `${frames * COL_W}px` },
     })
+    // Deux tags qui se chevauchent se cachent mutuellement les bords : on les
+    // repartit sur des bandes successives, la premiere ou la place est libre.
+    const bandes: number[] = []
+    const bandeDe = new Map<Tag['id'], number>()
+    for (const tag of [...ed.sprite.tags].sort((a, b) => a.from - b.from)) {
+      let i = 0
+      while (i < bandes.length && bandes[i] > tag.from) i++
+      bandes[i] = tag.to
+      bandeDe.set(tag.id, i)
+    }
+    lane.style.height = `${Math.max(1, bandes.length) * TAG_H + 5}px`
+
     for (const tag of ed.sprite.tags) {
-      lane.appendChild(el('button', {
+      const node = el('button', {
         class: 'tl-tag',
         style: {
           left: `${tag.from * COL_W + 2}px`,
+          top: `${(bandeDe.get(tag.id) ?? 0) * TAG_H + 3}px`,
           width: `${(tag.to - tag.from + 1) * COL_W - 4}px`,
           background: toCss(tag.color),
         },
-        title: `${tag.name} — frames ${tag.from + 1} a ${tag.to + 1} (${tag.direction})`,
-        onclick: () => ed.setActiveFrame(tag.from),
+        title: this.tagTitle(tag),
         oncontextmenu: (e: MouseEvent) => { e.preventDefault(); this.tagMenu(e, tag) },
-      }, tag.name))
+      }, el('span', { class: 'tl-tag-label' }, tag.name))
+      this.makeTagDraggable(node, tag)
+      lane.appendChild(node)
     }
     this.grid.appendChild(lane)
 
@@ -348,6 +463,15 @@ export class TimelinePanel {
       for (const f of frames) if (ed.sprite.frameCount > 1) ed.sprite.removeFrame(f)
     })
     ed.setActiveFrame(Math.min(ed.activeFrame, ed.frameCount - 1))
+  }
+
+  /** Une seule cadence pour toute l'animation : le cas le plus courant. */
+  private setDurationForAll(ms: number): void {
+    const ed = this.ed
+    ed.run('Duree de toutes les frames', () => {
+      for (let f = 0; f < ed.frameCount; f++) ed.sprite.frameDurations[f] = ms
+    })
+    showToast(`${ms} ms sur les ${ed.frameCount} frames — ${Math.round(1000 / ms)} fps`, 'success')
   }
 
   private setDuration(ms: number): void {

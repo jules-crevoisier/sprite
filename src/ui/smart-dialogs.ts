@@ -31,15 +31,19 @@ function thumb(bitmap: Bitmap, box = 64): HTMLCanvasElement {
   return canvas
 }
 
-function swatchRow(colors: RGBA[]): HTMLElement {
-  const row = el('div', { style: { display: 'flex', gap: '2px' } })
-  for (const c of colors) {
-    row.appendChild(el('i', {
-      style: {
-        width: '14px', height: '14px', borderRadius: '3px',
-        background: toCss(c), border: '1px solid #0006', display: 'block',
-      },
-    }))
+/**
+ * Bande de couleurs d'une rampe. Au-dela de `max` teintes, le reste est
+ * resume par un compteur : une vignette de 90 px ne peut pas afficher vingt
+ * pastilles sans deborder sur sa voisine.
+ */
+function swatchRow(colors: RGBA[], max = 8): HTMLElement {
+  const row = el('div', { class: 'swatch-row' })
+  for (const c of colors.slice(0, max)) {
+    row.appendChild(el('i', { title: toCss(c), style: { background: toCss(c) } }))
+  }
+  if (colors.length > max) {
+    row.appendChild(el('span', { class: 'more', title: `${colors.length} teintes en tout` },
+      `+${colors.length - max}`))
   }
   return row
 }
@@ -86,7 +90,7 @@ export function variantsDialog(ed: Editor): void {
         style: { width: '100%', textAlign: 'left', border: active ? '1px solid var(--accent)' : '1px solid transparent' },
         onclick: () => { selectedRamp = ramp; renderRamps(); refresh() },
       },
-        swatchRow(ramp.colors.slice(0, 10)),
+        swatchRow(ramp.colors, 12),
         el('span', { class: 'lname', style: { marginLeft: '8px' } },
           `${ramp.label} · ${ramp.colors.length} teintes · ${ramp.pixels} px`),
       )
@@ -120,7 +124,7 @@ export function variantsDialog(ed: Editor): void {
         },
       },
         thumb(preview, 64),
-        swatchRow(variant.preview.slice(0, 6)),
+        swatchRow(variant.preview, 6),
         el('b', null, variant.label),
       )
       card.style.borderColor = 'var(--accent)'

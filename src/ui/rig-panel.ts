@@ -50,21 +50,17 @@ export class RigPanel {
     return [
       rig.bones.map((b) => `${b.id}/${b.name}/${b.parent ?? '-'}/${b.z}`).join(','),
       rig.rest ? 'lie' : 'libre',
+      // Le rattachement ne s'affiche que sur l'os choisi : la selection
+      // change donc bien le HTML de la liste.
+      rigState.selected,
       rigState.seam,
       this.poseA ? 'A' : '-',
     ].join('|')
   }
 
-  /** Rebatit si la structure a bouge, sinon met juste la selection a jour. */
+  /** Rebatit si ce qui est affiche a bouge, sinon ne touche a rien. */
   private sync(): void {
-    if (this.signature() !== this.drawn) { this.render(); return }
-    this.markSelection()
-  }
-
-  private markSelection(): void {
-    for (const node of this.body.querySelectorAll<HTMLElement>('[data-bone]')) {
-      node.classList.toggle('active', node.dataset.bone === String(rigState.selected))
-    }
+    if (this.signature() !== this.drawn) this.render()
   }
 
   render(): void {
@@ -89,6 +85,15 @@ export class RigPanel {
     }
 
     this.body.appendChild(this.hierarchy())
+    // Cinq lignes affichant « torse » se lisent comme un bug ; c'est en fait
+    // la hierarchie du modele. On l'ecrit une fois pour toutes.
+    const racine = rig.bones.find((b) => b.parent === null)
+    if (racine && rig.bones.length > 1) {
+      this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
+        `« ${racine.name} » est la racine : les os decales en dessous en dependent et `,
+        'le suivent. Bouger la racine emmene tout le corps, bouger un bras ne bouge que lui. ',
+        'Selectionnez un os pour changer son rattachement.'))
+    }
 
     // --- liaison ---
     this.body.appendChild(el('div', { class: 'form-section' }, 'Liaison'))
@@ -154,9 +159,17 @@ export class RigPanel {
    * Change l'os selectionne sans reconstruire la liste : reconstruire
    * arracherait le champ que l'on vient de toucher.
    */
-  private select(id: number): void {
+  private select(id: number, focus?: 'name'): void {
+    if (rigState.selected === id) return
     rigState.selected = id
-    this.markSelection()
+    // Le rattachement ne s'affiche que sur l'os choisi : la ligne change,
+    // il faut donc rebatir. On rend alors le curseur au champ d'ou venait
+    // le clic, sinon renommer un os demanderait deux clics.
+    this.render()
+    if (focus === 'name') {
+      const row = this.body.querySelector<HTMLElement>(`[data-bone="${id}"]`)
+      row?.querySelector('input')?.focus()
+    }
     this.ed.events.emit('settings', undefined)
   }
 
@@ -184,6 +197,7 @@ export class RigPanel {
     const rig = this.rig
     const index = rig.bones.indexOf(bone)
     const selected = rigState.selected === bone.id
+    const parentName = rig.bones.find((b) => b.id === bone.parent)?.name ?? 'racine'
 
     const name = el('input', {
       value: bone.name,
@@ -194,7 +208,7 @@ export class RigPanel {
       onchange: () => { bone.name = name.value.trim() || bone.name; this.ed.history.touch() },
       // Le champ arrete le clic pour ne pas etre detruit : il selectionne
       // donc l'os lui-meme quand on vient y ecrire.
-      onfocus: () => this.select(bone.id),
+      onfocus: () => this.select(bone.id, 'name'),
     })
 
     const parents = [
@@ -231,10 +245,15 @@ export class RigPanel {
     keepFocus(parentSelect)
 
     const row = el('div', {
-      class: `layer-row ${selected ? 'active' : ''}`,
-      style: { paddingLeft: `${6 + depth * 12}px` },
+      class: `layer-row bone-row ${selected ? 'active' : ''}`,
+      style: { paddingLeft: `${6 + depth * 13}px` },
       onclick: () => { this.select(bone.id) },
     },
+      // Un trait d'arborescence dit « cet os depend de celui du dessus »
+      // sans qu'il faille lire six fois le meme nom de parent.
+      depth > 0
+        ? el('i', { class: 'bone-branch', title: `Depend de « ${parentName} »` })
+        : el('i', { class: 'bone-branch is-root', title: 'Racine du squelette' }),
       el('i', {
         title: 'Couleur d\'influence sur la toile',
         style: {
@@ -243,7 +262,9 @@ export class RigPanel {
         },
       }),
       name,
-      parentSelect,
+      // Le rattachement ne s'affiche que sur l'os selectionne : sinon la liste
+      // n'est qu'une colonne de menus identiques.
+      ...(selected ? [el('label', { class: 'bone-parent' }, 'suit', parentSelect)] : []),
       el('button', {
         class: 'mini',
         title: 'Passer devant les autres os',
