@@ -36,6 +36,8 @@ const BINDINGS: Record<string, string> = {
   'ctrl+d': 'edit.deselect',
   'ctrl+i': 'edit.invert-selection',
 
+  'ctrl+shift+v': 'sprite.variants',
+  'ctrl+shift+d': 'sprite.detail',
   'ctrl+alt+c': 'sprite.canvas-size',
   'ctrl+alt+i': 'sprite.scale',
   'shift+h': 'sprite.flip-h',

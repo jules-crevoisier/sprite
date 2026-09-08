@@ -1,0 +1,202 @@
+import type { Bitmap } from '../core/bitmap'
+import {
+  type RGBA, getA, rgbaToHsv, hsvToRgba, luminance, colorDistance,
+} from '../core/color'
+
+/**
+ * Une rampe : les teintes d'une meme famille classees du plus sombre au plus
+ * clair. C'est l'unite de travail naturelle du pixel art — un vetement, une
+ * peau, un feuillage sont chacun une rampe.
+ */
+export interface Ramp {
+  id: number
+  /** Du plus sombre au plus clair. */
+  colors: RGBA[]
+  /** Nombre de pixels du sprite utilisant cette rampe. */
+  pixels: number
+  /** Teinte moyenne en degres, ou null pour les neutres. */
+  hue: number | null
+  /** Nom devine, affiche dans l'interface. */
+  label: string
+}
+
+const HUE_NAMES: [number, string][] = [
+  [15, 'rouges'], [45, 'oranges'], [70, 'jaunes'], [160, 'verts'],
+  [200, 'cyans'], [255, 'bleus'], [290, 'violets'], [335, 'roses'], [360, 'rouges'],
+]
+
+function hueName(h: number): string {
+  for (const [max, name] of HUE_NAMES) if (h < max) return name
+  return 'rouges'
+}
+
+/**
+ * Teintes chair : orange peu sature et clair. Le critere reste etroit, sinon
+ * un brun de terre passerait pour de la peau.
+ */
+function looksLikeSkin(h: number, s: number, v: number): boolean {
+  return h >= 12 && h <= 45 && s >= 0.15 && s <= 0.5 && v >= 0.62
+}
+
+/** Les oranges sombres se lisent comme des bruns, pas comme des oranges. */
+function looksBrown(h: number, s: number, v: number): boolean {
+  return h >= 8 && h <= 50 && s >= 0.2 && v < 0.62
+}
+
+/**
+ * Regroupe les couleurs d'un sprite en rampes.
+ * Les couleurs proches en teinte forment une famille ; les gris sont
+ * rassembles a part car leur teinte n'a pas de sens.
+ */
+export function extractRamps(bitmaps: Bitmap[], maxRamps = 12): Ramp[] {
+  const counts = new Map<RGBA, number>()
+  for (const bm of bitmaps) {
+    for (let i = 0; i < bm.u32.length; i++) {
+      const c = bm.u32[i]
+      if (getA(c) === 0) continue
+      counts.set(c, (counts.get(c) ?? 0) + 1)
+    }
+  }
+  if (counts.size === 0) return []
+
+  const entries = [...counts.entries()].map(([color, n]) => {
+    const hsv = rgbaToHsv(color)
+    return { color, n, h: hsv.h, s: hsv.s, v: hsv.v }
+  })
+
+  const neutrals = entries.filter((e) => e.s < 0.12)
+  const chromatic = entries.filter((e) => e.s >= 0.12).sort((a, b) => a.h - b.h)
+
+  const groups: typeof chromatic[] = []
+  let current: typeof chromatic = []
+  for (const e of chromatic) {
+    if (current.length === 0 || e.h - current[current.length - 1].h < 24) current.push(e)
+    else { groups.push(current); current = [e] }
+  }
+  if (current.length) groups.push(current)
+  // Le rouge est a cheval sur 0 et 360 : les deux extremites se rejoignent.
+  if (groups.length > 1) {
+    const first = groups[0], last = groups[groups.length - 1]
+    if (first[0].h + 360 - last[last.length - 1].h < 24) {
+      groups[0] = [...last, ...first]
+      groups.pop()
+    }
+  }
+  if (neutrals.length) groups.push(neutrals)
+
+  let id = 1
+  const ramps: Ramp[] = groups.map((group) => {
+    const colors = [...group].sort((a, b) => luminance(a.color) - luminance(b.color)).map((e) => e.color)
+    const pixels = group.reduce((n, e) => n + e.n, 0)
+    const isNeutral = group.every((e) => e.s < 0.12)
+    // Teinte representative : celle de la couleur la plus presente.
+    const dominant = group.reduce((best, e) => (e.n > best.n ? e : best), group[0])
+    const label = isNeutral
+      ? 'gris'
+      : looksLikeSkin(dominant.h, dominant.s, dominant.v)
+        ? 'peau'
+        : looksBrown(dominant.h, dominant.s, dominant.v)
+          ? 'bruns'
+          : hueName(dominant.h)
+    return { id: id++, colors, pixels, hue: isNeutral ? null : dominant.h, label }
+  })
+
+  // Les rampes les plus presentes d'abord : ce sont celles qu'on veut modifier.
+  ramps.sort((a, b) => b.pixels - a.pixels)
+  if (ramps.length <= maxRamps) return dedupeLabels(ramps)
+
+  // Au-dela, les plus petites sont fondues dans la rampe la plus proche.
+  const kept = ramps.slice(0, maxRamps)
+  for (const extra of ramps.slice(maxRamps)) {
+    let best = kept[0], bestD = Infinity
+    for (const r of kept) {
+      const d = colorDistance(r.colors[Math.floor(r.colors.length / 2)], extra.colors[0])
+      if (d < bestD) { bestD = d; best = r }
+    }
+    best.colors = [...best.colors, ...extra.colors].sort((a, b) => luminance(a) - luminance(b))
+    best.pixels += extra.pixels
+  }
+  return dedupeLabels(kept)
+}
+
+/** Deux rampes « bleus » deviennent « bleus » et « bleus 2 ». */
+function dedupeLabels(ramps: Ramp[]): Ramp[] {
+  const seen = new Map<string, number>()
+  for (const r of ramps) {
+    const n = (seen.get(r.label) ?? 0) + 1
+    seen.set(r.label, n)
+    if (n > 1) r.label = `${r.label} ${n}`
+  }
+  return ramps
+}
+
+/**
+ * Index inverse : retrouve la rampe d'une couleur et sa position dedans,
+ * pour se deplacer d'un cran vers l'ombre ou vers la lumiere.
+ */
+export class RampIndex {
+  private map = new Map<RGBA, { ramp: Ramp; index: number }>()
+  readonly ramps: Ramp[]
+
+  constructor(ramps: Ramp[]) {
+    this.ramps = ramps
+    for (const ramp of ramps) {
+      ramp.colors.forEach((c, index) => this.map.set(c, { ramp, index }))
+    }
+  }
+
+  static fromBitmaps(bitmaps: Bitmap[]): RampIndex {
+    return new RampIndex(extractRamps(bitmaps))
+  }
+
+  rampOf(color: RGBA): Ramp | null { return this.map.get(color)?.ramp ?? null }
+
+  /**
+   * Deplace une couleur de `delta` crans dans sa rampe.
+   * Une couleur inconnue est decalee en TSV puis ramenee sur la couleur la
+   * plus proche parmi celles disponibles, pour rester dans l'esprit du sprite.
+   */
+  step(color: RGBA, delta: number, fallback: RGBA[] = []): RGBA {
+    const hit = this.map.get(color)
+    if (hit) {
+      const i = Math.max(0, Math.min(hit.ramp.colors.length - 1, hit.index + delta))
+      return hit.ramp.colors[i]
+    }
+    const hsv = rgbaToHsv(color)
+    hsv.v = Math.min(1, Math.max(0, hsv.v + delta * 0.12))
+    hsv.s = Math.min(1, Math.max(0, hsv.s - delta * 0.03))
+    const shifted = hsvToRgba(hsv)
+    if (!fallback.length) return shifted
+    let best = shifted, bestD = Infinity
+    for (const c of fallback) {
+      const d = colorDistance(shifted, c)
+      if (d < bestD) { bestD = d; best = c }
+    }
+    return best
+  }
+
+  /** Toutes les couleurs connues, tous rampes confondues. */
+  allColors(): RGBA[] { return [...this.map.keys()] }
+}
+
+/** Masque des pixels dont la couleur appartient a la rampe donnee. */
+export function rampMask(bitmap: Bitmap, ramp: Ramp): Uint8Array {
+  const set = new Set(ramp.colors)
+  const mask = new Uint8Array(bitmap.u32.length)
+  for (let i = 0; i < bitmap.u32.length; i++) {
+    if (getA(bitmap.u32[i]) !== 0 && set.has(bitmap.u32[i])) mask[i] = 255
+  }
+  return mask
+}
+
+/** Generateur pseudo-aleatoire deterministe : une graine donne toujours le meme resultat. */
+export function makeRandom(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}

@@ -1,6 +1,7 @@
 import type { App } from './app'
 import * as ops from '../core/operations'
 import * as dlg from './dialogs'
+import { variantsDialog, detailDialog } from './smart-dialogs'
 import { exportFramePng, exportFramesZip, exportGif } from '../export'
 import { downloadText, pickFiles, safeName } from '../export/files'
 import { serializeSprite, deserializeSprite, PROJECT_EXT, loadAutosave, autosaveDate } from '../io/project'
@@ -248,6 +249,15 @@ export function buildCommands(app: App): Command[] {
     id: 'sprite.snap-palette', label: 'Aligner les couleurs sur la palette', group: 'Sprite', icon: 'palette',
     run: () => ops.snapToPalette(ed, 'sprite'),
   })
+  add({
+    id: 'sprite.variants', label: 'Variantes de couleur…', group: 'Assiste', keys: 'Ctrl+Maj+V', icon: 'variants',
+    run: () => variantsDialog(ed),
+  })
+  add({
+    id: 'sprite.detail', label: 'Ajouter du detail…', group: 'Assiste', keys: 'Ctrl+Maj+D', icon: 'detail',
+    run: () => detailDialog(ed),
+  })
+
   add({
     id: 'sprite.slice-new', label: 'Nouvelle zone depuis la selection…', group: 'Sprite', icon: 'crop',
     run: () => {

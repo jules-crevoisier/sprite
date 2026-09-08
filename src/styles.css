@@ -504,6 +504,10 @@ input[type="range"]::-moz-range-thumb {
   padding: 5px 6px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
+  /* La regle sert aussi a des <button> : sans fond explicite, le navigateur
+     applique le sien et le texte devient illisible. */
+  background: transparent;
+  color: var(--text);
   cursor: pointer;
   user-select: none;
 }

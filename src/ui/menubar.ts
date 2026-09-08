@@ -34,6 +34,10 @@ const MENUS: { label: string; items: string[] }[] = [
     ],
   },
   {
+    label: 'Assiste',
+    items: ['sprite.variants', 'sprite.detail'],
+  },
+  {
     label: 'Calque',
     items: [
       'layer.new', 'layer.duplicate', 'layer.delete', '---',
