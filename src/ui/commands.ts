@@ -517,6 +517,10 @@ export function buildCommands(app: App): Command[] {
   /* ---------------- Aide ---------------- */
 
   add({
+    id: 'help.tutorials', label: 'Tutoriels guides…', group: 'Aide', keys: 'Maj+F1', icon: 'info',
+    run: () => app.tutorial.openPicker(app.lessons()),
+  })
+  add({
     id: 'help.shortcuts', label: 'Raccourcis clavier', group: 'Aide', keys: 'F1', icon: 'info',
     run: () => dlg.shortcutsDialog(shortcutGroups(list)),
   })

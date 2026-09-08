@@ -72,6 +72,7 @@ const BINDINGS: Record<string, string> = {
   'alt+l': 'view.timeline',
 
   f1: 'help.shortcuts',
+  'shift+f1': 'help.tutorials',
   'ctrl+k': 'help.palette',
   'ctrl+shift+p': 'help.palette',
 }

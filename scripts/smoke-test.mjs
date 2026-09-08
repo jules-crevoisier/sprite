@@ -50,6 +50,13 @@ await sleep(400)
 
 check('l\'application demarre', await page.evaluate(() => !!window.pixelforge))
 
+// La visite guidee est proposee au premier lancement : on la refuse pour
+// retrouver un editeur vierge.
+const welcome = await page.locator('.modal-head h2').first().textContent().catch(() => null)
+check('la visite guidee est proposee au premier lancement', welcome?.includes('Bienvenue') ?? false, welcome ?? 'absente')
+await page.keyboard.press('Escape')
+await sleep(250)
+
 /* --- dessin au crayon --- */
 const box = await page.locator('#canvas').boundingBox()
 await page.mouse.move(box.x + box.width / 2 - 50, box.y + box.height / 2)
@@ -186,6 +193,46 @@ check('la ressource SpriteFrames Godot est coherente', report.godot)
 check('le GIF est decode par le navigateur', report.gif)
 check('l\'archive ZIP a une signature valide', report.zip)
 check('le projet fait un aller-retour sans perte', report.project)
+/* --- modeles de squelette et tutoriel --- */
+const guided = await page.evaluate(async () => {
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const app = window.pixelforge
+  const ed = app.ed
+  ed.loadSprite(demoCharacter())
+  const box = ed.peekCel().bitmap.trimBounds()
+
+  const out = { modeles: true, enfants: true }
+  for (const t of RIG_TEMPLATES) {
+    applyTemplate(ed.sprite.rig, t, ed.peekCel().bitmap, ed.sprite)
+    const bones = ed.sprite.rig.bones
+    if (bones.length !== t.bones.length) out.modeles = false
+    if (!bones.some((b) => b.parent !== null)) out.enfants = false
+    const dedans = bones.every((b) =>
+      b.x >= box.x - 1 && b.x <= box.x + box.w + 1 && b.ey >= box.y - 1 && b.ey <= box.y + box.h + 1)
+    if (!dedans) out.modeles = false
+  }
+
+  // Une lecon doit pouvoir enchainer ses etapes automatiques.
+  const lesson = app.lessons().find((l) => l.id === 'rig')
+  out.lecons = app.lessons().length
+  await app.tutorial.start(lesson)
+  out.carte = !!document.querySelector('.tutor-card:not([hidden])')
+  for (const step of lesson.steps) if (step.auto) await step.auto()
+  out.rigLie = !!ed.sprite.rig.rest
+  out.rigPose = ed.sprite.rig.bones.some((b) => Math.abs(b.angle) > 0.05)
+  app.tutorial.stop()
+  out.carteFermee = !document.querySelector('.tutor-card:not([hidden])')
+  return out
+})
+
+check('les modeles de squelette tiennent dans le dessin', guided.modeles)
+check('les modeles enchainent bien les os', guided.enfants)
+check('les lecons sont disponibles', guided.lecons === 5, `${guided.lecons} lecons`)
+check('la carte du tutoriel s\'affiche', guided.carte)
+check('la lecon squelette lie et pose le personnage', guided.rigLie && guided.rigPose)
+check('quitter le tutoriel referme la carte', guided.carteFermee)
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

@@ -23,6 +23,8 @@ import { renderToolbar } from './toolbar'
 import { renderOptionsBar } from './options-bar'
 import { renderTopbar } from './menubar'
 import { Workspace, type PanelDef } from './workspace'
+import { Tutorial, type Lesson } from './tutorial'
+import { buildLessons } from './lessons'
 import { el, qs, clear } from './dom'
 import { openModal, showToast, confirmDialog } from './overlay'
 
@@ -40,6 +42,7 @@ export class App {
   readonly rigPanel: RigPanel
   readonly status: StatusBar
   readonly workspace: Workspace
+  readonly tutorial: Tutorial
 
   exportRequest: ExportRequest = structuredClone(DEFAULT_EXPORT)
 
@@ -72,6 +75,7 @@ export class App {
       else this.viewport.invalidate()
     })
 
+    this.tutorial = new Tutorial(this)
     this.commands = buildCommands(this)
     this.commandMap = new Map(this.commands.map((c) => [c.id, c]))
 
@@ -80,7 +84,7 @@ export class App {
     this.viewport.fit()
     this.viewport.updateCursorStyle()
     this.colorPanel.renderPalette()
-    void this.offerAutosaveRestore()
+    void this.startupPrompts()
   }
 
   /* ---------------------------------------------------------------- */
@@ -241,21 +245,35 @@ export class App {
     if (autosave(this.ed.sprite)) this.status.markSaved()
   }
 
+  /** Lecons disponibles, construites a la demande. */
+  lessons(): Lesson[] { return buildLessons(this) }
+
+  /**
+   * Au demarrage : reprendre le travail precedent, sinon proposer la visite
+   * guidee au tout premier lancement.
+   */
+  private async startupPrompts(): Promise<void> {
+    const restored = await this.offerAutosaveRestore()
+    if (!restored) await this.tutorial.offerFirstRun(this.lessons())
+  }
+
   /** Propose de reprendre le travail precedent au demarrage. */
-  private async offerAutosaveRestore(): Promise<void> {
-    if (!hasAutosave()) return
+  private async offerAutosaveRestore(): Promise<boolean> {
+    if (!hasAutosave()) return false
     const at = autosaveDate()
     const ok = await confirmDialog(
       'Reprendre votre travail ?',
       `Une sauvegarde automatique du ${at?.toLocaleString('fr-FR') ?? '—'} a ete trouvee dans ce navigateur.`,
       'Reprendre',
     )
-    if (!ok) return
+    if (!ok) return false
     const sprite = await loadAutosave()
     if (sprite) {
       this.ed.loadSprite(sprite)
       showToast('Travail restaure', 'success')
+      return true
     }
+    return false
   }
 
   showAbout(): void {

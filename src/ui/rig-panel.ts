@@ -3,10 +3,11 @@ import {
   applyPose, autoBind, canParent, capturePose, deform, lerpPose, resetPose,
   type Bone, type Pose,
 } from '../smart/rig'
+import { RIG_TEMPLATES, applyTemplate } from '../smart/rig-presets'
 import { rigState, refreshPose } from '../tools'
 import { el, clear, iconButton, numberInput, segmented, slider } from './dom'
 import { icon } from './icons'
-import { confirmDialog, showToast } from './overlay'
+import { confirmDialog, openMenu, showToast } from './overlay'
 
 /**
  * Panneau du squelette : construire les os, lier les pixels, poser le
@@ -24,6 +25,8 @@ export class RigPanel {
     this.ed = editor
     this.content = this.body
     this.actions = [
+      iconButton(icon('group', 14), 'Modeles de squelette',
+        (e) => this.templateMenu(e.currentTarget as HTMLElement), { className: 'ghost sm icon-only' }),
       iconButton(icon('refresh', 14), 'Reinitialiser la pose', () => this.resetPose(), { className: 'ghost sm icon-only' }),
     ]
     editor.events.on('doc', () => this.render())
@@ -48,9 +51,15 @@ export class RigPanel {
     }))
 
     if (!rig.bones.length) {
+      this.body.appendChild(el('button', {
+        class: 'btn primary',
+        style: { width: '100%', marginTop: '8px' },
+        html: icon('group', 14),
+        onclick: (e: MouseEvent) => this.templateMenu(e.currentTarget as HTMLElement),
+      }, el('span', null, 'Partir d\'un modele')))
       this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '8px' } },
-        'Choisissez l\'outil Squelette puis glissez sur la toile pour tracer un premier os. ',
-        'Commencer un os sur le bout d\'un autre le rattache automatiquement.'))
+        'Ou tracez vous-meme : avec l\'outil Squelette, glissez sur la toile pour poser un os. ',
+        'Repartir du bout d\'un os l\'enchaine au precedent.'))
       return
     }
 
@@ -182,7 +191,31 @@ export class RigPanel {
   /* Actions                                                           */
   /* ---------------------------------------------------------------- */
 
-  private bind(): void {
+  /** Choix d'un squelette pret a l'emploi. */
+  private templateMenu(anchor: HTMLElement): void {
+    const ed = this.ed
+    openMenu(anchor, [
+      { title: 'Modeles' },
+      ...RIG_TEMPLATES.map((template) => ({
+        label: `${template.label} — ${template.hint}`,
+        icon: 'rig',
+        onClick: () => {
+          const cel = ed.peekCel()
+          ed.run(`Modele ${template.label}`, () => {
+            applyTemplate(ed.sprite.rig, template, cel?.bitmap ?? null, ed.sprite)
+          })
+          rigState.mode = 'edit'
+          rigState.selected = ed.sprite.rig.bones[0]?.id ?? null
+          ed.updateSettings({ tool: 'rig' })
+          showToast(`${template.label} : ajustez les os puis liez les pixels`, 'success')
+          this.render()
+        },
+      })),
+    ], 'right')
+  }
+
+  /** Lie les pixels de la case active au squelette. */
+  bind(): void {
     const cel = this.ed.peekCel()
     if (!cel) { showToast('Aucune case active', 'error'); return }
     if (cel.bitmap.isEmpty()) { showToast('Dessinez le personnage avant de lier', 'error'); return }

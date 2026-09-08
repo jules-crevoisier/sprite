@@ -137,8 +137,11 @@ peau, un feuillage sont chacun une famille.
 
 ![Un personnage au repos puis posé par le squelette](docs/rig.png)
 
-**Squelette et pose** (`K`). On trace des os sur le personnage, on lie les
-pixels, et chaque pixel est attribué à l'os le plus proche. Tirer une
+**Squelette et pose** (`K`). Six modèles prêts à l'emploi — humanoïde de face
+et de profil, quadrupède, oiseau, arbre, membre simple — se calent sur la
+boîte des pixels opaques, donc ils tombent juste quelle que soit la taille du
+sprite. On peut aussi tracer les os soi-même. On lie ensuite les
+pixels : chacun est attribué à l'os le plus proche. Tirer une
 extrémité fait pivoter le membre et l'image est régénérée : le parcours va
 du pixel d'arrivée vers sa source, donc aucun trou n'apparaît là où la
 matière s'étire, et les fissures d'articulation sont refermées par une
@@ -209,6 +212,19 @@ frames en indiquant la taille des cases, l'espacement et la marge.
 `.gpl` et `.hex` (Lospec), tri par luminosité ou par teinte. Remplacer une
 couleur de la palette la remplace dans tout le sprite.
 
+## Apprendre
+
+`Maj+F1` ouvre les tutoriels, et la visite est proposée au tout premier
+lancement. Chaque leçon charge un document de démonstration et se déroule
+**dans l'éditeur** : la zone concernée est mise en avant, l'étape se valide
+d'elle-même dès que le geste est fait, et un bouton l'exécute à votre place
+si vous préférez voir le résultat d'abord.
+
+![Une leçon en cours dans l'éditeur](docs/tutoriel.png)
+
+Cinq leçons : prise en main, animer, squelette et pose, détail et variantes,
+export vers un moteur.
+
 ## Espace de travail
 
 Les panneaux ne sont pas figés. Chacun se déplace entre le dock gauche et le
@@ -230,6 +246,7 @@ courante est restaurée au chargement suivant.
 | Sélection | `Maj` ajoute · `Alt` soustrait · `Ctrl` intersecte · flèches déplacent les pixels |
 | Animation | `,` `.` frame précédente/suivante · `Entrée` lecture · `Alt+N` nouvelle frame · `Ctrl+T` tag |
 | Assistant | `K` squelette · `Ctrl+Maj+V` variantes · `Ctrl+Maj+D` détail |
+| Aide | `Maj+F1` tutoriels · `F1` raccourcis · `Ctrl+K` commandes |
 | Divers | `X` permute les couleurs · `[` `]` taille de brosse · `Échap` annule le geste puis désélectionne |
 
 ## Sous le capot

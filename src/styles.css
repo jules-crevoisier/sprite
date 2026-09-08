@@ -816,3 +816,67 @@ input[type="range"]::-moz-range-thumb {
   .toolbar { grid-template-columns: 1fr; }
   .brand-name { display: none; }
 }
+
+
+/* ------------------------------------------------------------------
+   Visite guidee
+   ------------------------------------------------------------------ */
+
+.tutor-card {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: min(340px, calc(100vw - 32px));
+  background: var(--bg-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  z-index: 400;
+  overflow: hidden;
+  animation: pop .16s ease;
+}
+.tutor-card.validated { border-color: var(--ok); }
+.tutor-card.validated .tutor-progress i { background: var(--ok); }
+
+.tutor-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 10px 8px 13px;
+}
+.tutor-head strong { font-size: 13px; }
+.tutor-head .spacer { flex: 1; }
+.tutor-count { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+
+.tutor-progress { height: 2px; background: var(--bg-4); }
+.tutor-progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+
+.tutor-text {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.tutor-foot {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 12px 12px;
+}
+.tutor-foot .spacer { flex: 1; }
+.tutor-tip {
+  margin: 0;
+  padding: 7px 14px;
+  font-size: 11px;
+  color: var(--text-faint);
+  background: var(--bg-1);
+  border-top: 1px solid var(--line-soft);
+}
+
+/* Le halo laisse passer les clics : on suit la lecon dans l'editeur reel. */
+.tutor-spotlight {
+  position: fixed;
+  border-radius: var(--radius);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 9999px #05060a99;
+  pointer-events: none;
+  z-index: 399;
+  transition: left .18s, top .18s, width .18s, height .18s;
+}
