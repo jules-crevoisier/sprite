@@ -21,7 +21,8 @@ import { Playback } from './playback'
 import { renderToolbar } from './toolbar'
 import { renderOptionsBar } from './options-bar'
 import { renderTopbar } from './menubar'
-import { el, qs, clear, panelSection } from './dom'
+import { Workspace, type PanelDef } from './workspace'
+import { el, qs, clear } from './dom'
 import { openModal, showToast, confirmDialog } from './overlay'
 
 const AUTOSAVE_INTERVAL = 45_000
@@ -36,6 +37,7 @@ export class App {
   readonly layersPanel: LayersPanel
   readonly preview: PreviewPanel
   readonly status: StatusBar
+  readonly workspace: Workspace
 
   exportRequest: ExportRequest = structuredClone(DEFAULT_EXPORT)
 
@@ -54,6 +56,19 @@ export class App {
     this.preview = new PreviewPanel(this.ed)
     this.timeline = new TimelinePanel(this.ed, this.playback, qs('#timeline'))
 
+    this.workspace = new Workspace(this.panelDefs(), {
+      left: qs('#dock-left'),
+      right: qs('#dock-right'),
+      splitLeft: qs('#split-left'),
+      splitRight: qs('#split-right'),
+      timeline: qs('#timeline'),
+    }, (reason) => {
+      // Un changement de disposition peut sortir le sprite du cadre :
+      // on le ramene, sans le faire sauter pendant un simple glissement.
+      if (reason === 'layout') requestAnimationFrame(() => this.viewport.ensureVisible())
+      else this.viewport.invalidate()
+    })
+
     this.commands = buildCommands(this)
     this.commandMap = new Map(this.commands.map((c) => [c.id, c]))
 
@@ -69,15 +84,25 @@ export class App {
   /* Montage                                                           */
   /* ---------------------------------------------------------------- */
 
-  private mount(): void {
-    const sidebar = qs('#sidebar')
-    clear(sidebar)
-    sidebar.append(
-      panelSection({ title: 'Apercu', key: 'preview', body: this.preview.root }),
-      this.layersPanel.root,
-      this.colorPanel.root,
-    )
+  /** Panneaux rangeables dans les docks lateraux. */
+  private panelDefs(): PanelDef[] {
+    return [
+      { id: 'preview', title: 'Apercu', icon: 'film', content: this.preview.content },
+      {
+        id: 'layers', title: 'Calques', icon: 'layers',
+        content: this.layersPanel.content, actions: this.layersPanel.actions,
+        grow: true, minHeight: 150,
+      },
+      { id: 'color', title: 'Couleur', icon: 'palette', content: this.colorPanel.pickerContent },
+      {
+        id: 'palette', title: 'Palette', icon: 'sliders',
+        content: this.colorPanel.paletteContent, actions: this.colorPanel.paletteActions,
+        grow: true, minHeight: 104,
+      },
+    ]
+  }
 
+  private mount(): void {
     this.renderTop()
     this.renderTools()
     this.renderOptions()

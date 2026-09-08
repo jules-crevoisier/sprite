@@ -479,6 +479,23 @@ export function buildCommands(app: App): Command[] {
     },
   })
 
+  add({
+    id: 'view.workspace', label: 'Espace de travail…', group: 'Vue', icon: 'layout',
+    run: () => {
+      const anchor = document.querySelector<HTMLElement>('.topbar-actions button[title^="Espace"]')
+      if (anchor) app.workspace.workspaceMenu(anchor)
+    },
+  })
+  add({
+    id: 'view.timeline', label: 'Afficher la timeline', group: 'Vue', keys: 'Alt+L', icon: 'panel-bottom',
+    checked: () => app.workspace.timelineVisible,
+    run: () => app.workspace.setTimelineVisible(!app.workspace.timelineVisible),
+  })
+  add({
+    id: 'view.layout-reset', label: 'Reinitialiser la disposition', group: 'Vue', icon: 'refresh',
+    run: () => app.workspace.reset(),
+  })
+
   /* ---------------- Aide ---------------- */
 
   add({

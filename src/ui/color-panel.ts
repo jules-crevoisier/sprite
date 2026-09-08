@@ -4,7 +4,7 @@ import {
   rgbaToHsv, hsvToRgba, TRANSPARENT,
 } from '../core/color'
 import { PALETTE_PRESETS, Palette, quantize } from '../core/palette'
-import { el, clear, iconButton, panelSection } from './dom'
+import { el, clear, iconButton } from './dom'
 import { icon } from './icons'
 import { openMenu, promptDialog, showToast } from './overlay'
 
@@ -14,7 +14,11 @@ import { openMenu, promptDialog, showToast } from './overlay'
  * cartouche actif.
  */
 export class ColorPanel {
-  readonly root: HTMLElement
+  /** Selecteur de couleur. */
+  readonly pickerContent!: HTMLElement
+  /** Nuancier du sprite. */
+  readonly paletteContent!: HTMLElement
+  readonly paletteActions!: HTMLElement[]
   private ed: Editor
   private editing: 'primary' | 'secondary' = 'primary'
   private hsv = { h: 0, s: 0, v: 1, a: 255 }
@@ -34,14 +38,14 @@ export class ColorPanel {
 
   constructor(editor: Editor) {
     this.ed = editor
-    this.root = this.build()
+    this.build()
     this.syncFromEditor()
     editor.events.on('settings', () => this.syncFromEditor())
     editor.events.on('reload', () => { this.renderPalette(); this.syncFromEditor() })
     editor.events.on('doc', () => this.renderPalette())
   }
 
-  private build(): HTMLElement {
+  private build(): void {
     const swatches = el('div', { class: 'color-slots' },
       this.primarySwatch,
       this.secondarySwatch,
@@ -106,21 +110,14 @@ export class ColorPanel {
     const picker = el('div', { class: 'panel-body fixed' },
       swatches, el('div', { style: { height: '9px' } }), svArea, hue, alpha, hexRow, toggle, channels)
 
-    return el('div', { style: { display: 'contents' } },
-      panelSection({ title: 'Couleur', key: 'color', body: picker }),
-      panelSection({
-        title: 'Palette',
-        key: 'palette',
-        grow: true,
-        className: 'palette',
-        body: el('div', { class: 'panel-body tight' }, this.paletteGrid),
-        actions: [
-          this.paletteName,
-          iconButton(icon('plus', 14), 'Ajouter la couleur courante', () => this.addCurrent(), { className: 'ghost sm icon-only' }),
-          iconButton(icon('settings', 14), 'Options de palette', (e) => this.paletteMenu(e), { className: 'ghost sm icon-only' }),
-        ],
-      }),
-    )
+    ;(this as { pickerContent: HTMLElement }).pickerContent = picker
+    ;(this as { paletteContent: HTMLElement }).paletteContent =
+      el('div', { class: 'panel-body tight' }, this.paletteGrid)
+    ;(this as { paletteActions: HTMLElement[] }).paletteActions = [
+      this.paletteName,
+      iconButton(icon('plus', 14), 'Ajouter la couleur courante', () => this.addCurrent(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('settings', 14), 'Options de palette', (e) => this.paletteMenu(e), { className: 'ghost sm icon-only' }),
+    ]
   }
 
   /** Rend une bande ou une zone interactive au glisser. */

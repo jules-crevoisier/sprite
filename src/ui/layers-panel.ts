@@ -1,13 +1,14 @@
 import type { Editor } from '../core/editor'
 import { BLEND_MODES, type BlendMode } from '../core/blend'
 import { compositeFrame } from '../render/composite'
-import { el, clear, iconButton, panelSection, select, slider } from './dom'
+import { el, clear, iconButton, select, slider } from './dom'
 import { icon } from './icons'
 import { openMenu, confirmDialog } from './overlay'
 
 /** Panneau des calques : visibilite, verrou, opacite, fusion, reordonnancement. */
 export class LayersPanel {
-  readonly root: HTMLElement
+  readonly content: HTMLElement
+  readonly actions: HTMLElement[]
   private ed: Editor
   private list = el('div', { class: 'layer-list' })
   private footer = el('div', { class: 'layer-foot' })
@@ -15,23 +16,16 @@ export class LayersPanel {
 
   constructor(editor: Editor) {
     this.ed = editor
-    const body = el('div', { style: { display: 'contents' } },
+    this.content = el('div', { style: { display: 'contents' } },
       el('div', { class: 'panel-body tight', style: { flex: '1' } }, this.list),
       this.footer,
     )
-    this.root = panelSection({
-      title: 'Calques',
-      key: 'layers',
-      grow: true,
-      className: 'layers',
-      body,
-      actions: [
-        iconButton(icon('plus', 14), 'Nouveau calque (Maj+N)', () => this.addLayer(), { className: 'ghost sm icon-only' }),
-        iconButton(icon('duplicate', 14), 'Dupliquer le calque', () => this.duplicate(), { className: 'ghost sm icon-only' }),
-        iconButton(icon('merge', 14), 'Fusionner vers le bas', () => this.mergeDown(), { className: 'ghost sm icon-only' }),
-        iconButton(icon('trash', 14), 'Supprimer le calque', () => this.remove(), { className: 'ghost sm icon-only' }),
-      ],
-    })
+    this.actions = [
+      iconButton(icon('plus', 14), 'Nouveau calque (Maj+N)', () => this.addLayer(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('duplicate', 14), 'Dupliquer le calque', () => this.duplicate(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('merge', 14), 'Fusionner vers le bas', () => this.mergeDown(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('trash', 14), 'Supprimer le calque', () => this.remove(), { className: 'ghost sm icon-only' }),
+    ]
     editor.events.on('doc', () => this.render())
     editor.events.on('cursor', () => this.render())
     editor.events.on('reload', () => this.render())

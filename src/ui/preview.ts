@@ -4,7 +4,8 @@ import { el } from './dom'
 
 /** Apercu du rendu final a l'echelle, sans grille ni onion skin. */
 export class PreviewPanel {
-  readonly root: HTMLElement
+  /** Contenu du panneau ; l'entete est fournie par l'espace de travail. */
+  readonly content: HTMLElement
   private ed: Editor
   private canvas = el('canvas', { width: 64, height: 64 })
   private meta = el('div', { class: 'preview-meta' })
@@ -19,7 +20,7 @@ export class PreviewPanel {
       this.render()
     })
     box.title = 'Cliquer pour changer l\'echelle de l\'apercu'
-    this.root = box
+    this.content = box
 
     editor.events.on('doc', () => this.render())
     editor.events.on('cursor', () => this.render())

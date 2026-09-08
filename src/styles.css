@@ -78,14 +78,51 @@ button { cursor: pointer; }
 }
 
 .workspace {
-  display: grid;
-  grid-template-columns: var(--w-tools) 1fr var(--w-side);
+  display: flex;
   min-height: 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
+/* Colonnes de panneaux, rangees a gauche ou a droite de la toile. */
+.dock {
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: none;
+}
+.dock-left { border-right: 1px solid var(--line); }
+.dock-right { border-left: 1px solid var(--line); }
+.dock.is-empty { display: none; }
+
+.splitter {
+  flex: none;
+  width: 5px;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background .12s;
+}
+.splitter:hover, .splitter.active { background: var(--accent); }
+.splitter.is-hidden { display: none; }
+
+.dock-drop { min-height: 24px; flex: 1 0 24px; }
+.dock-drop.active { background: var(--accent-soft); box-shadow: inset 0 2px 0 var(--accent); }
+
+.panel.is-dragging { opacity: .45; }
+.panel.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.panel.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.panel-head[draggable="true"] { cursor: grab; }
+.panel-head[draggable="true"]:active { cursor: grabbing; }
+.panel-title { font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+
+.timeline.is-hidden { display: none; }
+
 .canvas-area {
+  /* Prend toute la largeur laissee par les docks. */
+  flex: 1 1 0;
   position: relative;
   background:
     radial-gradient(circle at 50% 40%, #1a1f2b 0%, #0d0f14 78%);
@@ -318,16 +355,6 @@ input[type="range"]::-moz-range-thumb {
    Panneau lateral
    ------------------------------------------------------------------ */
 
-.sidebar {
-  background: var(--bg-1);
-  border-left: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
 .panel {
   display: flex;
   flex-direction: column;
@@ -342,10 +369,8 @@ input[type="range"]::-moz-range-thumb {
    laterale qui defile plutot que les panneaux qui s'ecrasent.
 */
 .panel.grow { flex: 1 0 auto; }
-.panel.layers { min-height: 150px; }
-.panel.layers .panel-body { max-height: 34vh; }
-.panel.palette { min-height: 104px; }
-.panel.palette .panel-body { max-height: 32vh; }
+/* Un panneau extensible ne doit pas manger tout le dock a lui seul. */
+.dock .panel.grow > .panel-body { max-height: 36vh; }
 .layer-foot { flex: none; padding: 6px 10px 9px; border-top: 1px solid var(--line-soft); }
 
 .panel-head {
@@ -776,16 +801,14 @@ input[type="range"]::-moz-range-thumb {
 /* Ecrans etroits : les panneaux passent en tiroirs */
 /* Ecrans peu hauts : on resserre pour garder la palette visible. */
 @media (max-height: 840px) {
-  :root { --h-timeline: 172px; }
   .preview-box { height: 84px; }
   .preview-box canvas { max-height: 72px; }
   .sv-area { height: 78px; }
-  .panel.layers { min-height: 128px; }
-  .panel.palette { min-height: 92px; }
+  .dock .panel.grow > .panel-body { max-height: 30vh; }
 }
 
 @media (max-width: 1180px) {
-  :root { --w-side: 232px; --h-timeline: 176px; --w-tools: 44px; }
+  :root { --h-timeline: 176px; --w-tools: 44px; }
   .toolbar { grid-template-columns: 1fr; }
   .brand-name { display: none; }
 }

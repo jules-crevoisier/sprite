@@ -66,6 +66,7 @@ const BINDINGS: Record<string, string> = {
   'ctrl+1': 'view.zoom-100',
   "ctrl+'": 'view.grid',
   'alt+t': 'view.tiled',
+  'alt+l': 'view.timeline',
 
   f1: 'help.shortcuts',
   'ctrl+k': 'help.palette',

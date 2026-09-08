@@ -116,6 +116,32 @@ export class Viewport {
     this.center()
   }
 
+  /**
+   * Rattrape un changement de largeur de la zone de dessin en decalant le
+   * panoramique : le sprite ne saute pas sous le curseur quand on tire un
+   * separateur.
+   */
+  shiftPan(dx: number, dy = 0): void {
+    this.ed.view.panX += dx
+    this.ed.view.panY += dy
+    this.invalidate()
+  }
+
+  /** Ramene le sprite dans la vue s'il en est completement sorti. */
+  ensureVisible(): void {
+    const r = this.canvas.getBoundingClientRect()
+    if (!r.width || !r.height) return
+    const v = this.ed.view
+    const w = this.ed.sprite.width * v.zoom
+    const h = this.ed.sprite.height * v.zoom
+    const margin = 24
+    const outside =
+      v.panX + w < margin || v.panX > r.width - margin ||
+      v.panY + h < margin || v.panY > r.height - margin
+    if (outside) this.center()
+    else this.invalidate()
+  }
+
   center(): void {
     const r = this.canvas.getBoundingClientRect()
     const s = this.ed.sprite
