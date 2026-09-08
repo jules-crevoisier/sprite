@@ -35,7 +35,7 @@ const MENUS: { label: string; items: string[] }[] = [
   },
   {
     label: 'Assiste',
-    items: ['sprite.variants', 'sprite.detail'],
+    items: ['rig.open', '---', 'sprite.variants', 'sprite.detail'],
   },
   {
     label: 'Calque',

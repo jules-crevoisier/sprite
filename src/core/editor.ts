@@ -13,6 +13,7 @@ export type ToolId =
   | 'select-rect' | 'select-ellipse' | 'lasso' | 'magic-wand'
   | 'move' | 'hand' | 'zoom'
   | 'shading' | 'blur' | 'spray' | 'gradient'
+  | 'rig'
 
 export interface ToolSettings {
   tool: ToolId

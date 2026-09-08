@@ -3,6 +3,7 @@ import { fromHex, toHex } from '../core/color'
 import { Sprite, Layer, genId, seedIds, type Slice, type Tag } from '../core/document'
 import { Palette } from '../core/palette'
 import type { BlendMode } from '../core/blend'
+import { emptyRig, seedBoneIds, type Bone } from '../smart/rig'
 
 export const PROJECT_EXT = 'pixelforge'
 const FORMAT = 'pixelforge'
@@ -18,6 +19,14 @@ interface LayerJson {
   blendMode: BlendMode
   cels: (CelJson | null)[]
 }
+interface RigJson {
+  bones: Bone[]
+  /** Dessin de reference encode en PNG. */
+  rest: string | null
+  /** Table des poids, un octet par pixel, encodee en base64. */
+  weights: string | null
+}
+
 interface ProjectJson {
   format: string
   version: number
@@ -31,6 +40,7 @@ interface ProjectJson {
   tags: (Omit<Tag, 'color'> & { color: string })[]
   slices: (Omit<Slice, 'color'> & { color: string })[]
   layers: LayerJson[]
+  rig?: RigJson
 }
 
 /** Serialise le sprite. Les pixels sont stockes en PNG base64, donc compresses. */
@@ -47,6 +57,11 @@ export function serializeSprite(sprite: Sprite): string {
     palette: { name: sprite.palette.name, colors: sprite.palette.toHexList() },
     tags: sprite.tags.map((t) => ({ ...t, color: toHex(t.color) })),
     slices: sprite.slices.map((s) => ({ ...s, color: toHex(s.color) })),
+    rig: {
+      bones: sprite.rig.bones.map((b) => ({ ...b })),
+      rest: sprite.rig.rest ? sprite.rig.rest.toCanvas().toDataURL('image/png') : null,
+      weights: sprite.rig.weights ? bytesToBase64(sprite.rig.weights) : null,
+    },
     layers: sprite.layers.map((l) => ({
       name: l.name,
       visible: l.visible,
@@ -109,8 +124,39 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
     sprite.layers.push(layer)
   }
   if (!sprite.layers.length) sprite.layers.push(new Layer('Calque 1', sprite.frameCount))
+
+  sprite.rig = emptyRig()
+  if (data.rig?.bones?.length) {
+    sprite.rig.bones = data.rig.bones.map((b) => ({ ...b }))
+    seedBoneIds(Math.max(...sprite.rig.bones.map((b) => b.id)))
+    if (data.rig.rest) sprite.rig.rest = await decodePng(data.rig.rest, data.width, data.height)
+    if (data.rig.weights) {
+      const bytes = base64ToBytes(data.rig.weights)
+      // Une toile redimensionnee entre deux sessions invalide la liaison.
+      sprite.rig.weights = bytes.length === data.width * data.height ? bytes : null
+      if (!sprite.rig.weights) sprite.rig.rest = null
+    }
+  }
+
   seedIds(Date.now() % 100000)
   return sprite
+}
+
+/** Encodage compact d'un tableau d'octets, sans passer par une chaine geante. */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+function base64ToBytes(text: string): Uint8Array {
+  const binary = atob(text)
+  const out = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+  return out
 }
 
 /* ------------------------------------------------------------------ */

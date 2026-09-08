@@ -15,6 +15,7 @@ import { openCommandPalette } from './command-palette'
 import { ColorPanel } from './color-panel'
 import { LayersPanel } from './layers-panel'
 import { PreviewPanel } from './preview'
+import { RigPanel } from './rig-panel'
 import { TimelinePanel } from './timeline'
 import { StatusBar } from './statusbar'
 import { Playback } from './playback'
@@ -36,6 +37,7 @@ export class App {
   readonly colorPanel: ColorPanel
   readonly layersPanel: LayersPanel
   readonly preview: PreviewPanel
+  readonly rigPanel: RigPanel
   readonly status: StatusBar
   readonly workspace: Workspace
 
@@ -54,6 +56,7 @@ export class App {
     this.colorPanel = new ColorPanel(this.ed)
     this.layersPanel = new LayersPanel(this.ed)
     this.preview = new PreviewPanel(this.ed)
+    this.rigPanel = new RigPanel(this.ed)
     this.timeline = new TimelinePanel(this.ed, this.playback, qs('#timeline'))
 
     this.workspace = new Workspace(this.panelDefs(), {
@@ -98,6 +101,10 @@ export class App {
         id: 'palette', title: 'Palette', icon: 'sliders',
         content: this.colorPanel.paletteContent, actions: this.colorPanel.paletteActions,
         grow: true, minHeight: 104,
+      },
+      {
+        id: 'rig', title: 'Squelette', icon: 'rig',
+        content: this.rigPanel.content, actions: this.rigPanel.actions,
       },
     ]
   }

@@ -127,6 +127,43 @@ déplacement, main et loupe.
 - **Pelure d'oignon** jusqu'à 3 frames avant et après, teintées rouge/bleu.
 - Lecture en direct sur la toile, limitée au tag courant si besoin.
 
+### Travailler avec l'assistant
+
+Trois fonctions s'appuient sur une analyse du dessin plutôt que sur des
+réglages aveugles. Les couleurs du sprite sont d'abord regroupées en
+**familles** — les teintes d'une même gamme classées de l'ombre à la
+lumière. C'est l'unité de travail naturelle du pixel art : un vêtement, une
+peau, un feuillage sont chacun une famille.
+
+![Un personnage au repos puis posé par le squelette](docs/rig.png)
+
+**Squelette et pose** (`K`). On trace des os sur le personnage, on lie les
+pixels, et chaque pixel est attribué à l'os le plus proche. Tirer une
+extrémité fait pivoter le membre et l'image est régénérée : le parcours va
+du pixel d'arrivée vers sa source, donc aucun trou n'apparaît là où la
+matière s'étire, et les fissures d'articulation sont refermées par une
+recherche locale puis un comblement majoritaire. Les os s'enchaînent — une
+rotation d'épaule entraîne tout le bras — et les pixels qu'aucun os ne porte
+restent en place, ce qui permet de ne rigger qu'une partie du dessin.
+Mémorisez une pose, déplacez le squelette, et les frames intermédiaires sont
+générées par interpolation.
+
+**Variantes de couleur** (`Ctrl+Maj+V`). On choisit une famille et l'éditeur
+en propose des déclinaisons : tour du cercle chromatique, teintes voisines,
+complémentaire, ou strictement dans la palette du projet. Les rapports
+d'ombre et de lumière sont conservés, donc le modelé survit au changement de
+teinte. Les variantes retenues deviennent des frames taguées, des calques,
+ou remplacent le sprite.
+
+![Bloc d'herbe brut, deux passes de détail, puis une variante de couleur](docs/detail.png)
+
+**Ajouter du détail** (`Ctrl+Maj+D`). Grain, taches, touffes, ombre des
+bords, lumière du haut, volume tramé — avec des enchaînements prêts pour
+l'herbe, la pierre, la terre, le tissu et le métal. Chaque pixel se décale
+d'un cran dans sa propre famille, si bien que la texture **n'introduit
+aucune couleur étrangère**. Une graine fait varier le tirage, et « Ajouter »
+fige la passe courante pour en préparer une autre : le détail se cumule.
+
 ### Exporter
 
 La fenêtre d'export montre la planche générée en direct et produit une archive
@@ -172,6 +209,15 @@ frames en indiquant la taille des cases, l'espacement et la marge.
 `.gpl` et `.hex` (Lospec), tri par luminosité ou par teinte. Remplacer une
 couleur de la palette la remplace dans tout le sprite.
 
+## Espace de travail
+
+Les panneaux ne sont pas figés. Chacun se déplace entre le dock gauche et le
+dock droit par glisser-déposer sur son en-tête, se réordonne, se plie ou se
+masque ; les docks se redimensionnent au séparateur et la timeline s'affiche
+ou se cache. Cinq dispositions couvrent les façons de travailler courantes —
+complet, dessin, animation, deux colonnes, minimal — et la disposition
+courante est restaurée au chargement suivant.
+
 ## Raccourcis
 
 `F1` affiche la liste complète, `Ctrl+K` ouvre la palette de commandes.
@@ -183,6 +229,7 @@ couleur de la palette la remplace dans tout le sprite.
 | Pendant un tracé | `Maj` contraint à 45° · `Alt` dessine depuis le centre |
 | Sélection | `Maj` ajoute · `Alt` soustrait · `Ctrl` intersecte · flèches déplacent les pixels |
 | Animation | `,` `.` frame précédente/suivante · `Entrée` lecture · `Alt+N` nouvelle frame · `Ctrl+T` tag |
+| Assistant | `K` squelette · `Ctrl+Maj+V` variantes · `Ctrl+Maj+D` détail |
 | Divers | `X` permute les couleurs · `[` `]` taille de brosse · `Échap` annule le geste puis désélectionne |
 
 ## Sous le capot
@@ -204,6 +251,7 @@ src/
                pixel perfect, tramage) et les 20 outils
   render/      composition des calques et viewport (zoom, grilles, onion skin)
   export/      planches, JSON, Unity, Godot, GIF, ZIP
+  smart/       analyse des familles de couleurs, variantes, détail, squelette
   io/          sauvegarde du projet et import d'images
   ui/          panneaux, menus, dialogues, raccourcis
 docker/        configuration nginx de l'image de production
@@ -234,6 +282,8 @@ décodeur du navigateur, la signature du ZIP et l'aller-retour du projet.
 ## Limites connues
 
 - Pas de groupes de calques ni de cases liées.
+- Le squelette déforme au plus proche voisin : une rotation faible sur un
+  petit sprite reste anguleuse, comme toute rotation de pixel art.
 - Pas de lecture ni d'écriture du format `.aseprite` binaire ; l'échange passe
   par le PNG et le JSON.
 - Le mode couleur est RGBA : pas d'indexé strict, mais l'alignement sur la

@@ -250,6 +250,14 @@ export function buildCommands(app: App): Command[] {
     run: () => ops.snapToPalette(ed, 'sprite'),
   })
   add({
+    id: 'rig.open', label: 'Squelette : ouvrir le panneau', group: 'Assiste', keys: 'K', icon: 'rig',
+    run: () => {
+      app.workspace.setVisible('rig', true)
+      app.setTool('rig')
+      showToast('Glissez sur la toile pour tracer un os', 'info')
+    },
+  })
+  add({
     id: 'sprite.variants', label: 'Variantes de couleur…', group: 'Assiste', keys: 'Ctrl+Maj+V', icon: 'variants',
     run: () => variantsDialog(ed),
   })

@@ -2,6 +2,7 @@ import { Bitmap, type Rect } from './bitmap'
 import { compositeBitmap, type BlendMode } from './blend'
 import type { RGBA } from './color'
 import { Palette } from './palette'
+import { emptyRig, type Rig } from '../smart/rig'
 
 let nextId = 1
 export const genId = (): number => nextId++
@@ -72,6 +73,8 @@ export class Sprite {
   grid = { x: 0, y: 0, w: 16, h: 16 }
   /** Origine du sprite, exportee vers Unity/Godot comme pivot par defaut. */
   pivot = { x: 0.5, y: 0.5 }
+  /** Squelette optionnel, pour poser le dessin plutot que le redessiner. */
+  rig: Rig = emptyRig()
 
   constructor(width = 32, height = 32, palette?: Palette) {
     this.width = width

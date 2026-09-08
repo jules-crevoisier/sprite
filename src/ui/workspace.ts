@@ -35,8 +35,8 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     label: 'Complet',
     hint: 'Tous les panneaux a droite',
     layout: () => ({
-      docks: { left: [], right: ['preview', 'layers', 'color', 'palette'] },
-      hidden: [],
+      docks: { left: [], right: ['preview', 'layers', 'color', 'palette', 'rig'] },
+      hidden: ['rig'],
       collapsed: [],
       widths: { left: 260, right: 264 },
       timelineVisible: true,
@@ -47,7 +47,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     hint: 'Couleur et palette, grande toile',
     layout: () => ({
       docks: { left: [], right: ['color', 'palette', 'layers'] },
-      hidden: ['preview'],
+      hidden: ['preview', 'rig'],
       collapsed: [],
       widths: { left: 260, right: 250 },
       timelineVisible: false,
@@ -57,8 +57,8 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     label: 'Animation',
     hint: 'Apercu et calques, timeline en avant',
     layout: () => ({
-      docks: { left: [], right: ['preview', 'layers', 'palette'] },
-      hidden: ['color'],
+      docks: { left: [], right: ['preview', 'layers', 'rig'] },
+      hidden: ['color', 'palette'],
       collapsed: [],
       widths: { left: 260, right: 264 },
       timelineVisible: true,
@@ -69,7 +69,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     hint: 'Outils a gauche, couleurs a droite',
     layout: () => ({
       docks: { left: ['preview', 'layers'], right: ['color', 'palette'] },
-      hidden: [],
+      hidden: ['rig'],
       collapsed: [],
       widths: { left: 232, right: 246 },
       timelineVisible: true,
@@ -80,7 +80,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     hint: 'Rien que la toile',
     layout: () => ({
       docks: { left: [], right: ['palette'] },
-      hidden: ['preview', 'layers', 'color'],
+      hidden: ['preview', 'layers', 'color', 'rig'],
       collapsed: [],
       widths: { left: 260, right: 200 },
       timelineVisible: false,
