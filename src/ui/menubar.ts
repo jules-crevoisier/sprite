@@ -9,7 +9,7 @@ const MENUS: { label: string; items: string[] }[] = [
   {
     label: 'Fichier',
     items: [
-      'file.new', 'file.open', 'file.save', '---',
+      'file.new', 'file.mascotte', 'file.open', 'file.save', '---',
       'file.import-image', 'file.import-layer', '---',
       'file.export', 'file.export-png', 'file.export-gif', 'file.export-frames', '---',
       'file.copy-png', 'file.restore',

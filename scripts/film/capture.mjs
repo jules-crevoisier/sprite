@@ -179,6 +179,48 @@ writeFileSync(join(OUT, 'sprite.json'), JSON.stringify({
 }, null, 2))
 
 /* ---------------------------------------------------------------- */
+/* 1bis. Les cycles de la mascotte, dessines a la main                */
+/* ---------------------------------------------------------------- */
+// Le chapitre precedent montre ce que le moteur deforme tout seul. Celui-ci
+// montre l'autre moitie du logiciel : des images posees une par une. Les
+// deux sortent du meme fichier de sprite, c'est ce qui rend la comparaison
+// honnete.
+const mascotte = await page.evaluate(async () => {
+  const { CLIPS_PIXL, imageDePose } = await import('/src/ui/mascot-clips.ts')
+  const { TAILLE, PALETTE_MASCOTTE } = await import('/src/ui/mascot-anim.ts')
+
+  const vers = (bm) => {
+    const cv = document.createElement('canvas')
+    cv.width = TAILLE; cv.height = TAILLE
+    const img = new ImageData(new Uint8ClampedArray(bm.data), TAILLE, TAILLE)
+    cv.getContext('2d').putImageData(img, 0, 0)
+    return cv.toDataURL()
+  }
+
+  return {
+    taille: TAILLE,
+    // La palette de la mascotte est deja ecrite en hexadecimal.
+    palette: Object.values(PALETTE_MASCOTTE),
+    clips: CLIPS_PIXL.map((c) => ({
+      id: c.id, nom: c.nom, ms: c.ms, loop: c.loop,
+      images: c.poses.map((pose) => vers(imageDePose(pose))),
+    })),
+  }
+}, {})
+
+mkdirSync(join(OUT, 'mascotte'), { recursive: true })
+for (const cycle of mascotte.clips) {
+  cycle.images.forEach((url, i) => {
+    writeFileSync(join(OUT, 'mascotte', `${cycle.id}-${String(i).padStart(2, '0')}.png`), png(url))
+  })
+  console.log(`mascotte ${cycle.id.padEnd(8)} ${cycle.images.length} images`)
+}
+writeFileSync(join(OUT, 'mascotte.json'), JSON.stringify({
+  taille: mascotte.taille, palette: mascotte.palette,
+  clips: mascotte.clips.map((c) => ({ id: c.id, nom: c.nom, ms: c.ms, loop: c.loop, frames: c.images.length })),
+}, null, 2))
+
+/* ---------------------------------------------------------------- */
 /* 2. Les captures de l'interface                                     */
 /* ---------------------------------------------------------------- */
 const clip = async (nom, selecteur, avant) => {

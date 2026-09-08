@@ -38,6 +38,15 @@ export function buildCommands(app: App): Command[] {
   })
 
   add({
+    id: 'file.mascotte', label: 'Ouvrir la mascotte animee', group: 'Fichier', icon: 'film',
+    run: async () => {
+      const { spritePixl } = await import('./mascot-clips')
+      ed.loadSprite(spritePixl())
+      ed.toast('Pixl et ses six cycles — les tags sont deja poses', 'success')
+    },
+  })
+
+  add({
     id: 'file.open', label: 'Ouvrir un projet…', group: 'Fichier', keys: 'Ctrl+O', icon: 'upload',
     run: async () => {
       const files = await pickFiles(`.${PROJECT_EXT},.json`)
