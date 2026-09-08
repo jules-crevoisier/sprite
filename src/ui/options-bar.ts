@@ -16,40 +16,61 @@ import { icon } from './icons'
  * secondaire transparente troue le trait, ce qui ressemble a s'y meprendre a
  * un pinceau plus fin. On dessine donc le trait tel qu'il sortira.
  */
-function strokePreview(ed: Editor): HTMLElement {
-  const s = ed.settings
-  const offsets = brushOffsets(s.brushSize, s.brushShape)
+function strokePreview(ed: Editor): { node: HTMLElement; redraw: () => void } {
   const W = 46, H = 22, cell = 1
-  const canvas = el('canvas', {
-    width: W, height: H,
-    class: 'brush-preview stroke',
-    title: `Trait reel : ${offsets.length / 2} pixel(s) par pointe`
-      + (s.ditherPattern === 'none' ? '' : ', tramage applique'),
-  })
+  const canvas = el('canvas', { width: W, height: H, class: 'brush-preview stroke' })
   const ctx = canvas.getContext('2d')
-  if (!ctx) return el('div', { class: 'opt' }, canvas)
+  const node = el('div', { class: 'opt' }, canvas)
+  if (!ctx) return { node, redraw: () => {} }
 
-  // Un trait courbe : il montre a la fois l'epaisseur, la forme de la pointe
-  // et, sur les obliques, ce que le tramage fait du remplissage.
-  const poser = (px: number, py: number) => {
-    for (let i = 0; i < offsets.length; i += 2) {
-      const x = px + offsets[i], y = py + offsets[i + 1]
-      if (x < 0 || y < 0 || x >= W || y >= H) continue
-      let color = ed.primary
-      if (s.ditherPattern !== 'none') {
-        const on = dither(s.ditherPattern, x, y, s.ditherRatio)
-        color = on ? ed.primary : ed.secondary
+  // Redessine au lieu d'etre reconstruit : l'apercu doit suivre le curseur
+  // pendant qu'on le tire, sans que la barre entiere soit refaite.
+  const redraw = (): void => {
+    const s = ed.settings
+    const offsets = brushOffsets(s.brushSize, s.brushShape)
+    canvas.title = `Trait reel : ${offsets.length / 2} pixel(s) par pointe`
+      + (s.ditherPattern === 'none' ? '' : ', tramage applique')
+    ctx.clearRect(0, 0, W, H)
+
+    // Un trait courbe : il montre a la fois l'epaisseur, la forme de la pointe
+    // et, sur les obliques, ce que le tramage fait du remplissage.
+    const poser = (px: number, py: number) => {
+      for (let i = 0; i < offsets.length; i += 2) {
+        const x = px + offsets[i], y = py + offsets[i + 1]
+        if (x < 0 || y < 0 || x >= W || y >= H) continue
+        let color = ed.primary
+        if (s.ditherPattern !== 'none') {
+          const on = dither(s.ditherPattern, x, y, s.ditherRatio)
+          color = on ? ed.primary : ed.secondary
+        }
+        if (getA(color) === 0) continue
+        ctx.fillStyle = toCss(color)
+        ctx.fillRect(x * cell, y * cell, cell, cell)
       }
-      if (getA(color) === 0) continue
-      ctx.fillStyle = toCss(color)
-      ctx.fillRect(x * cell, y * cell, cell, cell)
+    }
+    for (let t = 0; t <= 1; t += 0.02) {
+      poser(Math.round(4 + t * (W - 9)), Math.round(H / 2 + Math.sin(t * Math.PI) * -5))
     }
   }
-  for (let t = 0; t <= 1; t += 0.02) {
-    poser(Math.round(4 + t * (W - 9)), Math.round(H / 2 + Math.sin(t * Math.PI) * -5))
-  }
-  return el('div', { class: 'opt' }, canvas)
+  redraw()
+  return { node, redraw }
 }
+
+/**
+ * Etat conserve entre deux rendus de la barre.
+ *
+ * Chaque changement de reglage rejoue le rendu de la barre. Tant qu'on ne
+ * touche a rien c'est sans consequence, mais pendant un glisser cela detruit
+ * le curseur que la souris tient : le navigateur perd sa prise et la valeur
+ * s'arrete au premier cran. On note donc qu'un geste est en cours, et on se
+ * contente alors de rafraichir ce qui depend de la valeur.
+ */
+interface EtatBarre {
+  enGeste: boolean
+  rafraichir: (() => void) | null
+  rebatir: () => void
+}
+const etats = new WeakMap<HTMLElement, EtatBarre>()
 
 const SHAPES: { value: BrushShape; icon: string; title: string }[] = [
   { value: 'circle', icon: '<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="currentColor"/></svg>', title: 'Ronde' },
@@ -67,6 +88,28 @@ const PAINT_MODES: { value: PaintMode; label: string }[] = [
 
 /** Barre contextuelle : n'affiche que les reglages utiles a l'outil actif. */
 export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: () => void): void {
+  let etat = etats.get(container)
+  if (!etat) {
+    etat = { enGeste: false, rafraichir: null, rebatir: refresh }
+    etats.set(container, etat)
+    const e = etat
+    container.addEventListener('pointerdown', () => { e.enGeste = true })
+    // Le relachement peut tomber hors de la barre : on ecoute la fenetre.
+    const fin = () => {
+      if (!e.enGeste) return
+      e.enGeste = false
+      e.rebatir()
+    }
+    window.addEventListener('pointerup', fin)
+    window.addEventListener('pointercancel', fin)
+  }
+  etat.rebatir = refresh
+  if (etat.enGeste) { etat.rafraichir?.(); return }
+
+  // Les fonctions a rejouer pendant un geste, sans reconstruire la barre.
+  const aJour: (() => void)[] = []
+  etat.rafraichir = () => { for (const f of aJour) f() }
+
   clear(container)
   const tool = toolById(ed.settings.tool)
   const s = ed.settings
@@ -113,14 +156,22 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
   if (opts.has('brush')) {
     add(el('div', { class: 'opt' },
       el('label', null, 'Taille'),
-      slider(1, 64, s.brushSize, 1, (v) => { ed.updateSettings({ brushSize: v }); refresh() }, (v) => `${v}px`),
+      slider(1, 64, s.brushSize, 1, (v) => ed.updateSettings({ brushSize: v }), (v) => `${v}px`),
     ))
     add(segmented(SHAPES.map((sh) => ({ value: sh.value, icon: sh.icon, title: sh.title })), s.brushShape,
-      (v) => { ed.updateSettings({ brushShape: v }); refresh() }))
+      (v) => ed.updateSettings({ brushShape: v })))
     // Le trait tel qu'il sortira : c'est la seule facon de voir ce que la
     // forme change, et pourquoi elle ne change rien en dessous de 3 pixels.
-    add(strokePreview(ed))
-    if (s.brushSize < 3) add(el('div', { class: 'opt-note' }, 'inerte sous 3 px'))
+    const apercu = strokePreview(ed)
+    add(apercu.node)
+    aJour.push(apercu.redraw)
+    // La note est toujours posee et seulement masquee : la faire apparaitre
+    // et disparaitre changerait la largeur de la barre pendant le glisser.
+    const note = el('div', { class: 'opt-note' }, 'inerte sous 3 px')
+    const majNote = () => { note.style.visibility = ed.settings.brushSize < 3 ? 'visible' : 'hidden' }
+    majNote()
+    aJour.push(majNote)
+    add(note)
   }
 
   if (opts.has('opacity')) {
@@ -148,10 +199,10 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
     add(el('div', { class: 'opt' },
       el('label', null, 'Tramage'),
       select(DITHER_PATTERNS.map((d) => ({ value: d.id, label: d.label })), s.ditherPattern,
-        (v) => { ed.updateSettings({ ditherPattern: v }); refresh() }),
+        (v) => ed.updateSettings({ ditherPattern: v })),
     ))
     if (s.ditherPattern !== 'none') {
-      add(slider(0, 1, s.ditherRatio, 0.05, (v) => { ed.updateSettings({ ditherRatio: v }); refresh() },
+      add(slider(0, 1, s.ditherRatio, 0.05, (v) => ed.updateSettings({ ditherRatio: v }),
         (v) => `${Math.round(v * 100)}%`))
       // Le tramage melange deux couleurs pour simuler une teinte absente de
       // la palette. Avec une secondaire transparente il ne melange rien : il

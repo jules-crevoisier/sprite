@@ -130,6 +130,14 @@ export class App {
     clear(hud)
     const zoom = el('span', { class: 'chip' }, `${this.ed.view.zoom < 1 ? this.ed.view.zoom.toFixed(2) : this.ed.view.zoom}x`)
     hud.appendChild(zoom)
+    // La taille du pinceau se regle a la molette et aux crochets : sans
+    // repere pres du curseur, on la change a l'aveugle.
+    if (toolById(this.ed.settings.tool).options.includes('brush')) {
+      hud.appendChild(el('span', {
+        class: 'chip',
+        title: 'Taille du pinceau — Alt+molette, ou [ et ]',
+      }, `${this.ed.settings.brushSize} px`))
+    }
     if (this.ed.tiledDrawing) hud.appendChild(el('span', { class: 'chip' }, 'mode tuile'))
     if (this.ed.symmetry.x || this.ed.symmetry.y) {
       hud.appendChild(el('span', { class: 'chip' },

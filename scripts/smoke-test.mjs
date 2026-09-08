@@ -1641,6 +1641,101 @@ check('graver ecrit les effets dans les pixels', effets.grave)
 check('chaque type d\'effet a sa commande', effets.sansCommande.length === 0,
   effets.sansCommande.join(', '))
 
+/* --- reglages tirables a la souris --- */
+// Les sections precedentes ont pu laisser l'editeur en mode Squelette, ou
+// la barre montre d'autres reglages.
+await page.evaluate(() => { window.pixelforge.setMode('draw'); window.pixelforge.setTool('pencil') })
+await sleep(300)
+// Vise le curseur de taille par son intitule, pas par son rang. Le repere
+// est repose avant chaque usage : la barre se refait entre-temps.
+const marquerTaille = () => page.evaluate(() => {
+  const opt = [...document.querySelectorAll('#optionsbar .opt')]
+    .find((o) => o.querySelector('label')?.textContent === 'Taille')
+  opt?.querySelector('input[type=range]')?.setAttribute('data-test', 'taille')
+})
+await marquerTaille()
+const curseurTaille = '#optionsbar input[data-test="taille"]'
+
+// Un reglage change pendant un geste ne doit pas reconstruire la barre :
+// le curseur tenu par la souris serait detruit et le glisser s'arreterait
+// au premier cran.
+const survie = await page.evaluate((sel) => {
+  const barre = document.getElementById('optionsbar')
+  const avant = document.querySelector(sel)
+  avant.dataset.marque = 'oui'
+  barre.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  window.pixelforge.ed.updateSettings({ brushSize: 12 })
+  const pendant = document.querySelector(sel)?.dataset.marque === 'oui'
+  window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
+  return { pendant, apercu: !!document.querySelector('#optionsbar canvas.stroke') }
+}, curseurTaille)
+check('le curseur survit a un changement pendant le geste', survie.pendant)
+check('l\'apercu du trait reste affiche', survie.apercu)
+
+// Et un vrai glisser doit atteindre la valeur visee, pas le premier cran.
+await marquerTaille()
+const boite = await page.locator(curseurTaille).first().boundingBox()
+const ligne = boite.y + boite.height / 2
+await page.mouse.move(boite.x + boite.width * 0.08, ligne)
+await page.mouse.down()
+for (let i = 1; i <= 12; i++) {
+  await page.mouse.move(boite.x + boite.width * (0.08 + 0.065 * i), ligne)
+}
+await page.mouse.up()
+await sleep(150)
+const tiree = await page.evaluate(() => window.pixelforge.ed.settings.brushSize)
+check('le curseur de taille se tire jusqu\'au bout', tiree > 40, `${tiree} px apres un glisser`)
+
+// Alt sur la molette regle la taille ; le pincement d'un pave tactile,
+// qui arrive avec ctrlKey, doit continuer a zoomer.
+const molette = await page.evaluate(async () => {
+  const ed = window.pixelforge.ed
+  const cv = document.querySelector('#canvas')
+  const r = cv.getBoundingClientRect()
+  const x = r.left + r.width / 2, y = r.top + r.height / 2
+  const roue = (opts) => cv.dispatchEvent(new WheelEvent('wheel',
+    { deltaY: -120, clientX: x, clientY: y, bubbles: true, cancelable: true, ...opts }))
+  const t0 = ed.settings.brushSize, z0 = ed.view.zoom
+  for (let i = 0; i < 4; i++) roue({ altKey: true })
+  const t1 = ed.settings.brushSize, z1 = ed.view.zoom
+  roue({ ctrlKey: true })
+  return { alt: t1 - t0, zoomFige: z0 === z1, pincement: ed.view.zoom !== z1, tailleFigee: ed.settings.brushSize === t1 }
+})
+check('Alt sur la molette change la taille', molette.alt === 4 && molette.zoomFige, `+${molette.alt} px`)
+check('le pincement du pave tactile zoome toujours', molette.pincement && molette.tailleFigee)
+
+/* --- zoomables zoomables des dialogues --- */
+const zoomables = []
+for (const [cmd, nom] of [['sprite.shade', 'ombrage'], ['sprite.detail', 'detail'], ['file.export', 'export']]) {
+  await page.evaluate((c) => window.pixelforge.runCommand(c), cmd)
+  await sleep(500)
+  const cadre = await page.locator('.apercu-zoom').first().boundingBox().catch(() => null)
+  if (!cadre) { zoomables.push({ nom, zoomable: false }); await page.keyboard.press('Escape'); await sleep(300); continue }
+  const valeur = () => page.evaluate(() => document.querySelector('.apercu-zoom-valeur')?.textContent ?? '')
+  const pose = () => page.evaluate(() => document.querySelector('.apercu-scene')?.style.transform ?? '')
+  const depart = await valeur()
+  const cx = cadre.x + cadre.width / 2, cy = cadre.y + cadre.height / 2
+  await page.mouse.move(cx, cy)
+  for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, -100); await sleep(50) }
+  const zoome = await valeur()
+  const avantGlisser = await pose()
+  await page.mouse.down()
+  await page.mouse.move(cx + 60, cy + 25)
+  await page.mouse.up()
+  await sleep(120)
+  const apresGlisser = await pose()
+  await page.mouse.dblclick(cx, cy)
+  await sleep(150)
+  const ajuste = await valeur()
+  zoomables.push({ nom, zoomable: true, zoom: depart !== zoome, deplace: avantGlisser !== apresGlisser, ajuste: ajuste !== zoome })
+  await page.keyboard.press('Escape')
+  await sleep(300)
+}
+check('les apercus des dialogues se zooment', zoomables.every((a) => a.zoomable && a.zoom),
+  zoomables.map((a) => `${a.nom}:${a.zoomable ? (a.zoom ? 'ok' : 'fige') : 'absent'}`).join(' '))
+check('les apercus se deplacent en les tirant', zoomables.every((a) => a.deplace))
+check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

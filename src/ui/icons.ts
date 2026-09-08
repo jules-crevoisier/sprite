@@ -17,7 +17,7 @@ import {
   Merge, LayoutGrid, Box, Gamepad2, SquarePlus,
   PanelBottom, PanelRight, PanelLeft, Columns2, Sparkles, Bone, PersonStanding,
   Shuffle, SlidersHorizontal, Image as ImageIcon, Package, Scissors,
-  ClipboardPaste, Leaf, Dices, RefreshCw, Maximize2, Group,
+  ClipboardPaste, Leaf, Dices, RefreshCw, Maximize2, Group, ZoomOut, Scan,
 } from 'lucide'
 
 /** Structure d'une icone Lucide : [balise, attributs, enfants?]. */
@@ -46,6 +46,9 @@ const SOURCE: Record<string, IconNode> = {
   move: Move as IconNode,
   hand: Hand as IconNode,
   zoom: ZoomIn as IconNode,
+  'zoom-in': ZoomIn as IconNode,
+  'zoom-out': ZoomOut as IconNode,
+  fit: Scan as IconNode,
 
   // Lecture
   play: Play as IconNode,

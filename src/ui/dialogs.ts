@@ -11,6 +11,7 @@ import { spriteFromImage, layerFromImage } from '../io/import'
 import { loadImageBitmap, pickFiles } from '../export/files'
 import { el, checkbox, numberInput, select, slider } from './dom'
 import { ICONS } from './icons'
+import { zoomablePreview } from './preview-zoom'
 import { openModal, showToast } from './overlay'
 
 const SIZE_PRESETS: [string, number, number][] = [
@@ -354,18 +355,16 @@ export function exportDialog(ed: Editor, request: ExportRequest): void {
     unity: { ...request.unity },
   }
 
-  const preview = el('div', { class: 'export-preview' })
+  // Une planche depasse vite la largeur du dialogue : sans zoom on ne peut
+  // pas verifier une case, et c'est justement ce qu'on vient regarder.
+  const apercu = zoomablePreview({ hauteur: 220 })
+  const preview = apercu.node
   const stats = el('p', { class: 'form-note', style: { marginTop: '8px' } })
   const settings = el('div')
 
   const refresh = () => {
     const result = buildExport(ed.sprite, req)
-    const canvas = result.bitmap.toCanvas()
-    // Agrandissement entier pour garder l'apercu net et lisible.
-    const factor = Math.max(1, Math.min(8, Math.floor(Math.min(700 / canvas.width, 210 / canvas.height))))
-    canvas.style.width = `${canvas.width * factor}px`
-    canvas.style.height = `${canvas.height * factor}px`
-    preview.replaceChildren(canvas)
+    apercu.show(result.bitmap)
     const bytes = result.bitmap.width * result.bitmap.height * 4
     stats.textContent =
       `Planche ${result.bitmap.width} × ${result.bitmap.height} px · ${result.frames.length} frame(s) · ` +
