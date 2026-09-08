@@ -1760,7 +1760,7 @@ check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
 
 /* --- mascotte et ses cycles --- */
 const mascotte = await page.evaluate(async () => {
-  const { CLIPS_PIXL, debordsDePatte, decollageSansPoussee, lignesDePatteVisibles, patteDecrochee, piedAuSol, semellesQuiGlissent, spritePixl } = await import('/src/ui/mascot-clips.ts')
+  const { CLIPS_PIXL, corpsEcrase, debordsDePatte, decollageSansPoussee, ecartDePattes, lignesDePatteVisibles, masseDessinee, patteDecrochee, piedAuSol, semellesQuiGlissent, spritePixl } = await import('/src/ui/mascot-clips.ts')
   const { imageDePose, TAILLE } = await import('/src/ui/mascot-anim.ts')
 
   /**
@@ -1792,7 +1792,7 @@ const mascotte = await page.evaluate(async () => {
     return n
   }
 
-  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], piedsEnLair: [], glissements: [], levitations: [], lignesMin: 99, degagementMin: 99 }
+  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], piedsEnLair: [], glissements: [], levitations: [], lignesMin: 99, degagementMin: 99, pattesFondues: [], queuesInegales: [], pattesElastiques: [], masseDessineeMax: 0 }
   for (const clip of CLIPS_PIXL) {
     bilan.cycles++
     const bmps = clip.poses.map(imageDePose)
@@ -1807,6 +1807,11 @@ const mascotte = await page.evaluate(async () => {
       if (lignes < 2) bilan.pattesAvalees.push(`${clip.id}#${i + 1} (${lignes})`)
       // Une patte restee au sol pendant que le corps monte pend dans le vide.
       if (patteDecrochee(clip.poses[i])) bilan.pattesPendantes.push(`${clip.id}#${i + 1}`)
+      // Deux pattes qui se rejoignent ne changent ni la masse ni le nombre
+      // de morceaux : rien d'autre ne peut voir le personnage perdre une
+      // jambe.
+      const ecart = ecartDePattes(clip.poses[i])
+      if (ecart < 2) bilan.pattesFondues.push(`${clip.id}#${i + 1} (${ecart})`)
       bilan.lignesMin = Math.min(bilan.lignesMin, lignes)
       let n = 0, x0 = 99, x1 = -1, y0 = 99, y1 = -1
       for (let y = 0; y < TAILLE; y++) for (let x = 0; x < TAILLE; x++) {
@@ -1845,9 +1850,62 @@ const mascotte = await page.evaluate(async () => {
       for (let k = 0; k < bmps[a].u32.length; k++) if (bmps[a].u32[k] !== bmps[b].u32[k]) d++
       if (d === 0) bilan.jumelles.push(`${clip.id} ${a + 1}=${b + 1}`)
     }
+    // La queue disparait sous le torse sans que rien ne le signale : sa
+    // surface visible se mesure en la sortant du cadre et en comparant.
+    // Ce qui se voit n'est pas l'ecart sur tout le cycle — les cinq dessins
+    // de queue n'ont deja pas la meme taille — mais le saut d'une image a
+    // la suivante. La queue du saut perdait un quart de sa surface sur une
+    // seule image, pile a l'atterrissage : c'est un clignotement.
+    const queues = clip.poses.map((p, i) => {
+      const sans = imageDePose({ ...p, queue: [p.queue[0], -60, -60] })
+      let n = 0
+      for (let k = 0; k < bmps[i].u32.length; k++) {
+        if ((bmps[i].u32[k] >>> 24) && !(sans.u32[k] >>> 24)) n++
+      }
+      return n
+    })
+    for (let i = 0; i < queues.length; i++) {
+      const suivant = (i + 1) % queues.length
+      if (!clip.loop && suivant === 0) continue
+      const d = Math.abs(queues[suivant] - queues[i])
+      if (d > 4) bilan.queuesInegales.push(`${clip.id} ${i + 1}->${suivant + 1} (${d} px)`)
+    }
+
+    // Une patte peut perdre les deux tiers de sa longueur sans jamais
+    // passer sous le plancher de deux lignes. C'est l'ecart d'une image a
+    // l'autre qui se voit, pas la valeur absolue — sauf apres un
+    // ecrasement, ou le torse se retire d'un coup et la decouvre.
+    const lignesParImage = clip.poses.map(lignesDePatteVisibles)
+    for (let i = 0; i < clip.poses.length; i++) {
+      const suivant = (i + 1) % clip.poses.length
+      if (!clip.loop && suivant === 0) continue
+      // Deux moments ou la patte se decouvre pour de vrai : quand le torse
+      // ecrase se retire, et quand le personnage retombe sur ses pieds.
+      if (corpsEcrase(clip.poses[i])) continue
+      if (!piedAuSol(clip.poses[i]) && piedAuSol(clip.poses[suivant])) continue
+      const d = Math.abs(lignesParImage[suivant] - lignesParImage[i])
+      if (d > 2) bilan.pattesElastiques.push(`${clip.id} ${i + 1}->${suivant + 1} (${d})`)
+    }
+
+    // La vraie masse constante : celle des pieces posees, pas celle de
+    // l'image composee, qui melange la matiere et ce qui la cache.
+    const posees = clip.poses.map(masseDessinee)
+    bilan.masseDessineeMax = Math.max(bilan.masseDessineeMax,
+      (Math.max(...posees) - Math.min(...posees)) / Math.min(...posees))
+
+    // Ce qui se voit d'une image a l'autre n'est pas l'ecart sur tout le
+    // cycle — un personnage accroupi se cache legitimement plus qu'un
+    // personnage etire — mais le saut entre deux images voisines.
+    let saut = 0
+    for (let i = 0; i < masses.length; i++) {
+      const suivant = (i + 1) % masses.length
+      if (!clip.loop && suivant === 0) continue
+      saut = Math.max(saut, Math.abs(masses[suivant] - masses[i]) / masses[i])
+    }
     const ecart = (Math.max(...masses) - Math.min(...masses)) / Math.min(...masses)
-    bilan.masseMax = Math.max(bilan.masseMax, ecart)
-    bilan.masses = (bilan.masses ?? []).concat(`${clip.id} ${(ecart * 100).toFixed(1)}%`)
+    bilan.masseMax = Math.max(bilan.masseMax, saut)
+    bilan.masses = (bilan.masses ?? []).concat(
+      `${clip.id} ${(saut * 100).toFixed(1)}% (${(ecart * 100).toFixed(1)}% sur le cycle)`)
   }
 
   const sprite = spritePixl()
@@ -1865,8 +1923,23 @@ check('aucune image n\'en repete une autre', mascotte.jumelles.length === 0,
   mascotte.jumelles.join(', '))
 check('aucune patte ne deborde du torse', mascotte.debords === 0, `${mascotte.debords} pixels`)
 check('rien ne sort du cadre', mascotte.horsCadre.length === 0, mascotte.horsCadre.join(', '))
-check('la masse reste stable dans un cycle', mascotte.masseMax < 0.12,
+// Deux mesures differentes, et il faut les deux : la premiere dit que le
+// personnage garde sa matiere, la seconde combien il s'en cache lui-meme.
+check('la matiere posee ne varie pas', mascotte.masseDessineeMax < 0.04,
+  `${(mascotte.masseDessineeMax * 100).toFixed(1)}% au pire`)
+// La matiere posee est verifiee juste au-dessus et ne bouge pas. Ce qui
+// reste ici est de l'occlusion : le personnage se cache lui-meme. Ce n'est
+// un defaut que si ca change d'un coup, donc on borne le saut entre deux
+// images voisines et non l'ecart sur le cycle entier — un accroupissement
+// se cache legitimement plus qu'une detente.
+check('la surface visible ne saute pas d\'une image a l\'autre', mascotte.masseMax < 0.12,
   mascotte.masses.join(' · '))
+check('les deux pattes ne fusionnent jamais', mascotte.pattesFondues.length === 0,
+  mascotte.pattesFondues.join(', '))
+check('la queue garde sa longueur visible', mascotte.queuesInegales.length === 0,
+  mascotte.queuesInegales.join(', '))
+check('la patte ne s\'allonge pas d\'un coup', mascotte.pattesElastiques.length === 0,
+  mascotte.pattesElastiques.join(', '))
 check('les images de contact gardent un pied au sol', mascotte.piedsEnLair.length === 0,
   mascotte.piedsEnLair.join(', '))
 // Plus aucune exception : le choc arrache le personnage du sol au lieu de
