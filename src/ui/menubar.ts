@@ -28,14 +28,18 @@ const MENUS: { label: string; items: string[] }[] = [
     label: 'Sprite',
     items: [
       'sprite.canvas-size', 'sprite.scale', 'sprite.crop', 'sprite.trim', '---',
-      'sprite.flip-h', 'sprite.flip-v', 'sprite.rotate-cw', 'sprite.rotate-ccw', 'sprite.rotate-180', '---',
+      'sprite.flip-h', 'sprite.flip-v', 'sprite.flip-cel-h', 'sprite.rotate-cw', 'sprite.rotate-ccw', 'sprite.rotate-180', '---',
       'sprite.outline', 'sprite.invert-colors', 'sprite.desaturate', 'sprite.snap-palette', '---',
       'sprite.grid', 'sprite.slice-new', 'sprite.slices', 'sprite.palette-from-list',
     ],
   },
   {
     label: 'Assiste',
-    items: ['rig.open', '---', 'sprite.variants', 'sprite.detail'],
+    items: [
+      'rig.open', '---',
+      'sprite.ramp', 'sprite.shade', '---',
+      'sprite.variants', 'sprite.detail',
+    ],
   },
   {
     label: 'Calque',

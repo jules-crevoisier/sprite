@@ -270,7 +270,7 @@ export function buildCommands(app: App): Command[] {
     run: () => shadeDialog(ed),
   })
   add({
-    id: 'sprite.ramp', label: 'Rampe de couleurs…', group: 'Assiste', keys: 'Ctrl+Maj+R', icon: 'palette',
+    id: 'sprite.ramp', label: 'Rampe de couleurs…', group: 'Assiste', keys: 'Ctrl+Maj+G', icon: 'palette',
     run: () => rampDialog(ed),
   })
 

@@ -15,7 +15,13 @@ export function comboOf(e: KeyboardEvent): string {
   return parts.join('+')
 }
 
-/** Raccourci -> identifiant de commande. Les libelles affiches sont separes. */
+/**
+ * Raccourci -> identifiant de commande.
+ *
+ * Le libelle affiche dans les menus est declare a part, sur la commande : les
+ * deux tables peuvent donc diverger, et une commande annoncer un raccourci
+ * qui ne declenche rien. Le test de bout en bout compare les deux.
+ */
 const BINDINGS: Record<string, string> = {
   'ctrl+n': 'file.new',
   'ctrl+o': 'file.open',
@@ -39,6 +45,8 @@ const BINDINGS: Record<string, string> = {
   'shift+k': 'rig.open',
   'ctrl+shift+v': 'sprite.variants',
   'ctrl+shift+d': 'sprite.detail',
+  'ctrl+shift+g': 'sprite.ramp',
+  'ctrl+shift+o': 'sprite.shade',
   'ctrl+alt+c': 'sprite.canvas-size',
   'ctrl+alt+i': 'sprite.scale',
   'shift+h': 'sprite.flip-h',
@@ -175,3 +183,6 @@ export function keyLabel(commandId: string): string | undefined {
     })
     .join('+')
 }
+
+/** Expose la table aux tests, qui verifient qu'elle suit les commandes. */
+export const BINDINGS_FOR_TEST = BINDINGS

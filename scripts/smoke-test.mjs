@@ -1363,6 +1363,49 @@ check('la courbe est partagee avec le squelette', courbeUI.partage)
 check('la courbe peut repartir les durees des frames',
   courbeUI.variees && courbeUI.totalConserve)
 
+/* --- toute commande doit etre atteignable depuis les menus --- */
+const menus = await page.evaluate(async () => {
+  const app = window.pixelforge
+  const listes = []
+  const barres = [...document.querySelectorAll('.topbar .menu-btn')]
+  for (const btn of barres) {
+    btn.click()
+    await new Promise((r) => setTimeout(r, 60))
+    const items = [...document.querySelectorAll('.dropdown .menu-item .label')]
+      .map((n) => n.textContent.trim())
+    listes.push({ menu: btn.textContent.trim(), items })
+    document.body.click()
+    await new Promise((r) => setTimeout(r, 40))
+  }
+  const vus = new Set(listes.flatMap((l) => l.items))
+  // Le menubar liste ses entrees a la main : une commande ajoutee sans y etre
+  // inscrite n'existe que dans la palette, donc pour personne.
+  const absentes = app.commands
+    .filter((c) => !c.hidden && !vus.has(c.label))
+    .map((c) => c.id)
+  return { menus: listes.length, entrees: vus.size, absentes }
+})
+check('chaque commande figure dans un menu',
+  menus.absentes.length === 0,
+  menus.absentes.length ? menus.absentes.join(', ') : `${menus.entrees} entrees sur ${menus.menus} menus`)
+
+/* --- un raccourci affiche doit exister pour de vrai --- */
+const raccourcis = await page.evaluate(async () => {
+  const { BINDINGS_FOR_TEST } = await import('/src/ui/shortcuts.ts')
+  const app = window.pixelforge
+  const lies = new Set(Object.values(BINDINGS_FOR_TEST))
+  // Le libelle affiche et la liaison reelle vivent dans deux tables : une
+  // commande peut donc annoncer un raccourci qui ne declenche rien.
+  const menteuses = app.commands.filter((c) => c.keys && !lies.has(c.id)).map((c) => c.id)
+  const orphelines = [...lies].filter((id) => !app.commands.some((c) => c.id === id))
+  return { menteuses, orphelines, lies: lies.size }
+})
+check('un raccourci affiche declenche bien sa commande',
+  raccourcis.menteuses.length === 0,
+  raccourcis.menteuses.length ? raccourcis.menteuses.join(', ') : `${raccourcis.lies} liaisons`)
+check('aucune liaison ne pointe vers une commande disparue',
+  raccourcis.orphelines.length === 0, raccourcis.orphelines.join(', '))
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()
