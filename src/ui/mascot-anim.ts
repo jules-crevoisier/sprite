@@ -42,12 +42,9 @@ const TETE = [
   'oFFo......oFFo',
   'oFFFooooooFFFo',
   'oFFFFFFFFFFFFo',
-  'oFFFFFFFFFFFFo',
-  'oFFFFFFFFFFFFo',
   'oFFyyFFFFyyFFo',
   'oFFyyFFFFyyFFo',
   'oFFFFFppFFFFFo',
-  'oFFFFFFFFFFFFo',
   'odFFFFFFFFFFdo',
   '.oFFFFFFFFFFo.',
   '..oFFFFFFFFo..',
@@ -63,9 +60,9 @@ const TETE = [
  * fermeture.
  */
 const TETE_CLIN = TETE.map((l, i) =>
-  i === 7 ? 'oFFooFFFFooFFo' : i === 8 ? 'oFFFFFFFFFFFFo' : l)
+  i === 5 ? 'oFFooFFFFooFFo' : i === 6 ? 'oFFFFFFFFFFFFo' : l)
 const TETE_MI_CLOS = TETE.map((l, i) =>
-  i === 8 ? 'oFFooFFFFooFFo' : l)
+  i === 6 ? 'oFFooFFFFooFFo' : l)
 
 /**
  * Tete ecrasee : une ligne de moins, et deux colonnes de plus sur les
@@ -77,12 +74,9 @@ const TETE_ECRASEE = [
   '.oFFo......oFFo.',
   '.oFFFooooooFFFo.',
   'oFFFFFFFFFFFFFFo',
-  'oFFFFFFFFFFFFFFo',
-  'oFFFFFFFFFFFFFFo',
   'oFFFyyFFFFyyFFFo',
   'oFFFyyFFFFyyFFFo',
   '.oFFFFFppFFFFFo.',
-  '.oFFFFFFFFFFFFo.',
   '.odFFFFFFFFFFdo.',
   '..oFFFFFFFFFFo..',
   '...oFFFFFFFFo...',
@@ -92,7 +86,7 @@ const TETE_ECRASEE = [
 
 /** La meme, yeux fermes : l'impact ferme les yeux sur l'image du choc. */
 const TETE_ECRASEE_CLIN = TETE_ECRASEE.map((l, i) =>
-  i === 6 ? 'oFFFooFFFFooFFFo' : i === 7 ? 'oFFFFFFFFFFFFFFo' : l)
+  i === 4 ? 'oFFFooFFFFooFFFo' : i === 5 ? 'oFFFFFFFFFFFFFFo' : l)
 
 /**
  * Corps. 12 x 8, soit 96 pixels.
@@ -127,7 +121,7 @@ const CORPS_ECRASE = [
 
 /** Corps etire : une ligne de plus, une colonne de moins. 90 pixels. */
 const CORPS_ETIRE = [
-  '.oFFFFFFFFo.',
+  'oFFFFFFFFFFo',
   '.oFFwwwwFFo.',
   '.oFFwwwwFFo.',
   '.oFFwwwwFFo.',
@@ -135,7 +129,7 @@ const CORPS_ETIRE = [
   '.oFFFFFFFFo.',
   '.odFFFFFFdo.',
   '.odFFFFFFdo.',
-  '.oFFFFFFFFo.',
+  'oFFFFFFFFFFo',
 ]
 
 /**
