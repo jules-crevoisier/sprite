@@ -13,11 +13,11 @@ import type { Sprite } from '../core/document'
  * personnage qui marche et un personnage qui glisse.
  */
 
-const { TETE_CLIN, TETE_MI_CLOS, TETE_ECRASEE, CORPS_ECRASE, CORPS_ETIRE } = PIECES
+const { TETE_CLIN, TETE_MI_CLOS, TETE_ECRASEE, TETE_ECRASEE_CLIN, CORPS_ECRASE, CORPS_ETIRE } = PIECES
 const CORPS_NORMAL = PIECES.CORPS
 
 /** Position de repos : corps en (11, 18), pieds a la ligne 29. */
-const CORPS_X = 11
+const CORPS_X = 10
 /**
  * Le personnage est pose bas dans le cadre : les pieds touchent la
  * derniere ligne. Ce qui reste au-dessus sert au saut — a l'ancienne
@@ -85,7 +85,7 @@ interface Reglage {
   /** Decalage de la tete par rapport au corps. Elle suit avec du retard. */
   tete?: [number, number]
   corpsArt?: 'ecrase' | 'etire'
-  teteArt?: 'clin' | 'miclos' | 'ecrasee'
+  teteArt?: 'clin' | 'miclos' | 'ecrasee' | 'ecraseeClin'
   /** Decalage de chaque patte par rapport a sa position posee. */
   gauche?: [number, number]
   droite?: [number, number]
@@ -93,7 +93,10 @@ interface Reglage {
 }
 
 const ARTS_CORPS = { ecrase: CORPS_ECRASE, etire: CORPS_ETIRE }
-const ARTS_TETE = { clin: TETE_CLIN, miclos: TETE_MI_CLOS, ecrasee: TETE_ECRASEE }
+const ARTS_TETE = {
+  clin: TETE_CLIN, miclos: TETE_MI_CLOS,
+  ecrasee: TETE_ECRASEE, ecraseeClin: TETE_ECRASEE_CLIN,
+}
 
 /**
  * Construit une pose. Le corps commande : la tete et la queue s'y
@@ -115,12 +118,16 @@ function pose(r: Reglage = {}): Pose {
   // Le haut du corps se deplace avec sa variante ; la tete doit suivre,
   // sinon une ligne vide s'ouvre entre les deux et la tete flotte.
   const dCorps = r.corpsArt === 'ecrase' ? 1 : r.corpsArt === 'etire' ? -1 : 0
-  const teteY = (r.teteArt === 'ecrasee' ? by - 15 : by - 16) + dCorps
+  // La tete ecrasee est plus large de deux pixels : elle se recentre, sans
+  // quoi l'ecrasement ferait glisser le personnage d'un pixel.
+  const ecrasee = r.teteArt === 'ecrasee' || r.teteArt === 'ecraseeClin'
+  const teteY = (ecrasee ? by - 15 : by - 16) + dCorps
+  const teteX = ecrasee ? bx - 2 : bx - 1
   const [gx, gy] = r.gauche ?? [0, 0]
   const [ddx, ddy] = r.droite ?? [0, 0]
   const nomQueue = r.queue ?? 'milieu'
   const sortie: Pose = {
-    tete: [bx - 2 + tx, teteY + ty],
+    tete: [teteX + tx, teteY + ty],
     teteArt,
     corps: [cx, cy],
     corpsArt,
@@ -138,105 +145,102 @@ function pose(r: Reglage = {}): Pose {
 
 /**
  * Repos. Le souffle vaut un pixel : en dessous il ne franchit pas
- * l'arrondi et rien ne bouge. La tete descend une image apres le corps —
- * ce retard est ce qui distingue un souffle d'un aller-retour.
- *
- * Aucune image ne repete la precedente. Trois silhouettes identiques
- * d'affilee, a 160 ms, font une demi-seconde ou l'animation a l'air
- * arretee ; le clignement seul ne suffit pas a la sauver.
+ * l'arrondi et rien ne bouge. La tete atteint chaque extreme une image
+ * apres le corps — ce retard distingue un souffle d'un aller-retour — et
+ * derive lateralement d'un pixel, sans quoi elle monterait et
+ * descendrait sur une verticale parfaite.
  */
 const REPOS: Reglage[] = [
   { corps: [0, 0], queue: 'milieu' },
-  { corps: [0, 1], queue: 'milieu' },
+  { corps: [0, 1], tete: [-1, 0], queue: 'milieu' },
   { corps: [0, 1], tete: [0, 1], queue: 'basmilieu' },
   { corps: [0, 0], tete: [0, 1], queue: 'basse' },
-  { corps: [0, 0], teteArt: 'miclos', tete: [0, 1], queue: 'basmilieu' },
+  { corps: [0, 0], teteArt: 'miclos', tete: [1, 1], queue: 'basmilieu' },
   { corps: [0, 1], teteArt: 'clin', queue: 'milieu' },
 ]
 
 /**
  * Marche de face.
  *
- * Deux regles commandent tout le cycle. La premiere : le corps se penche
- * au-dessus du pied qui PORTE, jamais au-dessus de celui qu'on vient de
- * lever — c'est la difference entre marcher et perdre l'equilibre. La
- * seconde : un pied pose ne bouge pas. Tout le deplacement lateral
- * appartient a la jambe en l'air.
+ * Le corps passe par zero entre les deux appuis au lieu de sauter d'un
+ * cote a l'autre : moins un, moins un, zero, zero, plus un, plus un, zero,
+ * zero. Un balancement en creneau teleporte le personnage de deux pixels
+ * deux fois par cycle, et c'est le raccord qu'on voit.
  *
- * De face, une patte qui passe devant l'autre les fait fusionner en un
- * seul moignon : elles restent donc toujours du meme cote, et ce qui
- * marque le pas est le report du poids, pas leur ecart.
+ * Les pieds ne se deplacent jamais lateralement : tout le mouvement
+ * horizontal appartient au corps, qui passe au-dessus d'eux.
  */
 const MARCHE: Reglage[] = [
-  { corps: [-1, 1], gauche: [0, 0], droite: [-1, 0], queue: 'milieu' },
-  { corps: [-1, 1], tete: [0, 1], gauche: [0, 0], droite: [-1, -2], queue: 'milieu' },
-  { corps: [-1, -1], tete: [-1, 0], gauche: [0, 0], droite: [-1, -3], queue: 'basse' },
-  { corps: [-1, 0], tete: [-1, 0], gauche: [0, 0], droite: [-1, -1], queue: 'basmilieu' },
-  { corps: [1, 1], gauche: [1, 0], droite: [0, 0], queue: 'haute' },
-  { corps: [1, 1], tete: [0, 1], gauche: [1, -2], droite: [0, 0], queue: 'milieu' },
-  { corps: [1, -1], tete: [1, 0], gauche: [1, -3], droite: [0, 0], queue: 'basse' },
-  { corps: [1, 0], tete: [1, 0], gauche: [1, -1], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [-1, 1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
+  { corps: [-1, 1], tete: [0, 1], gauche: [0, 0], droite: [0, -3], queue: 'basmilieu' },
+  { corps: [0, -1], tete: [-1, 1], gauche: [0, 0], droite: [0, -4], queue: 'basse' },
+  { corps: [0, 0], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
+  { corps: [1, 1], gauche: [0, 0], droite: [0, 0], queue: 'haute' },
+  { corps: [1, 1], tete: [0, 1], gauche: [0, -3], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [0, -1], tete: [1, 1], gauche: [0, -4], droite: [0, 0], queue: 'basse' },
+  { corps: [0, 0], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
 ]
 
 /**
- * Course. Un seul pied au sol par contact : le double appui est la
- * signature d'une marche, une course n'en a jamais. Et les deux moities
- * ne sont pas la meme a deux pixels pres — le corps penche d'un cote puis
- * de l'autre, ce qui leur donne des silhouettes distinctes.
+ * Course. Un seul pied au sol par contact — le double appui est la
+ * signature d'une marche. Meme balancement adouci que la marche, et la
+ * queue en retard d'une image : quand le corps monte, elle traine encore.
  */
 const COURSE: Reglage[] = [
-  { corps: [-1, 0], corpsArt: 'ecrase', tete: [-1, 0], gauche: [-1, 0], droite: [-2, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [-1, 0], gauche: [-1, -1], droite: [-1, -4], queue: 'fouet' },
-  { corps: [-1, -3], gauche: [-1, -3], droite: [-1, -5], queue: 'basse' },
-  { corps: [1, 0], corpsArt: 'ecrase', tete: [1, 0], gauche: [2, -3], droite: [1, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [1, 0], gauche: [2, -4], droite: [1, -1], queue: 'fouet' },
-  { corps: [1, -3], gauche: [2, -5], droite: [1, -3], queue: 'basse' },
+  { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
+  { corps: [-1, -2], gauche: [0, -1], droite: [0, -4], queue: 'basmilieu' },
+  { corps: [0, -3], gauche: [0, -3], droite: [0, -5], queue: 'basse' },
+  { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
+  { corps: [1, -2], gauche: [0, -4], droite: [0, -1], queue: 'basmilieu' },
+  { corps: [0, -3], gauche: [0, -5], droite: [0, -3], queue: 'basse' },
 ]
 
 /**
- * Saut. L'accroupissement precede la detente : sans lui le personnage
- * decolle sans avoir pris son elan. Les hauteurs de tete sont 7, 2, 1, 2,
- * 7 : l'ecart se resserre au sommet, ce qui y fait durer le personnage,
- * et s'ouvre au decollage et a la reception, ou tout va vite.
+ * Saut. L'accroupissement precede la detente, et l'ecart entre images se
+ * resserre au sommet — c'est ce qui y fait durer le personnage.
  *
- * La queue traine vers le bas a la montee et vers le haut a la descente.
- * La meme position dans les deux sens serait physiquement impossible.
+ * La queue traine vers le bas pendant la montee et vers le haut pendant la
+ * chute. L'inverse serait physiquement impossible, et c'est pourtant ce
+ * que faisait la version precedente.
  */
 const SAUT: Reglage[] = [
-  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'basse' },
-  { corps: [0, -1], corpsArt: 'etire', tete: [1, 0], gauche: [1, -1], droite: [-1, -1], queue: 'fouet' },
-  { corps: [0, -3], tete: [1, 0], gauche: [1, -3], droite: [-1, -3], queue: 'basmilieu' },
-  { corps: [0, -1], corpsArt: 'etire', gauche: [1, -2], droite: [-1, -2], queue: 'haute' },
+  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'haute' },
+  { corps: [0, -1], corpsArt: 'etire', tete: [1, 0], gauche: [0, -2], droite: [0, -2], queue: 'basse' },
+  { corps: [0, -3], tete: [1, 0], gauche: [0, -4], droite: [0, -4], queue: 'basmilieu' },
+  { corps: [0, -1], corpsArt: 'etire', tete: [-1, 0], gauche: [0, -2], droite: [0, -2], queue: 'milieu' },
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [-1, 0], droite: [1, 0], queue: 'fouet' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
 /**
- * Bond d'attaque : recul, detente, coup, retour.
+ * Bond d'attaque : recul, detente, coup, amorti, retour.
  *
- * Le corps large est reserve au coup. L'utiliser aussi pour le recul
- * rejouerait la silhouette de l'impact avant l'impact, et le coup
- * n'apporterait plus aucun contraste.
+ * Le recul vaut deux pixels et emmene les pieds avec lui. A un pixel il
+ * etait dans le code et pas a l'ecran. Le corps large est reserve au coup :
+ * s'en servir aussi pour le recul rejouerait la silhouette de l'impact
+ * avant l'impact.
  */
 const ATTAQUE: Reglage[] = [
-  { corps: [0, 1], tete: [-1, 0], queue: 'fouet' },
-  { corps: [0, -2], corpsArt: 'etire', tete: [1, 0], gauche: [1, -2], droite: [-1, -2], queue: 'haute' },
+  { corps: [-2, 1], tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'milieu' },
+  { corps: [0, -2], corpsArt: 'etire', tete: [1, 0], gauche: [0, -2], droite: [0, -2], queue: 'haute' },
   { corps: [0, 0], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 2], gauche: [-1, 0], droite: [1, 0], queue: 'fouet' },
-  { corps: [0, 0], tete: [0, 1], queue: 'basmilieu' },
+  { corps: [0, 1], tete: [0, 1], gauche: [-1, -1], droite: [1, -1], queue: 'basmilieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
 /**
- * Degats. La compression est l'impact lui-meme, pas une preparation : un
- * personnage qui encaisse ne se prepare pas. Elle tombe donc sur la meme
- * image que le coup, et le recul ne part qu'ensuite — trois pixels d'un
- * coup, puis un maintien, puis un retour amorti.
+ * Degats. La compression est l'impact lui-meme, pas une preparation, et
+ * les yeux se ferment des cette image : une seconde de retard sur le
+ * visage et la reaction n'appartient plus au coup.
+ *
+ * Un pied se leve a chaque changement d'appui. Deux semelles plaquees au
+ * sol pendant que le corps recule de trois pixels, c'est du patinage.
  */
 const DEGATS: Reglage[] = [
-  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
-  { corps: [-3, 0], teteArt: 'clin', tete: [-1, 0], gauche: [-3, 0], droite: [-3, 0], queue: 'fouet' },
-  { corps: [-3, 1], teteArt: 'clin', tete: [-1, 1], gauche: [-3, 0], droite: [-3, 0], queue: 'basse' },
-  { corps: [-1, 1], teteArt: 'clin', gauche: [-1, 0], droite: [-1, 0], queue: 'basmilieu' },
+  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', queue: 'milieu' },
+  { corps: [-3, 0], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, -2], queue: 'fouet' },
+  { corps: [-3, 1], teteArt: 'clin', tete: [-1, 1], gauche: [-2, 0], droite: [-2, 0], queue: 'basse' },
+  { corps: [-1, 1], teteArt: 'clin', gauche: [-1, -2], droite: [-1, 0], queue: 'basmilieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 

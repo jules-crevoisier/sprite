@@ -67,59 +67,75 @@ const TETE_CLIN = TETE.map((l, i) =>
 const TETE_MI_CLOS = TETE.map((l, i) =>
   i === 8 ? 'oFFooFFFFooFFo' : l)
 
-/** Tete ecrasee d'un pixel, pour l'appui et l'atterrissage. 14 x 15. */
+/**
+ * Tete ecrasee : une ligne de moins, et deux colonnes de plus sur les
+ * joues. 16 x 15, 186 pixels — exactement la masse de la tete au repos.
+ * Un ecrasement deplace la matiere, il ne l'efface pas.
+ */
 const TETE_ECRASEE = [
-  '.oo........oo.',
-  'oFFo......oFFo',
-  'oFFFooooooFFFo',
-  'oFFFFFFFFFFFFo',
-  'oFFFFFFFFFFFFo',
-  'oFFFFFFFFFFFFo',
-  'oFFyyFFFFyyFFo',
-  'oFFyyFFFFyyFFo',
-  'oFFFFFppFFFFFo',
-  'oFFFFFFFFFFFFo',
-  'odFFFFFFFFFFdo',
-  '.oFFFFFFFFFFo.',
-  '..oFFFFFFFFo..',
-  '..odFFFFFFdo..',
-  '...oooooooo...',
+  '..oo........oo..',
+  '.oFFo......oFFo.',
+  '.oFFFooooooFFFo.',
+  'oFFFFFFFFFFFFFFo',
+  'oFFFFFFFFFFFFFFo',
+  'oFFFFFFFFFFFFFFo',
+  'oFFFyyFFFFyyFFFo',
+  'oFFFyyFFFFyyFFFo',
+  '.oFFFFFppFFFFFo.',
+  '.oFFFFFFFFFFFFo.',
+  '.odFFFFFFFFFFdo.',
+  '..oFFFFFFFFFFo..',
+  '...oFFFFFFFFo...',
+  '...odFFFFFFdo...',
+  '....oooooooo....',
 ]
 
-/** Corps. 10 x 8. */
+/** La meme, yeux fermes : l'impact ferme les yeux sur l'image du choc. */
+const TETE_ECRASEE_CLIN = TETE_ECRASEE.map((l, i) =>
+  i === 6 ? 'oFFFooFFFFooFFFo' : i === 7 ? 'oFFFFFFFFFFFFFFo' : l)
+
+/**
+ * Corps. 12 x 8, soit 96 pixels.
+ *
+ * Deux pattes de quatre pixels separees de deux en font dix : un corps de
+ * dix ne laissait aucun jeu, et le balancement lateral faisait
+ * immanquablement deborder une patte hors du torse. A douze, le corps peut
+ * se decaler d'un pixel de chaque cote sans qu'une seule colonne de patte
+ * ne sorte.
+ */
 const CORPS = [
-  'oFFFFFFFFo',
-  'oFFwwwwFFo',
-  'oFFwwwwFFo',
-  'oFFwwwwFFo',
-  'oFFFFFFFFo',
-  'odFFFFFFdo',
-  'odFFFFFFdo',
-  'oFFFFFFFFo',
-]
-
-/** Corps ecrase : un pixel de moins en hauteur, un de plus en largeur. */
-const CORPS_ECRASE = [
-  'ooFFFFFFFFoo',
-  'oFFFwwwwFFFo',
-  'oFFFwwwwFFFo',
-  'oFFFwwwwFFFo',
+  'oFFFFFFFFFFo',
+  'oFFwwwwwwFFo',
+  'oFFwwwwwwFFo',
+  'oFFwwwwwwFFo',
+  'oFFFFFFFFFFo',
   'odFFFFFFFFdo',
   'odFFFFFFFFdo',
   'oFFFFFFFFFFo',
 ]
 
-/** Corps etire : un pixel de plus en hauteur, un de moins en largeur. */
+/** Corps ecrase : une ligne de moins, deux colonnes de plus. 94 pixels. */
+const CORPS_ECRASE = [
+  '.oFFFFFFFFFFo.',
+  'oFFFwwwwwwFFFo',
+  'oFFFwwwwwwFFFo',
+  'oFFFwwwwwwFFFo',
+  'odFFFFFFFFFFdo',
+  'odFFFFFFFFFFdo',
+  '.oFFFFFFFFFFo.',
+]
+
+/** Corps etire : une ligne de plus, une colonne de moins. 90 pixels. */
 const CORPS_ETIRE = [
-  '.oFFFFFFo.',
-  '.oFwwwwFo.',
-  '.oFwwwwFo.',
-  '.oFwwwwFo.',
-  '.oFwwwwFo.',
-  '.oFFFFFFo.',
-  '.odFFFFdo.',
-  '.odFFFFdo.',
-  '.oFFFFFFo.',
+  '.oFFFFFFFFo.',
+  '.oFFwwwwFFo.',
+  '.oFFwwwwFFo.',
+  '.oFFwwwwFFo.',
+  '.oFFwwwwFFo.',
+  '.oFFFFFFFFo.',
+  '.odFFFFFFdo.',
+  '.odFFFFFFdo.',
+  '.oFFFFFFFFo.',
 ]
 
 /**
@@ -199,7 +215,7 @@ const QUEUES: Record<string, string[]> = {
   ],
 }
 
-export const PIECES = { TETE, TETE_CLIN, TETE_MI_CLOS, TETE_ECRASEE, CORPS, CORPS_ECRASE, CORPS_ETIRE, PATTE, QUEUES }
+export const PIECES = { TETE, TETE_CLIN, TETE_MI_CLOS, TETE_ECRASEE, TETE_ECRASEE_CLIN, CORPS, CORPS_ECRASE, CORPS_ETIRE, PATTE, QUEUES }
 
 /* ------------------------------------------------------------------ */
 /* Assemblage                                                          */
