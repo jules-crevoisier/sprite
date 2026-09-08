@@ -79,6 +79,18 @@ export interface Rig {
 
 export const emptyRig = (): Rig => ({ bones: [], rest: null, weights: null })
 
+/**
+ * Couleurs d'identification des os. Elles servent a montrer sur la toile a
+ * quel os appartient chaque pixel : c'est la lecture la plus directe de ce
+ * que fait la liaison.
+ */
+export const BONE_COLORS = [
+  '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff',
+  '#ff77a8', '#a06cff', '#00d6b4', '#ff6b3d', '#7bd93a',
+]
+
+export const boneColor = (index: number): string => BONE_COLORS[index % BONE_COLORS.length]
+
 let nextBoneId = 1
 export const newBoneId = (): number => nextBoneId++
 export const seedBoneIds = (from: number): void => { nextBoneId = Math.max(nextBoneId, from + 1) }
@@ -210,6 +222,12 @@ export interface DeformOptions {
    * les fissures se referment.
    */
   seamNeighbours?: number
+  /**
+   * Rempli, si fourni, avec l'index de l'os proprietaire de chaque pixel
+   * d'arrivee (255 = aucun). Permet de montrer l'influence des os sur le
+   * dessin pose, et pas seulement sur le dessin de repos.
+   */
+  owners?: Uint8Array
 }
 
 /**
@@ -230,6 +248,7 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
   const seamRadius = options.seamRadius ?? 1
   const fillPasses = options.fillPasses ?? 1
   const seamNeighbours = options.seamNeighbours ?? 4
+  const owners = options.owners
   const w = rest.width, h = rest.height
   const out = new Bitmap(w, h)
 
@@ -258,6 +277,7 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
       // qu'une partie du dessin, le reste reste en place.
       if (weights[restIndex] === 255 && getA(rest.u32[restIndex]) !== 0) {
         out.u32[restIndex] = rest.u32[restIndex]
+        if (owners) owners[restIndex] = 255
         continue
       }
       for (const { bone, index } of order) {
@@ -267,7 +287,11 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
           Math.floor(applyX(inv, x + 0.5, y + 0.5)),
           Math.floor(applyY(inv, x + 0.5, y + 0.5)),
         )
-        if (color !== null) { out.u32[restIndex] = color; break }
+        if (color !== null) {
+          out.u32[restIndex] = color
+          if (owners) owners[restIndex] = index
+          break
+        }
       }
     }
   }

@@ -1,5 +1,5 @@
 import type { App } from './app'
-import { el, clear, iconButton } from './dom'
+import { el, clear, iconButton, segmented } from './dom'
 import { icon } from './icons'
 import { openMenu, type MenuItem } from './overlay'
 import { keyLabel } from './shortcuts'
@@ -109,6 +109,14 @@ export function renderTopbar(container: HTMLElement, app: App): void {
 
   container.appendChild(el('div', { class: 'topbar-spacer' }))
 
+  // Bascule de mode : toute l'interface suit, outils et panneaux compris.
+  container.appendChild(segmented([
+    { value: 'draw', label: 'Dessin', icon: icon('pencil', 14), title: 'Dessiner, animer, exporter' },
+    { value: 'rig', label: 'Squelette', icon: icon('rig', 14), title: 'Articuler et poser le personnage (Maj+K)' },
+  ], ed.mode, (v) => app.setMode(v as 'draw' | 'rig')))
+
+  container.appendChild(el('div', { class: 'topbar-spacer' }))
+
   const title = el('input', { class: 'doc-title', type: 'text', value: ed.sprite.name, spellcheck: false })
   title.addEventListener('change', () => {
     const value = title.value.trim() || 'sans-titre'
@@ -116,8 +124,6 @@ export function renderTopbar(container: HTMLElement, app: App): void {
   })
   title.addEventListener('keydown', (e) => { if (e.key === 'Enter') title.blur() })
   container.appendChild(title)
-
-  container.appendChild(el('div', { class: 'topbar-spacer' }))
 
   const actions = el('div', { class: 'topbar-actions' },
     iconButton(icon('undo', 16), `Annuler${ed.history.undoLabel ? ` : ${ed.history.undoLabel}` : ''}`,

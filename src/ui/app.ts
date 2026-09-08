@@ -1,4 +1,4 @@
-import { Editor, type ToolId } from '../core/editor'
+import { Editor, type EditorMode, type ToolId } from '../core/editor'
 import { getA, withAlpha } from '../core/color'
 import { Sprite } from '../core/document'
 import { Palette } from '../core/palette'
@@ -154,6 +154,7 @@ export class App {
 
     ed.events.on('toast', ({ text, kind }) => showToast(text, kind))
     ed.events.on('settings', () => { this.renderOptions(); this.renderHud(); this.viewport.updateCursorStyle() })
+    ed.events.on('mode', () => { this.renderTools(); this.renderOptions(); this.renderTop() })
     ed.events.on('doc', () => { this.renderTop(); this.renderHud(); this.maybeAutosave() })
     ed.events.on('reload', () => { this.renderTop(); this.renderHud(); this.colorPanel.renderPalette() })
     ed.history.onChange(() => this.renderTop())
@@ -215,6 +216,19 @@ export class App {
   /* ---------------------------------------------------------------- */
   /* Actions                                                           */
   /* ---------------------------------------------------------------- */
+
+  /** Bascule dessin / squelette : outils, panneaux et reglages suivent. */
+  setMode(mode: EditorMode): void {
+    if (this.ed.mode === mode) return
+    toolById(this.ed.settings.tool).cancel?.(this.ed)
+    this.ed.setMode(mode)
+    this.workspace.setMode(mode)
+    this.renderTools()
+    this.renderOptions()
+    this.renderTop()
+    this.viewport.updateCursorStyle()
+    this.viewport.invalidate()
+  }
 
   setTool(id: ToolId): void {
     if (this.ed.settings.tool === id) return

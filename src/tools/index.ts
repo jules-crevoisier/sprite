@@ -9,21 +9,33 @@ import {
   selectRectTool, selectEllipseTool, lassoTool, magicWandTool,
   moveTool, handTool, zoomTool,
 } from './select-tools'
-import { rigTool } from './rig-tool'
+import { rigBoneTool, rigPoseTool, rigWeightTool } from './rig-tool'
 
 export * from './types'
 export { beginMove, applyMove, endMove } from './select-tools'
-export { rigState, refreshPose, seamSettings } from './rig-tool'
+export { rigState, refreshPose, seamSettings, bonePoints } from './rig-tool'
 
-/** Ordre d'affichage dans la barre d'outils, groupe par famille. */
-export const TOOL_LIST: Tool[] = [
+/** Outils du mode dessin, dans l'ordre de la barre d'outils. */
+export const DRAW_TOOLS: Tool[] = [
   pencilTool, eraserTool, bucketTool, eyedropperTool,
   lineTool, curveTool, rectangleTool, ellipseTool, contourTool,
   gradientTool, shadingTool, blurTool, sprayTool,
   selectRectTool, selectEllipseTool, lassoTool, magicWandTool, moveTool,
-  rigTool,
   handTool, zoomTool,
 ]
+
+/** Outils du mode squelette : construire, poser, ponderer. */
+export const RIG_TOOLS: Tool[] = [
+  rigBoneTool, rigPoseTool, rigWeightTool,
+  handTool, zoomTool,
+]
+
+export const TOOL_LIST: Tool[] = [...DRAW_TOOLS, rigBoneTool, rigPoseTool, rigWeightTool]
+
+/** Outils proposes dans un mode donne. */
+export function toolsForMode(mode: 'draw' | 'rig'): Tool[] {
+  return mode === 'rig' ? RIG_TOOLS : DRAW_TOOLS
+}
 
 export const TOOLS: Record<ToolId, Tool> = Object.fromEntries(
   TOOL_LIST.map((t) => [t.id, t]),

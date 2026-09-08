@@ -1,12 +1,10 @@
 import { fromHex } from '../core/color'
-import { RIG_TEMPLATES, applyTemplate } from '../smart/rig-presets'
-import { refreshPose, rigState } from '../tools'
+
 import { demoBall, demoCharacter, demoGrassBlock } from './demo-content'
 import type { App } from './app'
 import type { Lesson } from './tutorial'
 
 const q = (selector: string) => (): Element | null => document.querySelector(selector)
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** Les cinq lecons proposees, de la prise en main a l'export moteur. */
 export function buildLessons(app: App): Lesson[] {
@@ -97,62 +95,57 @@ export function buildLessons(app: App): Lesson[] {
     {
       id: 'rig',
       title: 'Squelette et pose',
-      hint: 'Poser un personnage au lieu de le redessiner',
+      hint: 'Articuler un personnage au lieu de le redessiner',
       icon: 'rig',
       setup: () => ed.loadSprite(demoCharacter()),
       steps: [
         {
-          text: 'Un personnage de face. Plutot que de redessiner chaque pose, on va lui poser un squelette et bouger ses membres.',
-          target: q('#canvas'),
-          enter: () => { app.workspace.setVisible('rig', true); app.setTool('rig') },
+          text: 'Un personnage de face. Pour l\'animer, on ne va pas le redessiner pose par pose : on va lui poser un squelette. Basculez en mode Squelette, en haut de la fenetre.',
+          target: q('.topbar .seg'),
+          done: () => ed.mode === 'rig',
         },
         {
-          text: 'Partez d\'un modele : « Humanoide de face » place torse, tete, bras et jambes, ajustes a la taille du dessin.',
+          text: 'L\'interface a change : la barre d\'outils propose Creer des os, Poser et Ponderer, et le panneau de droite montre la hierarchie. Partez d\'un modele « Humanoide de face ».',
           target: q('[data-panel="rig"]'),
-          auto: () => {
-            const template = RIG_TEMPLATES.find((t) => t.id === 'humanoid-front')!
-            const cel = ed.peekCel()
-            ed.run('Modele humanoide', () => applyTemplate(ed.sprite.rig, template, cel?.bitmap ?? null, ed.sprite))
-            app.rigPanel.render()
-          },
-          autoLabel: 'Poser le modele',
           done: () => ed.sprite.rig.bones.length > 0,
         },
         {
-          text: 'Les os se deplacent a la souris en mode Construction : glissez une extremite avec Alt pour l\'ajuster. Repartir du bout d\'un os en cree un enfant, qui suivra son parent.',
-          target: q('#canvas'),
+          text: 'Les os apparaissent sur le dessin. Avec l\'outil Creer des os, glissez une extremite en maintenant Alt pour l\'ajuster, ou repartez du bout d\'un os pour en enchainer un nouveau.',
+          target: q('.toolbar'),
+          enter: () => app.setTool('rig-bone'),
         },
         {
-          text: 'Liez les pixels : chaque pixel est attribue a l\'os le plus proche. C\'est ce qui permet ensuite de deformer le dessin.',
+          text: 'Liez maintenant les pixels : chacun rejoint l\'os le plus proche. C\'est cette liaison qui permettra de deformer le dessin.',
           target: q('[data-panel="rig"] button'),
-          // Meme chemin que le bouton du panneau.
-          auto: () => { app.rigPanel.bind() },
-          autoLabel: 'Lier les pixels',
           done: () => !!ed.sprite.rig.rest,
         },
         {
-          text: 'Passez en mode Pose et tirez le bout d\'un bras : le membre pivote et les pixels sont regeneres. Tirer une racine deplace l\'os.',
-          target: q('#canvas'),
-          enter: () => { rigState.mode = 'pose'; app.rigPanel.render() },
-          auto: async () => {
-            const arm = ed.sprite.rig.bones.find((b) => b.name.includes('bras'))
-            if (!arm) return
-            ed.runPixels('Pose', [], () => { arm.angle = -1.1 })
-            refreshPose(ed)
-            await wait(150)
-          },
-          autoLabel: 'Lever un bras',
-          done: () => ed.sprite.rig.bones.some((b) => Math.abs(b.angle) > 0.05),
+          text: 'Chaque couleur sur la toile montre l\'os qui porte le pixel : rouge le torse, orange la tete, jaune et vert les bras. C\'est la lecture la plus directe de ce qui va bouger avec quoi.',
+          enter: () => { ed.showWeights = true; ed.events.emit('settings', undefined) },
         },
         {
-          text: 'Memorisez cette pose, bougez encore le squelette, puis demandez les frames intermediaires : le mouvement complet est genere par interpolation.',
+          text: 'Passez sur l\'outil Poser et tirez le bout du bras gauche vers le haut, en suivant la fleche. Le membre pivote et les pixels sont regeneres.',
+          enter: () => app.setTool('rig-pose'),
+          gesture: () => {
+            const arm = ed.sprite.rig.bones.find((b) => b.name === 'bras G')
+            if (!arm) return null
+            return { from: [arm.ex, arm.ey], to: [arm.ex - 6, arm.ey - 12] }
+          },
+          done: () => ed.sprite.rig.bones.some((b) => Math.abs(b.angle) > 0.08),
+        },
+        {
+          text: 'Si une frontiere tombe mal — un bout d\'epaule qui part avec le bras — choisissez l\'os dans la liste, prenez l\'outil Ponderer et repeignez. Alt retire l\'influence.',
+          target: q('.toolbar'),
+          enter: () => app.setTool('rig-weight'),
+        },
+        {
+          text: 'Reste a en faire une animation : memorisez la pose de depart, bougez le squelette, puis demandez les frames intermediaires. Le mouvement complet est genere par interpolation.',
           target: q('[data-panel="rig"]'),
-          enter: setMark,
+          enter: () => { app.setTool('rig-pose'); setMark() },
           done: () => ed.frameCount > 1,
         },
       ],
     },
-
     {
       id: 'assiste',
       title: 'Detail et variantes',

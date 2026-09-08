@@ -197,6 +197,7 @@ check('le projet fait un aller-retour sans perte', report.project)
 const guided = await page.evaluate(async () => {
   const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
   const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { refreshPose } = await import('/src/tools/index.ts')
   const app = window.pixelforge
   const ed = app.ed
   ed.loadSprite(demoCharacter())
@@ -213,14 +214,53 @@ const guided = await page.evaluate(async () => {
     if (!dedans) out.modeles = false
   }
 
-  // Une lecon doit pouvoir enchainer ses etapes automatiques.
+  // La lecon squelette doit avancer sur les gestes de l'utilisateur, pas
+  // sur des boutons qui font tout a sa place.
   const lesson = app.lessons().find((l) => l.id === 'rig')
   out.lecons = app.lessons().length
+  out.gestesExiges = lesson.steps.filter((s) => s.done && !s.auto).length
   await app.tutorial.start(lesson)
   out.carte = !!document.querySelector('.tutor-card:not([hidden])')
-  for (const step of lesson.steps) if (step.auto) await step.auto()
+
+  const etape = () => document.querySelector('.tutor-count')?.textContent ?? ''
+  const attendre = (predicat) => new Promise((resolve) => {
+    const debut = Date.now()
+    const timer = setInterval(() => {
+      if (predicat() || Date.now() - debut > 2500) { clearInterval(timer); resolve() }
+    }, 120)
+  })
+
+  // Un pas apres l'autre : les etapes de lecture se passent au bouton, les
+  // etapes de geste attendent l'action reelle.
+  const suivant = () => document.querySelector('.tutor-foot button.primary')?.click()
+  const numero = () => Number(etape().split('/')[0])
+  const jusqua = async (n) => { await attendre(() => numero() >= n); return etape() }
+
+  out.avance = []
+  app.setMode('rig')
+  out.avance.push(await jusqua(2))
+
+  ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
+  out.avance.push(await jusqua(3))
+
+  suivant()
+  out.avance.push(await jusqua(4))
+
+  app.rigPanel.bind()
+  out.avance.push(await jusqua(5))
   out.rigLie = !!ed.sprite.rig.rest
+
+  suivant()
+  await jusqua(6)
+  const bras = ed.sprite.rig.bones.find((b) => b.name === 'bras G')
+  bras.angle = -1
+  refreshPose(ed)
+  out.avance.push(await jusqua(7))
   out.rigPose = ed.sprite.rig.bones.some((b) => Math.abs(b.angle) > 0.05)
+
+  suivant()
+  out.avance.push(await jusqua(8))
+
   app.tutorial.stop()
   out.carteFermee = !document.querySelector('.tutor-card:not([hidden])')
   return out
@@ -286,11 +326,67 @@ check('le personnage lie chaque membre a son os',
 check('aucun pixel du personnage ne reste sans os', perso.tousLies)
 check('une pose franche n\'ouvre pas de fente', perso.fentes === 0, `${perso.fentes} fentes`)
 
+/* --- le mode squelette doit remplacer l'interface, pas s'y ajouter --- */
+const modes = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { rigState } = await import('/src/tools/index.ts')
+  const app = window.pixelforge
+  const ed = app.ed
+  ed.loadSprite(demoCharacter())
+
+  const snapshot = () => ({
+    outils: [...document.querySelectorAll('.toolbar .tool')].length,
+    panneaux: [...document.querySelectorAll('#dock-right .panel')].map((p) => p.dataset.panel),
+  })
+  app.setMode('draw')
+  const dessin = snapshot()
+  app.setMode('rig')
+  const squelette = snapshot()
+
+  // La ponderation doit repeindre l'influence et rester annulable.
+  ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
+  app.rigPanel.bind()
+  const rig = ed.sprite.rig
+  const arm = rig.bones.findIndex((b) => b.name === 'bras G')
+  rigState.selected = rig.bones[arm].id
+  app.setTool('rig-weight')
+  const w = rig.rest.width
+  const cible = 24 * w + 22
+  const avant = rig.weights[cible]
+  const tool = (await import('/src/tools/index.ts')).TOOLS['rig-weight']
+  const at = (x, y) => ({ x, y, px: x, py: y, startPx: x, startPy: y, prevPx: x, prevPy: y, shift: false, alt: false, ctrl: false, button: 0, pressure: 1 })
+  tool.down(ed, at(22, 24))
+  tool.up(ed, at(22, 24))
+  const apres = rig.weights[cible]
+  ed.undo()
+  const annule = rig.weights[cible]
+
+  app.setMode('draw')
+  return {
+    dessin, squelette,
+    ponderationChange: avant !== apres && apres === arm,
+    ponderationAnnulee: annule === avant,
+  }
+})
+
+check('le mode squelette change la barre d\'outils',
+  modes.squelette.outils < modes.dessin.outils && modes.squelette.outils >= 3,
+  `${modes.dessin.outils} outils en dessin, ${modes.squelette.outils} en squelette`)
+check('le mode squelette change les panneaux',
+  modes.squelette.panneaux.includes('rig') && !modes.dessin.panneaux.includes('rig'),
+  modes.squelette.panneaux.join(', '))
+check('le pinceau de ponderation repeint l\'influence', modes.ponderationChange)
+check('la ponderation est annulable', modes.ponderationAnnulee)
+
 check('les modeles de squelette tiennent dans le dessin', guided.modeles)
 check('les modeles enchainent bien les os', guided.enfants)
 check('les lecons sont disponibles', guided.lecons === 5, `${guided.lecons} lecons`)
 check('la carte du tutoriel s\'affiche', guided.carte)
-check('la lecon squelette lie et pose le personnage', guided.rigLie && guided.rigPose)
+check('la lecon exige de vrais gestes', guided.gestesExiges >= 4, `${guided.gestesExiges} etapes sans bouton de secours`)
+check('la lecon se deroule jusqu\'au bout sur de vrais gestes',
+  guided.rigLie && guided.rigPose && guided.avance[guided.avance.length - 1] === '8/8',
+  guided.avance.join(' -> '))
 check('quitter le tutoriel referme la carte', guided.carteFermee)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))

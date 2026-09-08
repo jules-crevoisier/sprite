@@ -13,7 +13,13 @@ export type ToolId =
   | 'select-rect' | 'select-ellipse' | 'lasso' | 'magic-wand'
   | 'move' | 'hand' | 'zoom'
   | 'shading' | 'blur' | 'spray' | 'gradient'
-  | 'rig'
+  | 'rig-bone' | 'rig-pose' | 'rig-weight'
+
+/**
+ * Mode de travail. Chacun a sa barre d'outils, ses panneaux et ses reglages :
+ * on ne cherche pas un crayon quand on articule un personnage.
+ */
+export type EditorMode = 'draw' | 'rig'
 
 export interface ToolSettings {
   tool: ToolId
@@ -73,6 +79,8 @@ export interface EditorEvents {
   reload: void
   /** Etat de lecture de l'animation. */
   playback: boolean
+  /** Le mode de travail a change. */
+  mode: EditorMode
 }
 
 interface StrokeState {
@@ -90,6 +98,11 @@ export class Editor {
   history = new History(300)
   selection: Selection
   events = new Emitter<EditorEvents>()
+
+  /** Mode courant : dessin ou squelette. */
+  mode: EditorMode = 'draw'
+  /** Outil retenu pour chaque mode, pour retrouver son geste en revenant. */
+  private toolByMode: Record<EditorMode, ToolId> = { draw: 'pencil', rig: 'rig-bone' }
 
   activeLayer = 0
   activeFrame = 0
@@ -117,6 +130,9 @@ export class Editor {
   }
 
   onion: OnionSkin = { enabled: false, prev: 1, next: 1, opacity: 110, tint: true }
+
+  /** Affiche l'influence de chaque os en couleur par-dessus le dessin. */
+  showWeights = true
 
   view: ViewSettings = {
     zoom: 8,
@@ -152,6 +168,20 @@ export class Editor {
     this.selection = new Selection(this.sprite.width, this.sprite.height)
     this.symmetry.axisX = this.sprite.width / 2
     this.symmetry.axisY = this.sprite.height / 2
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Mode de travail                                                   */
+  /* ---------------------------------------------------------------- */
+
+  setMode(mode: EditorMode): void {
+    if (this.mode === mode) return
+    this.toolByMode[this.mode] = this.settings.tool
+    this.mode = mode
+    this.settings.tool = this.toolByMode[mode]
+    this.events.emit('mode', mode)
+    this.events.emit('settings', undefined)
+    this.events.emit('doc', undefined)
   }
 
   /* ---------------------------------------------------------------- */

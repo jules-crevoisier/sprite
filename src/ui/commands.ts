@@ -250,11 +250,11 @@ export function buildCommands(app: App): Command[] {
     run: () => ops.snapToPalette(ed, 'sprite'),
   })
   add({
-    id: 'rig.open', label: 'Squelette : ouvrir le panneau', group: 'Assiste', keys: 'K', icon: 'rig',
+    id: 'rig.open', label: 'Passer en mode Squelette', group: 'Assiste', keys: 'Maj+K', icon: 'rig',
+    checked: () => ed.mode === 'rig',
     run: () => {
-      app.workspace.setVisible('rig', true)
-      app.setTool('rig')
-      showToast('Glissez sur la toile pour tracer un os', 'info')
+      app.setMode(ed.mode === 'rig' ? 'draw' : 'rig')
+      if (ed.mode === 'rig') app.workspace.setVisible('rig', true)
     },
   })
   add({

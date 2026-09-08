@@ -36,7 +36,7 @@ export interface Tool {
   name: string
   shortcut: string
   icon: string
-  group: 'draw' | 'shape' | 'select' | 'nav'
+  group: 'draw' | 'shape' | 'select' | 'nav' | 'rig'
   /** Reglages pertinents affichés dans la barre d'options. */
   options: ToolOption[]
   cursor?: string
@@ -54,7 +54,7 @@ export interface Tool {
 export type ToolOption =
   | 'brush' | 'opacity' | 'paintMode' | 'pixelPerfect' | 'dither'
   | 'tolerance' | 'contiguous' | 'fillShapes' | 'strength' | 'sprayDensity'
-  | 'selectionMode' | 'gradientDither'
+  | 'selectionMode' | 'gradientDither' | 'weightBrush' | 'seam'
 
 /** Couleur active selon le bouton de la souris (droit = couleur secondaire). */
 export function activeColor(ed: Editor, p: PointerInfo): RGBA {

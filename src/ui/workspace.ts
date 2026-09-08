@@ -3,6 +3,7 @@ import { icon } from './icons'
 import { openMenu, showToast, type MenuItem } from './overlay'
 
 export type DockSide = 'left' | 'right'
+export type WorkMode = 'draw' | 'rig'
 
 export interface PanelDef {
   id: string
@@ -25,7 +26,7 @@ export interface LayoutState {
   timelineVisible: boolean
 }
 
-const STORAGE_KEY = 'pixelforge.layout.v2'
+const STORAGE_KEY = 'pixelforge.layout.v3'
 const MIN_DOCK = 180
 const MAX_DOCK = 520
 
@@ -95,7 +96,9 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
  */
 export class Workspace {
   private panels = new Map<string, PanelDef>()
-  private state: LayoutState
+  /** Une disposition par mode : le squelette n'a pas les memes besoins. */
+  private states: Record<WorkMode, LayoutState>
+  private mode: WorkMode = 'draw'
   private docks: Record<DockSide, HTMLElement>
   private splitters: Record<DockSide, HTMLElement>
   private timelineEl: HTMLElement
@@ -118,7 +121,7 @@ export class Workspace {
     this.splitters = { left: elements.splitLeft, right: elements.splitRight }
     this.timelineEl = elements.timeline
     this.onLayoutChange = onLayoutChange
-    this.state = this.load()
+    this.states = { draw: this.load('draw'), rig: this.load('rig') }
     this.bindSplitters()
     this.render()
   }
@@ -127,10 +130,21 @@ export class Workspace {
   /* Persistance                                                       */
   /* ---------------------------------------------------------------- */
 
-  private load(): LayoutState {
-    const fallback = PRESETS.complet.layout()
+  /** Disposition courante du mode actif. */
+  private get state(): LayoutState { return this.states[this.mode] }
+  private set state(next: LayoutState) { this.states[this.mode] = next }
+
+  /** Bascule de mode : la disposition suit. */
+  setMode(mode: WorkMode): void {
+    if (this.mode === mode) return
+    this.mode = mode
+    this.render()
+  }
+
+  private load(mode: WorkMode): LayoutState {
+    const fallback = mode === 'rig' ? RIG_LAYOUT() : PRESETS.complet.layout()
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      const raw = localStorage.getItem(`${STORAGE_KEY}.${mode}`)
       if (!raw) return fallback
       const parsed = JSON.parse(raw) as Partial<LayoutState>
       const merged: LayoutState = {
@@ -156,7 +170,7 @@ export class Workspace {
   }
 
   private save(): void {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)) } catch { /* quota */ }
+    try { localStorage.setItem(`${STORAGE_KEY}.${this.mode}`, JSON.stringify(this.state)) } catch { /* quota */ }
   }
 
   /* ---------------------------------------------------------------- */
@@ -321,7 +335,10 @@ export class Workspace {
     showToast(`Disposition « ${preset.label} »`, 'success')
   }
 
-  reset(): void { this.applyPreset('complet') }
+  reset(): void {
+    if (this.mode === 'rig') { this.state = RIG_LAYOUT(); this.render(); return }
+    this.applyPreset('complet')
+  }
 
   /* ---------------------------------------------------------------- */
   /* Menus                                                             */
@@ -412,5 +429,14 @@ export class Workspace {
     }
   }
 }
+
+/** Disposition par defaut du mode squelette : la hierarchie prend la place. */
+const RIG_LAYOUT = (): LayoutState => ({
+  docks: { left: [], right: ['rig', 'preview', 'layers'] },
+  hidden: ['color', 'palette'],
+  collapsed: [],
+  widths: { left: 260, right: 288 },
+  timelineVisible: true,
+})
 
 const clampWidth = (n: number): number => Math.max(MIN_DOCK, Math.min(MAX_DOCK, Math.round(n)))

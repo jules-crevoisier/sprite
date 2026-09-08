@@ -1,17 +1,17 @@
 import type { Editor } from '../core/editor'
 import {
-  applyPose, autoBind, canParent, capturePose, deform, lerpPose, resetPose,
-  type Bone, type Pose,
+  applyPose, autoBind, boneColor, canParent, capturePose, deform, lerpPose,
+  resetPose, type Bone, type Pose,
 } from '../smart/rig'
 import { RIG_TEMPLATES, applyTemplate } from '../smart/rig-presets'
 import { rigState, refreshPose, seamSettings } from '../tools'
-import { el, clear, iconButton, numberInput, segmented, slider } from './dom'
+import { el, clear, iconButton, numberInput, slider } from './dom'
 import { icon } from './icons'
 import { confirmDialog, openMenu, showToast } from './overlay'
 
 /**
- * Panneau du squelette : construire les os, lier les pixels, poser le
- * dessin et fabriquer des frames a partir des poses.
+ * Panneau du mode Squelette : hierarchie des os, liaison des pixels, rendu
+ * de la pose et fabrication des frames.
  */
 export class RigPanel {
   readonly content: HTMLElement
@@ -42,50 +42,39 @@ export class RigPanel {
     const rig = this.rig
     const bound = !!rig.rest && !!rig.weights
 
-    this.body.appendChild(segmented([
-      { value: 'edit', label: 'Construction', title: 'Creer et ajuster les os' },
-      { value: 'pose', label: 'Pose', title: 'Tirer les extremites pour animer' },
-    ], rigState.mode, (v) => {
-      rigState.mode = v
-      this.ed.updateSettings({ tool: 'rig' })
-    }))
-
     if (!rig.bones.length) {
-      this.body.appendChild(el('button', {
-        class: 'btn primary',
-        style: { width: '100%', marginTop: '8px' },
-        html: icon('group', 14),
-        onclick: (e: MouseEvent) => this.templateMenu(e.currentTarget as HTMLElement),
-      }, el('span', null, 'Partir d\'un modele')))
-      this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '8px' } },
-        'Ou tracez vous-meme : avec l\'outil Squelette, glissez sur la toile pour poser un os. ',
-        'Repartir du bout d\'un os l\'enchaine au precedent.'))
+      this.body.append(
+        el('button', {
+          class: 'btn primary',
+          style: { width: '100%' },
+          html: icon('group', 14),
+          onclick: (e: MouseEvent) => this.templateMenu(e.currentTarget as HTMLElement),
+        }, el('span', null, 'Partir d\'un modele')),
+        el('p', { class: 'form-note', style: { marginTop: '8px' } },
+          'Ou tracez vous-meme : avec l\'outil Creer des os, glissez sur la toile. ',
+          'Repartir du bout d\'un os l\'enchaine au precedent.'),
+      )
       return
     }
 
-    // --- liste des os ---
-    const list = el('div', { style: { display: 'grid', gap: '2px', marginTop: '8px' } })
-    for (const bone of [...rig.bones].sort((a, b) => a.z - b.z).reverse()) {
-      list.appendChild(this.boneRow(bone))
-    }
-    this.body.appendChild(list)
+    this.body.appendChild(this.hierarchy())
 
     // --- liaison ---
     this.body.appendChild(el('div', { class: 'form-section' }, 'Liaison'))
     this.body.appendChild(el('button', {
-      class: 'btn',
+      class: `btn ${bound ? '' : 'primary'}`,
       style: { width: '100%' },
       html: icon('bone', 14),
       onclick: () => this.bind(),
-    }, el('span', null, bound ? 'Relier les pixels au squelette' : 'Lier les pixels au squelette')))
+    }, el('span', null, bound ? 'Relier les pixels' : 'Lier les pixels au squelette')))
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
       bound
-        ? 'Le dessin de reference est enregistre. Passez en mode Pose et tirez une extremite.'
-        : 'A faire une fois le squelette en place : chaque pixel est attribue a l\'os le plus proche.'))
+        ? 'Chaque couleur sur la toile montre l\'os qui porte le pixel. Le pinceau Ponderer corrige les frontieres.'
+        : 'A faire une fois les os places : chaque pixel rejoint l\'os le plus proche.'))
 
     if (!bound) return
 
-    // --- reglages de deformation ---
+    // --- rendu ---
     const seamLabels = ['aucun', 'discret', 'normal', 'genereux']
     this.body.appendChild(el('div', { class: 'form-section' }, 'Rendu de la pose'))
     this.body.appendChild(el('div', { class: 'opt' },
@@ -95,7 +84,7 @@ export class RigPanel {
         (v) => seamLabels[v] ?? ''),
     ))
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '4px' } },
-      'Referme les fentes qui apparaissent a l\'articulation. Trop haut, la silhouette s\'epaissit.'))
+      'Referme les fentes de l\'articulation. Trop haut, la silhouette s\'epaissit.'))
 
     // --- frames ---
     this.body.appendChild(el('div', { class: 'form-section' }, 'Frames'))
@@ -107,16 +96,15 @@ export class RigPanel {
     }, el('span', null, 'Nouvelle frame depuis la pose')))
 
     const count = numberInput(4, () => {}, { min: 1, max: 32, width: '58px' })
-    this.body.appendChild(el('div', { class: 'form-row', style: { marginBottom: '6px' } },
-      el('button', {
-        class: `btn sm ${this.poseA ? 'active' : ''}`,
-        onclick: () => {
-          this.poseA = capturePose(this.rig)
-          showToast('Pose de depart memorisee', 'success')
-          this.render()
-        },
-      }, this.poseA ? 'Pose A memorisee' : 'Memoriser la pose A'),
-    ))
+    this.body.appendChild(el('button', {
+      class: `btn sm ${this.poseA ? 'active' : ''}`,
+      style: { width: '100%', marginBottom: '6px' },
+      onclick: () => {
+        this.poseA = capturePose(this.rig)
+        showToast('Pose de depart memorisee', 'success')
+        this.render()
+      },
+    }, this.poseA ? 'Pose de depart memorisee' : 'Memoriser la pose de depart'))
     this.body.appendChild(el('div', { class: 'form-row' },
       count,
       el('button', {
@@ -130,14 +118,30 @@ export class RigPanel {
       'l\'interpolation produit le mouvement complet.'))
   }
 
-  private boneRow(bone: Bone): HTMLElement {
+  /** Liste des os, indentee selon la hierarchie. */
+  private hierarchy(): HTMLElement {
     const rig = this.rig
+    const list = el('div', { style: { display: 'grid', gap: '2px' } })
+    const roots = rig.bones.filter((b) => b.parent === null)
+    const walk = (bones: Bone[], depth: number) => {
+      for (const bone of bones) {
+        list.appendChild(this.boneRow(bone, depth))
+        walk(rig.bones.filter((b) => b.parent === bone.id), depth + 1)
+      }
+    }
+    walk(roots, 0)
+    // Un os dont le parent a disparu doit rester visible.
+    const shown = new Set([...list.children].map((n) => (n as HTMLElement).dataset.bone))
+    for (const bone of rig.bones) {
+      if (!shown.has(String(bone.id))) list.appendChild(this.boneRow(bone, 0))
+    }
+    return list
+  }
+
+  private boneRow(bone: Bone, depth: number): HTMLElement {
+    const rig = this.rig
+    const index = rig.bones.indexOf(bone)
     const selected = rigState.selected === bone.id
-    const parents = [
-      { value: '', label: '— racine —' },
-      ...rig.bones.filter((b) => b.id !== bone.id && canParent(rig, bone.id, b.id))
-        .map((b) => ({ value: String(b.id), label: b.name })),
-    ]
 
     const name = el('input', {
       value: bone.name,
@@ -148,34 +152,44 @@ export class RigPanel {
       onchange: () => { bone.name = name.value.trim() || bone.name; this.ed.history.touch() },
     })
 
+    const parents = [
+      { value: '', label: '— racine —' },
+      ...rig.bones.filter((b) => b.id !== bone.id && canParent(rig, bone.id, b.id))
+        .map((b) => ({ value: String(b.id), label: b.name })),
+    ]
     const parentSelect = el('select', {
-      style: { height: '22px', fontSize: '11px', maxWidth: '86px' },
+      style: { height: '22px', fontSize: '11px', maxWidth: '74px' },
       title: 'Os parent',
       onchange: () => {
         const value = parentSelect.value === '' ? null : Number(parentSelect.value)
         if (canParent(rig, bone.id, value)) {
-          bone.parent = value
-          this.ed.history.touch()
-          this.ed.events.emit('doc', undefined)
+          this.ed.run('Rattacher un os', () => { bone.parent = value })
+          refreshPose(this.ed)
         }
       },
     }, ...parents.map((o) => el('option', { value: o.value, selected: String(bone.parent ?? '') === o.value }, o.label)))
 
-    return el('div', {
+    const row = el('div', {
       class: `layer-row ${selected ? 'active' : ''}`,
-      onclick: () => { rigState.selected = bone.id; this.render() },
+      style: { paddingLeft: `${6 + depth * 12}px` },
+      onclick: () => { rigState.selected = bone.id; this.render(); this.ed.events.emit('settings', undefined) },
     },
-      el('span', { html: icon('bone', 13), style: { color: selected ? 'var(--accent-text)' : 'var(--text-faint)', display: 'flex' } }),
+      el('i', {
+        title: 'Couleur d\'influence sur la toile',
+        style: {
+          width: '10px', height: '10px', borderRadius: '3px', flex: 'none',
+          background: boneColor(index), border: '1px solid #0006', display: 'block',
+        },
+      }),
       name,
       parentSelect,
       el('button', {
         class: 'mini',
-        title: 'Passer devant',
+        title: 'Passer devant les autres os',
         html: icon('chevron', 12),
         onclick: (e: MouseEvent) => {
           e.stopPropagation()
-          bone.z = Math.max(...rig.bones.map((b) => b.z)) + 1
-          this.ed.events.emit('doc', undefined)
+          this.ed.run('Ordre des os', () => { bone.z = Math.max(...rig.bones.map((b) => b.z)) + 1 })
           refreshPose(this.ed)
         },
       }),
@@ -183,9 +197,11 @@ export class RigPanel {
         class: 'mini',
         title: 'Supprimer l\'os',
         html: icon('trash', 12),
-        onclick: (e: MouseEvent) => { e.stopPropagation(); this.removeBone(bone) },
+        onclick: (e: MouseEvent) => { e.stopPropagation(); void this.removeBone(bone) },
       }),
     )
+    row.dataset.bone = String(bone.id)
+    return row
   }
 
   /* ---------------------------------------------------------------- */
@@ -205,9 +221,9 @@ export class RigPanel {
           ed.run(`Modele ${template.label}`, () => {
             applyTemplate(ed.sprite.rig, template, cel?.bitmap ?? null, ed.sprite)
           })
-          rigState.mode = 'edit'
           rigState.selected = ed.sprite.rig.bones[0]?.id ?? null
-          ed.updateSettings({ tool: 'rig' })
+          ed.setMode('rig')
+          ed.updateSettings({ tool: 'rig-bone' })
           showToast(`${template.label} : ajustez les os puis liez les pixels`, 'success')
           this.render()
         },
@@ -224,14 +240,14 @@ export class RigPanel {
       resetPose(this.rig)
       autoBind(this.rig, cel.bitmap)
     })
-    rigState.mode = 'pose'
-    showToast('Pixels lies : passez en mode Pose', 'success')
+    this.ed.updateSettings({ tool: 'rig-pose' })
+    showToast('Pixels lies : chaque couleur montre son os', 'success')
     this.render()
   }
 
   private resetPose(): void {
     if (!this.rig.bones.length) return
-    this.ed.runPixels('Reinitialiser la pose', [], () => resetPose(this.rig))
+    this.ed.run('Reinitialiser la pose', () => resetPose(this.rig))
     refreshPose(this.ed)
     this.render()
   }
@@ -253,7 +269,7 @@ export class RigPanel {
       rig.rest = null
     })
     if (rigState.selected === bone.id) rigState.selected = null
-    showToast('Os supprime — relier les pixels', 'info')
+    showToast('Os supprime — reliez les pixels', 'info')
     this.render()
   }
 
@@ -282,8 +298,7 @@ export class RigPanel {
 
     ed.run('Frames intermediaires', () => {
       for (let i = 1; i <= steps; i++) {
-        const t = i / steps
-        applyPose(rig, lerpPose(this.poseA!, poseB, t))
+        applyPose(rig, lerpPose(this.poseA!, poseB, i / steps))
         const posed = deform(rig, seamSettings(rigState.seam))
         if (!posed) continue
         const at = from + i

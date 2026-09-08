@@ -1,10 +1,13 @@
 import { Bitmap } from '../core/bitmap'
-import { getA, toCss } from '../core/color'
+import { getA } from '../core/color'
 import type { Editor } from '../core/editor'
 import { compositeFrame } from './composite'
 import { TOOLS, toolById, type PointerInfo, type Tool } from '../tools'
 import { eyedropperTool } from '../tools/draw-tools'
 import { brushOffsets } from '../tools/algorithms'
+import { deform, boneColor } from '../smart/rig'
+import { rigState, seamSettings } from '../tools'
+import { fromHex, getR, getG, getB, toCss } from '../core/color'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 64
@@ -23,10 +26,20 @@ export class Viewport {
   private frameCtx: CanvasRenderingContext2D
   private onionCanvas: HTMLCanvasElement
   private onionCtx: CanvasRenderingContext2D
+  private weightCanvas: HTMLCanvasElement
+  private weightCtx: CanvasRenderingContext2D
+  private owners: Uint8Array | null = null
 
   private needsRender = true
   private antsPhase = 0
   private lastAnts = 0
+
+  /**
+   * Geste a montrer sur la toile : une fleche animee de `from` vers `to`,
+   * en coordonnees sprite. Le tutoriel s'en sert pour designer le mouvement
+   * a faire, plutot que de le decrire.
+   */
+  gesture: { from: [number, number]; to: [number, number]; label?: string } | null = null
 
   /** Position du curseur en coordonnees sprite, ou null hors toile. */
   cursor: { x: number; y: number } | null = null
@@ -49,6 +62,8 @@ export class Viewport {
     this.frameCtx = this.frameCanvas.getContext('2d')!
     this.onionCanvas = document.createElement('canvas')
     this.onionCtx = this.onionCanvas.getContext('2d')!
+    this.weightCanvas = document.createElement('canvas')
+    this.weightCtx = this.weightCanvas.getContext('2d')!
 
     this.bindEvents()
     editor.events.on('doc', () => this.invalidate())
@@ -225,6 +240,9 @@ export class Viewport {
 
     ctx.drawImage(this.frameCanvas, ox, oy, dw, dh)
 
+    // En mode squelette, l'influence des os se lit directement sur le dessin.
+    if (ed.mode === 'rig' && ed.showWeights) this.drawWeights(ctx, ox, oy, dw, dh)
+
     ctx.save()
     ctx.translate(ox, oy)
     ctx.scale(v.zoom, v.zoom)
@@ -237,6 +255,7 @@ export class Viewport {
     const tool = toolById(ed.settings.tool)
     tool.overlay?.(ed, { ctx, zoom: v.zoom }, this.pointer)
 
+    if (this.gesture) this.drawGesture(ctx)
     if (ed.selection.active) this.drawAnts(ctx)
     if (!ed.playing) this.drawBrushCursor(ctx)
 
@@ -302,6 +321,38 @@ export class Viewport {
 
     for (let i = o.prev; i >= 1; i--) draw(ed.activeFrame - i, i, true)
     for (let i = o.next; i >= 1; i--) draw(ed.activeFrame + i, i, false)
+  }
+
+  /**
+   * Teinte chaque pixel selon l'os qui le porte. Les proprietaires sont
+   * recalcules dans l'espace de la pose, pas du repos : la couleur suit donc
+   * le membre quand il bouge.
+   */
+  private drawWeights(ctx: CanvasRenderingContext2D, ox: number, oy: number, dw: number, dh: number): void {
+    const ed = this.ed
+    const rig = ed.sprite.rig
+    if (!rig.rest || !rig.weights || !rig.bones.length) return
+    const w = rig.rest.width, h = rig.rest.height
+    if (!this.owners || this.owners.length !== w * h) this.owners = new Uint8Array(w * h)
+    this.owners.fill(255)
+    deform(rig, { ...seamSettings(rigState.seam), owners: this.owners })
+
+    this.weightCanvas.width = w
+    this.weightCanvas.height = h
+    const img = this.weightCtx.createImageData(w, h)
+    const selectedIndex = rig.bones.findIndex((b) => b.id === rigState.selected)
+    for (let i = 0; i < this.owners.length; i++) {
+      const owner = this.owners[i]
+      if (owner === 255) continue
+      const color = fromHex(boneColor(owner))
+      img.data[i * 4] = getR(color)
+      img.data[i * 4 + 1] = getG(color)
+      img.data[i * 4 + 2] = getB(color)
+      // Assez pour lire l'appartenance, assez discret pour voir le dessin.
+      img.data[i * 4 + 3] = owner === selectedIndex ? 165 : 78
+    }
+    this.weightCtx.putImageData(img, 0, 0)
+    ctx.drawImage(this.weightCanvas, ox, oy, dw, dh)
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D): void {
@@ -370,6 +421,44 @@ export class Viewport {
       }
     }
     ctx.restore()
+  }
+
+  /** Fleche pulsee du point de depart vers le point d'arrivee du geste. */
+  private drawGesture(ctx: CanvasRenderingContext2D): void {
+    const g = this.gesture
+    if (!g) return
+    const z = this.ed.view.zoom
+    const unit = 1 / z
+    const [x1, y1] = g.from
+    const [x2, y2] = g.to
+    const phase = (performance.now() % 1400) / 1400
+    const ease = 0.5 - Math.cos(phase * Math.PI * 2) / 2
+    const cx = x1 + (x2 - x1) * ease
+    const cy = y1 + (y2 - y1) * ease
+
+    ctx.save()
+    ctx.strokeStyle = '#ffb454'
+    ctx.lineWidth = 1.8 * unit
+    ctx.setLineDash([4 * unit, 3 * unit])
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    // Depart : un cercle. Arrivee : une cible. Entre les deux, le curseur.
+    ctx.beginPath()
+    ctx.arc(x1, y1, 3 * unit, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(x2, y2, 4 * unit, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(cx, cy, 2.4 * unit, 0, Math.PI * 2)
+    ctx.fillStyle = '#ffb454'
+    ctx.fill()
+    ctx.restore()
+    this.invalidate()
   }
 
   private drawAnts(ctx: CanvasRenderingContext2D): void {

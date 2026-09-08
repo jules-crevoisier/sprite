@@ -1,5 +1,5 @@
 import type { Editor } from '../core/editor'
-import { TOOL_LIST } from '../tools'
+import { toolsForMode } from '../tools'
 import { el, clear } from './dom'
 import { icon } from './icons'
 
@@ -7,7 +7,7 @@ import { icon } from './icons'
 export function renderToolbar(container: HTMLElement, ed: Editor, onSelect: (id: string) => void): void {
   clear(container)
   let lastGroup = ''
-  for (const tool of TOOL_LIST) {
+  for (const tool of toolsForMode(ed.mode)) {
     if (lastGroup && tool.group !== lastGroup) container.appendChild(el('div', { class: 'sep' }))
     lastGroup = tool.group
     const active = ed.settings.tool === tool.id

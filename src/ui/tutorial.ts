@@ -14,6 +14,11 @@ export interface TutorialStep {
   done?: () => boolean
   /** Preparation silencieuse a l'entree dans l'etape. */
   enter?: () => void
+  /**
+   * Geste a montrer sur la toile, en coordonnees sprite. Une fleche animee
+   * designe le mouvement a faire : c'est plus clair qu'une phrase.
+   */
+  gesture?: () => { from: [number, number]; to: [number, number] } | null
 }
 
 export interface Lesson {
@@ -86,6 +91,8 @@ export class Tutorial {
     if (completed && this.lesson) markDone(this.lesson.id)
     this.lesson = null
     this.target = null
+    this.app.viewport.gesture = null
+    this.app.viewport.invalidate()
     this.card.hidden = true
     this.spotlight.hidden = true
     clearInterval(this.poll)
@@ -104,6 +111,8 @@ export class Tutorial {
     const step = this.lesson.steps[this.index]
     step.enter?.()
     this.target = step.target?.() ?? null
+    this.app.viewport.gesture = step.gesture?.() ?? null
+    this.app.viewport.invalidate()
     this.render()
   }
 
@@ -234,7 +243,11 @@ export class Tutorial {
     }, this.index === lesson.steps.length - 1 ? 'Terminer' : 'Suivant'))
     this.card.appendChild(foot)
 
-    if (step.done) {
+    if (step.done && !step.auto) {
+      // Sans bouton de secours, l'etape attend vraiment le geste.
+      this.card.appendChild(el('p', { class: 'tutor-tip' },
+        'A vous de jouer : l\'etape se valide des que c\'est fait.'))
+    } else if (step.done) {
       this.card.appendChild(el('p', { class: 'tutor-tip' },
         'L\'etape se valide toute seule des que c\'est fait.'))
     }

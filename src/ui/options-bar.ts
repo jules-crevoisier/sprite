@@ -1,7 +1,7 @@
 import type { Editor } from '../core/editor'
 import { DITHER_PATTERNS, type BrushShape } from '../tools/algorithms'
 import type { PaintMode } from '../tools/painter'
-import { toolById } from '../tools'
+import { rigState, refreshPose, toolById } from '../tools'
 import { el, clear, slider, checkbox, select, segmented } from './dom'
 import { icon } from './icons'
 
@@ -32,6 +32,34 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
   add(el('div', { class: 'opt-sep' }))
 
   const opts = new Set(tool.options)
+
+  // Le mode squelette a ses propres reglages : la brosse de dessin et le
+  // tramage n'y ont pas de sens.
+  if (ed.mode === 'rig') {
+    if (opts.has('weightBrush')) {
+      add(el('div', { class: 'opt' },
+        el('label', null, 'Pinceau'),
+        slider(1, 24, rigState.weightBrush, 1,
+          (v) => { rigState.weightBrush = v; ed.events.emit('settings', undefined) },
+          (v) => `${v}px`),
+      ))
+    }
+    add(el('div', { class: 'opt' },
+      checkbox('Montrer l\'influence des os', ed.showWeights, (v) => {
+        ed.showWeights = v
+        ed.events.emit('settings', undefined)
+      }),
+    ))
+    const seamLabels = ['aucun', 'discret', 'normal', 'genereux']
+    add(el('div', { class: 'opt' },
+      el('label', null, 'Jointures'),
+      slider(0, 3, rigState.seam, 1,
+        (v) => { rigState.seam = v; refreshPose(ed) },
+        (v) => seamLabels[v] ?? ''),
+    ))
+    if (tool.hint) add(el('div', { class: 'opt-hint' }, tool.hint))
+    return
+  }
 
   if (opts.has('brush')) {
     add(el('div', { class: 'opt' },

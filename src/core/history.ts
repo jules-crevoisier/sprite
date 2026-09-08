@@ -1,5 +1,6 @@
 import { Bitmap, type Rect } from './bitmap'
 import type { Cel, Layer, Sprite, Slice, Tag } from './document'
+import type { Bone } from '../smart/rig'
 import type { BlendMode } from './blend'
 
 export interface Command {
@@ -138,6 +139,10 @@ export interface StructureSnapshot {
   slices: Slice[]
   paletteColors: number[]
   paletteName: string
+  /** Squelette : os, dessin de reference et table des poids. */
+  bones: Bone[]
+  rigRest: Bitmap | null
+  rigWeights: Uint8Array | null
 }
 
 /**
@@ -166,6 +171,9 @@ export function snapshotStructure(sprite: Sprite): StructureSnapshot {
     slices: sprite.slices.map((s) => ({ ...s, bounds: { ...s.bounds } })),
     paletteColors: [...sprite.palette.colors],
     paletteName: sprite.palette.name,
+    bones: sprite.rig.bones.map((b) => ({ ...b })),
+    rigRest: sprite.rig.rest,
+    rigWeights: sprite.rig.weights ? new Uint8Array(sprite.rig.weights) : null,
   }
 }
 
@@ -187,6 +195,9 @@ export function restoreStructure(sprite: Sprite, snap: StructureSnapshot): void 
   sprite.slices = snap.slices.map((s) => ({ ...s, bounds: { ...s.bounds } }))
   sprite.palette.colors = [...snap.paletteColors]
   sprite.palette.name = snap.paletteName
+  sprite.rig.bones = snap.bones.map((b) => ({ ...b }))
+  sprite.rig.rest = snap.rigRest
+  sprite.rig.weights = snap.rigWeights ? new Uint8Array(snap.rigWeights) : null
 }
 
 /**

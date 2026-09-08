@@ -140,7 +140,7 @@ peau, un feuillage sont chacun une famille.
 *De gauche à droite : le dessin de repos, la carte des os — une couleur par
 os, qui montre à qui appartient chaque pixel — puis quatre poses.*
 
-**Squelette et pose** (`K`). Six modèles prêts à l'emploi — humanoïde de face
+**Squelette et pose** (`Maj+K`). Six modèles prêts à l'emploi — humanoïde de face
 et de profil, quadrupède, oiseau, arbre, membre simple — se calent sur la
 boîte des pixels opaques, donc ils tombent juste quelle que soit la taille du
 sprite. On peut aussi tracer les os soi-même.
@@ -234,6 +234,28 @@ si vous préférez voir le résultat d'abord.
 Cinq leçons : prise en main, animer, squelette et pose, détail et variantes,
 export vers un moteur.
 
+La leçon du squelette ne fait rien à votre place : elle attend que vous
+basculiez de mode, que vous posiez le modèle, que vous liiez les pixels et
+que vous tiriez le bras — une flèche animée sur la toile montre exactement
+le geste à faire.
+
+## Deux modes de travail
+
+L'éditeur bascule entre **Dessin** et **Squelette** depuis la barre du haut,
+et l'interface entière suit : barre d'outils, panneaux, réglages. On ne
+cherche pas un crayon quand on articule un personnage.
+
+![Le mode Squelette : outils, hiérarchie des os et influence en couleur](docs/mode-squelette.png)
+
+En mode Squelette, trois outils : **Créer des os**, **Poser** et
+**Pondérer**. Chaque couleur sur la toile montre l'os qui porte le pixel —
+la lecture la plus directe de ce qui va bouger avec quoi — et le pinceau
+Pondérer corrige les frontières quand un bout d'épaule part avec le bras.
+Les couleurs suivent le membre quand il bouge : elles sont recalculées dans
+l'espace de la pose, pas du repos.
+
+Chaque mode garde sa propre disposition de panneaux.
+
 ## Espace de travail
 
 Les panneaux ne sont pas figés. Chacun se déplace entre le dock gauche et le
@@ -254,7 +276,8 @@ courante est restaurée au chargement suivant.
 | Pendant un tracé | `Maj` contraint à 45° · `Alt` dessine depuis le centre |
 | Sélection | `Maj` ajoute · `Alt` soustrait · `Ctrl` intersecte · flèches déplacent les pixels |
 | Animation | `,` `.` frame précédente/suivante · `Entrée` lecture · `Alt+N` nouvelle frame · `Ctrl+T` tag |
-| Assistant | `K` squelette · `Ctrl+Maj+V` variantes · `Ctrl+Maj+D` détail |
+| Assistant | `Maj+K` mode squelette · `Ctrl+Maj+V` variantes · `Ctrl+Maj+D` détail |
+| Mode squelette | `K` créer des os · `J` poser · `N` pondérer |
 | Aide | `Maj+F1` tutoriels · `F1` raccourcis · `Ctrl+K` commandes |
 | Divers | `X` permute les couleurs · `[` `]` taille de brosse · `Échap` annule le geste puis désélectionne |
 
