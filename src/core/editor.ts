@@ -6,6 +6,7 @@ import { Selection } from './selection'
 import { Emitter } from './events'
 import type { BrushShape, DitherPattern } from '../tools/algorithms'
 import type { PaintMode } from '../tools/painter'
+import type { EasingId } from '../smart/easing'
 
 export type ToolId =
   | 'pencil' | 'eraser' | 'bucket' | 'eyedropper'
@@ -130,6 +131,13 @@ export class Editor {
   }
 
   onion: OnionSkin = { enabled: false, prev: 1, next: 1, opacity: 110, tint: true }
+
+  /**
+   * Courbe de vitesse des images intermediaires. Elle vit sur l'editeur et
+   * non dans un panneau : c'est un reglage d'animation, employe aussi bien
+   * par la timeline que par le squelette.
+   */
+  easing: EasingId = 'ease-in-out'
 
   /**
    * Affiche l'influence de chaque os en couleur par-dessus le dessin.

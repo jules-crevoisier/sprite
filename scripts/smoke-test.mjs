@@ -1214,6 +1214,155 @@ check('tirer une articulation ne detache pas le membre',
   attaches.cuisseNonDeplacee, 'la cuisse n\'a pas ete translatee')
 check('c\'est l\'os porteur qui pivote', attaches.torsePivote)
 
+/* --- amplitude reelle des cycles : au-dessus du pixel --- */
+const amplitudes = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { autoBind, deform, applyPose } = await import('/src/smart/rig.ts')
+  const { ANIM_CLIPS, clipPoses } = await import('/src/smart/anim-clips.ts')
+  const ed = window.pixelforge.ed
+  const out = {}
+  for (const id of ['idle', 'walk', 'run']) {
+    const clip = ANIM_CLIPS.find((c) => c.id === id)
+    const sprite = demoCharacter()
+    const rest = sprite.layers[0].cels[0].bitmap
+    const rig = sprite.rig
+    applyTemplate(rig, RIG_TEMPLATES[0], rest, ed.sprite)
+    const part = autoBind(rig, sprite.layers[0].id, rest)
+    const frames = clipPoses(rig, clip, clip.frames)
+      .map((p) => { applyPose(rig, p); return deform(rig, part, { quality: 1 }) })
+    const boites = frames.map((f) => f.trimBounds())
+    const diff = (a, b) => {
+      let n = 0
+      for (let i = 0; i < a.u32.length; i++) if (a.u32[i] !== b.u32[i]) n++
+      return n
+    }
+    const pas = frames.map((f, i) => diff(f, frames[(i + 1) % frames.length]))
+    out[id] = {
+      // Un mouvement decrit en fraction de la taille du personnage peut
+      // valoir moins d'un pixel et disparaitre a l'arrondi : l'animation
+      // parait alors immobile.
+      vertical: Math.max(...boites.map((b) => b.y)) - Math.min(...boites.map((b) => b.y)),
+      // Le passage de la derniere image a la premiere doit ressembler aux
+      // autres : trop petit, le cycle marque un temps puis repart d'un coup.
+      raccord: +(pas[pas.length - 1] / Math.max(...pas)).toFixed(2),
+    }
+  }
+  return out
+})
+check('le repos bouge assez pour se voir',
+  amplitudes.idle.vertical >= 2, `${amplitudes.idle.vertical} px de souffle`)
+check('la marche et la course rebondissent',
+  amplitudes.walk.vertical >= 2 && amplitudes.run.vertical >= 2,
+  `marche ${amplitudes.walk.vertical} px, course ${amplitudes.run.vertical} px`)
+check('le passage de la derniere image a la premiere ne coupe pas',
+  Object.values(amplitudes).every((v) => v.raccord >= 0.55),
+  Object.entries(amplitudes).map(([k, v]) => `${k}:${v.raccord}`).join(' '))
+
+/* --- rampe de couleurs et ombrage --- */
+const ombrage = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { buildRamp, autoShade, antiAlias } = await import('/src/smart/shading.ts')
+  const { extractRamps } = await import('/src/smart/analysis.ts')
+  const { fromHex, getA, rgbaToHsv, luminance } = await import('/src/core/color.ts')
+
+  // Une rampe doit decaler la teinte, pas seulement la luminosite : une ombre
+  // qui n'est qu'un gris plus sombre se reconnait au premier coup d'oeil.
+  const base = fromHex('#3d60cf')
+  const rampe = buildRamp(base, { steps: 5 })
+  const tsv = rampe.map((c) => rgbaToHsv(c))
+  const teintes = tsv.map((h) => h.h)
+  const lumieres = rampe.map(luminance)
+  const croissante = lumieres.every((v, i) => i === 0 || v > lumieres[i - 1])
+  const ecartTeinte = Math.max(...teintes) - Math.min(...teintes)
+
+  const sprite = demoCharacter()
+  const bm = sprite.layers[0].cels[0].bitmap
+  const avant = new Uint32Array(bm.u32)
+  const palette = new Set([...avant].filter((c) => getA(c) !== 0))
+  const ramps = extractRamps([bm])
+  const bilan = autoShade(bm, ramps, { angle: 135, strength: 0.8 })
+  const apres = new Set([...bm.u32].filter((c) => getA(c) !== 0))
+  const etrangeres = [...apres].filter((c) => !palette.has(c)).length
+  // La silhouette ne doit pas changer : on repeint, on ne redessine pas.
+  let silhouette = true
+  for (let i = 0; i < bm.u32.length; i++) {
+    if ((getA(avant[i]) === 0) !== (getA(bm.u32[i]) === 0)) { silhouette = false; break }
+  }
+
+  const bm2 = sprite.layers[0].cels[0].bitmap.clone()
+  const lisses = antiAlias(bm2, ramps, 1)
+  const apresLissage = new Set([...bm2.u32].filter((c) => getA(c) !== 0))
+  const etrangeresLissage = [...apresLissage].filter((c) => !palette.has(c)).length
+
+  return {
+    tons: rampe.length,
+    croissante,
+    ecartTeinte: Math.round(ecartTeinte),
+    ombres: bilan.changed,
+    matieres: bilan.ramps,
+    etrangeres,
+    silhouette,
+    lisses,
+    etrangeresLissage,
+  }
+})
+check('une rampe va de l\'ombre a la lumiere', ombrage.croissante, `${ombrage.tons} tons`)
+check('une rampe decale la teinte, pas seulement la luminosite',
+  ombrage.ecartTeinte >= 20, `${ombrage.ecartTeinte}° d\'ecart`)
+check('l\'ombrage automatique repeint le dessin',
+  ombrage.ombres > 40 && ombrage.matieres >= 2,
+  `${ombrage.ombres} pixels sur ${ombrage.matieres} matieres`)
+check('l\'ombrage n\'introduit aucune couleur etrangere', ombrage.etrangeres === 0,
+  `${ombrage.etrangeres} couleurs inventees`)
+check('l\'ombrage ne change pas la silhouette', ombrage.silhouette)
+check('l\'anti-crenelage adoucit sans inventer de couleur',
+  ombrage.lisses > 0 && ombrage.etrangeresLissage === 0,
+  `${ombrage.lisses} coins adoucis`)
+
+/* --- la courbe de vitesse vit dans le panneau d'animation --- */
+const courbeUI = await page.evaluate(async () => {
+  const app = window.pixelforge, ed = app.ed
+  app.setMode('draw')
+  await new Promise((r) => setTimeout(r, 200))
+  const barre = document.querySelector('.tl-toolbar')
+  const select = barre?.querySelector('select')
+  const trace = barre?.querySelector('.easing-preview svg')
+  const bouton = barre?.querySelector('button[title^="Repartir les durees"]')
+  const dansLeRig = !!document.querySelector('.panel[data-panel="rig"] .easing-preview')
+
+  // Le reglage doit etre partage : le squelette s'en sert aussi.
+  select.value = 'bounce'
+  select.dispatchEvent(new Event('change', { bubbles: true }))
+  await new Promise((r) => setTimeout(r, 120))
+  const partage = ed.easing === 'bounce'
+
+  // Redistribution des durees : le total est conserve, la repartition change.
+  for (let i = 0; i < 5; i++) ed.sprite.addFrame(ed.frameCount)
+  ed.sprite.frameDurations = ed.sprite.frameDurations.map(() => 100)
+  const totalAvant = ed.sprite.frameDurations.reduce((a, b) => a + b, 0)
+  select.value = 'ease-in-out'
+  select.dispatchEvent(new Event('change', { bubbles: true }))
+  bouton.click()
+  await new Promise((r) => setTimeout(r, 150))
+  const durees = [...ed.sprite.frameDurations]
+  const totalApres = durees.reduce((a, b) => a + b, 0)
+
+  return {
+    dansLaTimeline: !!select && !!trace && !!bouton,
+    dansLeRig,
+    partage,
+    variees: new Set(durees).size > 1,
+    // A 20 % pres : les durees sont arrondies a l'entier.
+    totalConserve: Math.abs(totalApres - totalAvant) / totalAvant < 0.2,
+  }
+})
+check('la courbe de vitesse est dans le panneau d\'animation',
+  courbeUI.dansLaTimeline && !courbeUI.dansLeRig)
+check('la courbe est partagee avec le squelette', courbeUI.partage)
+check('la courbe peut repartir les durees des frames',
+  courbeUI.variees && courbeUI.totalConserve)
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

@@ -78,32 +78,47 @@ const keys = (values: number[]) => (t: number): number => {
 /**
  * Balancement d'une cuisse sur un cycle de marche, le contact en t = 0.
  *
- * L'appui balaie regulierement de l'avant vers l'arriere sur la premiere
- * moitie ; la seconde ramene la jambe devant, plus vite, comme un pas reel.
+ * Les huit valeurs sont choisies pour que l'ecart d'une image a la suivante
+ * reste du meme ordre sur tout le tour, le passage de la derniere a la
+ * premiere compris. Une suite qui ralentit fort juste avant le contact fait
+ * marquer un temps a chaque tour, puis repartir d'un coup : c'est ce qui se
+ * lit comme une coupure entre la huitieme image et la premiere, meme quand
+ * les valeurs se raccordent parfaitement.
  */
-const legSwing = keys([0.45, 0.24, 0.02, -0.22, -0.45, -0.16, 0.14, 0.36])
+const legSwing = keys([0.42, 0.23, 0.02, -0.20, -0.40, -0.21, -0.01, 0.22])
 
 /**
  * Flexion du genou correspondante. Presque tendu tant que le pied porte,
- * franchement plie au moment ou la jambe repasse sous le corps : c'est ce
- * pli qui evite au pied de racler le sol, et qui fait lire la marche.
+ * plie quand la jambe repasse sous le corps — c'est ce pli qui evite au pied
+ * de racler le sol. Le pli s'installe et se relache sur plusieurs images :
+ * concentre sur une seule, il produisait un a-coup deux fois par cycle.
  */
-const kneeBend = keys([-0.06, -0.06, -0.12, -0.22, -0.38, -0.78, -0.44, -0.14])
+const kneeBend = keys([-0.05, -0.09, -0.16, -0.28, -0.46, -0.58, -0.44, -0.20])
 
 export const ANIM_CLIPS: AnimClip[] = [
   {
     id: 'idle',
     label: 'Repos',
-    hint: 'Respiration lente, le personnage reste debout',
+    hint: 'Souffle lent : le corps s\'affaisse, les epaules et la tete suivent',
     needs: ['torso'],
-    frames: 4, ms: 180, loop: true,
+    // Six images plutot que quatre : le mouvement ne vaut que deux pixels, et
+    // sur quatre images il se lisait comme un clignotement entre deux poses.
+    frames: 6, ms: 160, loop: true,
     channels: {
-      torso: { ty: (t) => sin(t) * 0.012, angle: (t) => sin(t) * 0.02 },
-      head: { angle: (t) => sin(t, 0.12) * 0.045 },
-      armL: { angle: (t) => sin(t, 0.25) * 0.05 },
-      armR: { angle: (t) => -sin(t, 0.25) * 0.05 },
-      forearmL: { angle: (t) => -0.06 + sin(t, 0.4) * 0.05 },
-      forearmR: { angle: (t) => -0.06 - sin(t, 0.4) * 0.05 },
+      // Deux pixels de descente sur un personnage de cette taille. Le reglage
+      // precedent, a peine un tiers de pixel, ne franchissait jamais l'arrondi
+      // et l'animation ne bougeait pas.
+      torso: {
+        ty: keys([-0.030, -0.014, 0.010, 0.028, 0.016, -0.010]),
+        angle: (t) => sin(t) * 0.022,
+      },
+      // Tete et bras suivent avec un temps de retard : c'est ce decalage,
+      // plus que l'amplitude, qui distingue un souffle d'un aller-retour.
+      head: { angle: (t) => sin(t, 0.14) * 0.06 },
+      armL: { angle: (t) => sin(t, 0.2) * 0.075 },
+      armR: { angle: (t) => -sin(t, 0.2) * 0.075 },
+      forearmL: { angle: (t) => -0.08 + sin(t, 0.36) * 0.07 },
+      forearmR: { angle: (t) => -0.08 - sin(t, 0.36) * 0.07 },
     },
   },
   {
@@ -114,12 +129,16 @@ export const ANIM_CLIPS: AnimClip[] = [
     frames: 8, ms: 110, loop: true,
     channels: {
       // Le corps est au plus bas au contact et au plus haut au passage.
+      // Le corps monte au passage et redescend au contact. L'amplitude est
+      // donnee en fraction de la taille du personnage : en dessous de 0.03
+      // elle vaut moins d'un pixel sur un sprite de cette taille et disparait
+      // a l'arrondi — le rebond etait simplement invisible.
       torso: {
-        ty: keys([0.006, 0.010, 0.002, -0.008, -0.010, -0.004, 0.004, 0.008]),
-        tx: (t) => sin(t, 0.25) * 0.03,
+        ty: keys([0.030, 0.016, -0.004, -0.020, -0.030, -0.016, -0.004, 0.016]),
+        tx: (t) => sin(t, 0.25) * 0.035,
         angle: (t) => sin(t, 0.25) * 0.03,
       },
-      head: { angle: (t) => -sin(t, 0.25) * 0.04 },
+      head: { angle: (t) => -sin(t, 0.25) * 0.05 },
 
       // La cuisse decrit une oscillation complete sur le cycle : en avant au
       // contact, en arriere a la poussee, de retour en avant a l'appui
@@ -145,7 +164,7 @@ export const ANIM_CLIPS: AnimClip[] = [
     frames: 8, ms: 70, loop: true,
     channels: {
       torso: {
-        ty: keys([0.010, 0.018, 0.000, -0.020, -0.026, -0.010, 0.006, 0.016]),
+        ty: keys([0.050, 0.024, -0.012, -0.038, -0.050, -0.024, -0.012, 0.024]),
         tx: (t) => sin(t, 0.25) * 0.05,
         angle: (t) => 0.2 + sin(t, 0.25) * 0.05,
       },

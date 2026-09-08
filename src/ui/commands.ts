@@ -1,7 +1,7 @@
 import type { App } from './app'
 import * as ops from '../core/operations'
 import * as dlg from './dialogs'
-import { variantsDialog, detailDialog } from './smart-dialogs'
+import { variantsDialog, detailDialog, shadeDialog, rampDialog } from './smart-dialogs'
 import { exportFramePng, exportFramesZip, exportGif } from '../export'
 import { downloadText, pickFiles, safeName } from '../export/files'
 import { serializeSprite, deserializeSprite, PROJECT_EXT, loadAutosave, autosaveDate } from '../io/project'
@@ -264,6 +264,14 @@ export function buildCommands(app: App): Command[] {
   add({
     id: 'sprite.detail', label: 'Ajouter du detail…', group: 'Assiste', keys: 'Ctrl+Maj+D', icon: 'detail',
     run: () => detailDialog(ed),
+  })
+  add({
+    id: 'sprite.shade', label: 'Ombrage automatique…', group: 'Assiste', keys: 'Ctrl+Maj+O', icon: 'shading',
+    run: () => shadeDialog(ed),
+  })
+  add({
+    id: 'sprite.ramp', label: 'Rampe de couleurs…', group: 'Assiste', keys: 'Ctrl+Maj+R', icon: 'palette',
+    run: () => rampDialog(ed),
   })
 
   add({

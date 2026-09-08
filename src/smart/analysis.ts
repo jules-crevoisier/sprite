@@ -151,6 +151,11 @@ export class RampIndex {
 
   rampOf(color: RGBA): Ramp | null { return this.map.get(color)?.ramp ?? null }
 
+  /** Rampe d'une couleur et son rang dedans, de l'ombre a la lumiere. */
+  find(color: RGBA): { ramp: Ramp; index: number } | null {
+    return this.map.get(color) ?? null
+  }
+
   /**
    * Deplace une couleur de `delta` crans dans sa rampe.
    * Une couleur inconnue est decalee en TSV puis ramenee sur la couleur la

@@ -5,7 +5,7 @@ import {
 } from '../smart/rig'
 import { RIG_TEMPLATES, applyTemplate } from '../smart/rig-presets'
 import { ANIM_CLIPS, clipFits, clipPoses, clipTouches, type AnimClip } from '../smart/anim-clips'
-import { EASINGS, ease, easingPath, type EasingId } from '../smart/easing'
+import { EASINGS, ease } from '../smart/easing'
 import { applyFollowThrough, hasSoftBones } from '../smart/follow-through'
 import { rigState, refreshPose, syncRestFromCanvas, writePoseToFrame } from '../tools'
 import { el, clear, checkbox, iconButton, numberInput, slider } from './dom'
@@ -13,27 +13,6 @@ import { genId } from '../core/document'
 import { icon } from './icons'
 import { fromHex } from '../core/color'
 import { confirmDialog, openMenu, showToast } from './overlay'
-
-/**
- * Trace une courbe de vitesse. Le nom d'une courbe ne dit rien : il faut voir
- * « depassement » sortir du cadre pour comprendre ce qu'elle fait.
- */
-function easingPreview(id: EasingId): HTMLElement {
-  const W = 42, H = 24, pad = 3
-  const points = easingPath(id, 24)
-  // La courbe peut sortir de l'intervalle : on cadre sur ce qu'elle occupe.
-  let bas = 0, haut = 1
-  for (const p of points) { bas = Math.min(bas, p.y); haut = Math.max(haut, p.y) }
-  const trace = points.map((p, i) => {
-    const x = pad + p.x * (W - pad * 2)
-    const y = H - pad - ((p.y - bas) / (haut - bas)) * (H - pad * 2)
-    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
-  }).join(' ')
-  const svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" class="easing-curve">`
-    + `<path d="${trace}" fill="none" stroke="currentColor" stroke-width="1.4"`
-    + ' stroke-linecap="round" stroke-linejoin="round"/></svg>'
-  return el('span', { class: 'easing-preview', html: svg, title: 'Repartition des images entre les deux poses' })
-}
 
 /**
  * Panneau du mode Squelette : hierarchie des os, liaison des pixels, rendu
@@ -48,8 +27,6 @@ export class RigPanel {
   private poseA: Pose | null = null
   /** Empreinte de ce qui est affiche : on ne rebatit que si elle change. */
   private drawn = ''
-  /** Courbe de vitesse des frames intermediaires. */
-  private easing: EasingId = 'ease-in-out'
   /** Ajout automatique du retard des os souples. */
   private followThrough = true
 
@@ -85,7 +62,7 @@ export class RigPanel {
       // change donc bien le HTML de la liste.
       rigState.selected,
       rigState.seam,
-      this.easing,
+      this.ed.easing,
       this.followThrough ? 'suivi' : '-',
       this.poseA ? 'A' : '-',
     ].join('|')
@@ -179,22 +156,10 @@ export class RigPanel {
       }, 'Frames intermediaires'),
     ))
 
-    // Courbe de vitesse : c'est la repartition des images entre les deux
-    // poses, pas leur nombre, qui donne le poids du mouvement.
-    const courbe = el('select', {
-      style: { flex: '1', minWidth: '0', height: '24px', fontSize: '11px' },
-      onchange: () => { this.easing = courbe.value as EasingId; this.render() },
-    }, ...EASINGS.map((e) => el('option', {
-      value: e.id, selected: e.id === this.easing, title: e.hint,
-    }, e.label)))
-    this.body.appendChild(el('div', {
-      class: 'form-row', style: { marginTop: '6px', alignItems: 'center' },
-    }, courbe, easingPreview(this.easing)))
-    this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '4px' } },
-      EASINGS.find((e) => e.id === this.easing)?.hint ?? ''))
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
-      'Memorisez une pose, deplacez le squelette, puis generez les frames : ',
-      'l\'interpolation produit le mouvement complet.'))
+      'Memorisez une pose, deplacez le squelette, puis generez les frames. ',
+      'La courbe de vitesse, qui repartit les images entre les deux poses, se ',
+      `regle dans le panneau d'animation — actuellement « ${EASINGS.find((e) => e.id === this.ed.easing)?.label}Â ».`))
 
     this.animationSection()
     this.followSection()
@@ -718,7 +683,7 @@ export class RigPanel {
     // depart et l'arrivee ne bougent pas, seule la maniere d'aller de l'une a
     // l'autre change.
     const suite = this.withFollow(
-      Array.from({ length: steps }, (_, i) => lerpPose(this.poseA!, poseB, ease(this.easing, (i + 1) / steps))),
+      Array.from({ length: steps }, (_, i) => lerpPose(this.poseA!, poseB, ease(this.ed.easing, (i + 1) / steps))),
       false,
     )
     ed.run('Frames intermediaires', () => {

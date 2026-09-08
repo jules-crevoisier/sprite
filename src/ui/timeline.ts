@@ -4,7 +4,24 @@ import { genId, type Tag } from '../core/document'
 import { el, clear, iconButton, numberInput } from './dom'
 import { icon } from './icons'
 import { openMenu, promptDialog, openModal, showToast } from './overlay'
+import { EASINGS, ease, easingPath, type EasingId } from '../smart/easing'
 import type { Playback } from './playback'
+
+/** Trace d'une courbe de vitesse, pour la lire d'un coup d'oeil. */
+function easingSvg(id: EasingId): string {
+  const W = 34, H = 22, pad = 3
+  const points = easingPath(id, 24)
+  let bas = 0, haut = 1
+  for (const p of points) { bas = Math.min(bas, p.y); haut = Math.max(haut, p.y) }
+  const d = points.map((p, i) => {
+    const x = pad + p.x * (W - pad * 2)
+    const y = H - pad - ((p.y - bas) / (haut - bas)) * (H - pad * 2)
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
+  }).join(' ')
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+    + `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.4"`
+    + ' stroke-linecap="round" stroke-linejoin="round"/></svg>'
+}
 
 const COL_W = 44
 const NAME_W = 148
@@ -35,6 +52,8 @@ export class TimelinePanel {
     duration: HTMLInputElement
     fps: HTMLElement
     total: HTMLElement
+    courbe: HTMLSelectElement
+    trace: HTMLElement
   } | null = null
   private showThumbs = true
   private container: HTMLElement | null = null
@@ -140,6 +159,23 @@ export class TimelinePanel {
       ed.events.emit('settings', undefined)
       this.syncToolbar()
     }, { className: 'sm icon-only ghost' })
+    // La courbe de vitesse est un reglage d'animation : sa place est ici, a
+    // cote des frames, et non dans le panneau du squelette qui n'en est qu'un
+    // des usages.
+    const trace = el('span', { class: 'easing-preview' })
+    const courbe = el('select', {
+      style: { height: '24px', fontSize: '11px', maxWidth: '124px' },
+      title: 'Courbe de vitesse des images intermediaires',
+      onchange: () => {
+        ed.easing = courbe.value as EasingId
+        this.syncToolbar()
+        ed.events.emit('settings', undefined)
+      },
+    }, ...EASINGS.map((e) => el('option', { value: e.id, title: e.hint }, e.label)))
+    const retimer = iconButton(icon('sliders', 14),
+      'Repartir les durees du tag courant selon la courbe',
+      () => this.retimeWithCurve(), { className: 'ghost sm icon-only' })
+
     const duration = numberInput(100, (v) => this.setDuration(Math.max(1, v)), { min: 1, max: 60000, width: '62px' })
     const toutes = iconButton(icon('film', 14), 'Appliquer cette duree a toutes les frames',
       () => this.setDurationForAll(Math.max(1, Number(duration.value) || 100)),
@@ -159,6 +195,8 @@ export class TimelinePanel {
       el('div', { class: 'opt-sep' }),
       el('div', { class: 'tl-fps' }, el('span', null, 'Duree'), duration, el('span', null, 'ms'), fps, toutes),
       el('div', { class: 'opt-sep' }),
+      el('div', { class: 'tl-fps' }, el('span', null, 'Courbe'), courbe, trace, retimer),
+      el('div', { class: 'opt-sep' }),
       onion,
       iconButton(icon('settings', 14), 'Reglages de la pelure d\'oignon', (e) => this.onionMenu(e), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
@@ -167,7 +205,7 @@ export class TimelinePanel {
       el('div', { class: 'tl-fps' }, total),
     )
 
-    this.bar = { play, tagOnly, onion, duration, fps, total }
+    this.bar = { play, tagOnly, onion, duration, fps, total, courbe, trace }
     this.syncToolbar()
   }
 
@@ -198,6 +236,9 @@ export class TimelinePanel {
     bar.fps.textContent = `≈ ${Math.round(1000 / Math.max(1, duration))} fps`
     bar.total.textContent =
       `${ed.frameCount} frame${ed.frameCount > 1 ? 's' : ''} · ${(ed.sprite.totalDuration() / 1000).toFixed(2)}s`
+    if (bar.courbe.value !== ed.easing) bar.courbe.value = ed.easing
+    bar.trace.innerHTML = easingSvg(ed.easing)
+    bar.trace.title = EASINGS.find((e) => e.id === ed.easing)?.hint ?? ''
   }
 
   private renderToolbar(): void { this.syncToolbar() }
@@ -463,6 +504,46 @@ export class TimelinePanel {
       for (const f of frames) if (ed.sprite.frameCount > 1) ed.sprite.removeFrame(f)
     })
     ed.setActiveFrame(Math.min(ed.activeFrame, ed.frameCount - 1))
+  }
+
+  /**
+   * Repartit les durees d'une plage selon la courbe de vitesse.
+   *
+   * Une courbe ne sert pas qu'a fabriquer des images intermediaires : sur une
+   * suite deja dessinee, elle redistribue le temps. Les images ou la courbe
+   * est plate durent plus longtemps, celles ou elle grimpe defilent vite — le
+   * mouvement change de poids sans qu'un seul pixel bouge.
+   */
+  private retimeWithCurve(): void {
+    const ed = this.ed
+    const tag = ed.sprite.tags.find((t) => ed.activeFrame >= t.from && ed.activeFrame <= t.to)
+    const from = tag ? tag.from : 0
+    const to = tag ? tag.to : ed.frameCount - 1
+    const n = to - from + 1
+    if (n < 2) { showToast('Il faut au moins deux frames', 'error'); return }
+
+    // On garde la duree totale : seule sa repartition change.
+    const total = ed.sprite.frameDurations.slice(from, to + 1).reduce((a, b) => a + b, 0)
+    const parts: number[] = []
+    for (let i = 0; i < n; i++) {
+      // L'ecart entre deux points de la courbe donne la vitesse a cet
+      // endroit ; une image rapide doit rester peu de temps a l'ecran.
+      const d = ease(ed.easing, (i + 1) / n) - ease(ed.easing, i / n)
+      parts.push(Math.max(0.05, Math.abs(d)))
+    }
+    // Une image lente dure longtemps : la duree est l'inverse de la vitesse.
+    // Les inverses sont ramenes a leur somme, sinon la sequence s'allongerait
+    // ou se raccourcirait a chaque application.
+    const inverses = parts.map((p) => 1 / p)
+    const sommeInv = inverses.reduce((a, b) => a + b, 0)
+    ed.run('Repartir les durees', () => {
+      for (let i = 0; i < n; i++) {
+        ed.sprite.frameDurations[from + i] = Math.max(10, Math.round(total * inverses[i] / sommeInv))
+      }
+    })
+    const label = EASINGS.find((e) => e.id === ed.easing)?.label ?? ''
+    showToast(`${n} frames reparties selon « ${label} »`
+      + (tag ? ` sur le tag « ${tag.name} »` : ''), 'success')
   }
 
   /** Une seule cadence pour toute l'animation : le cas le plus courant. */

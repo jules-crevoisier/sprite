@@ -1,5 +1,5 @@
 import { Bitmap } from '../core/bitmap'
-import { toCss, type RGBA } from '../core/color'
+import { toCss, toHex, type RGBA } from '../core/color'
 import type { Editor } from '../core/editor'
 import { Layer, genId, type Cel } from '../core/document'
 import { compositeFrame } from '../render/composite'
@@ -11,6 +11,9 @@ import {
 import {
   DETAIL_MODES, DETAIL_PRESETS, addDetail, applyPreset, type DetailMode,
 } from '../smart/detail'
+import {
+  DEFAULT_RECIPE, DEFAULT_SHADE, antiAlias, autoShade, buildRamp,
+} from '../smart/shading'
 import { el, checkbox, numberInput, select, slider } from './dom'
 import { icon } from './icons'
 import { openModal, showToast } from './overlay'
@@ -380,5 +383,195 @@ export function detailDialog(ed: Editor): void {
       },
     ],
     onClose: () => { ed.cancelStroke() },
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* Ombrage et polissage                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Ombre le dessin selon une direction de lumiere, puis casse les marches
+ * d'escalier. Les deux operations n'emploient que les tons deja presents :
+ * la palette du sprite reste la sienne.
+ */
+export function shadeDialog(ed: Editor): void {
+  const cel = ed.beginStroke('Ombrage')
+  if (!cel) return
+
+  const options = { ...DEFAULT_SHADE }
+  let lissage = 0
+  let poses = 0
+
+  const preview = el('div', { class: 'export-preview', style: { minHeight: '150px' } })
+  const info = el('p', { class: 'form-note' })
+  const boussole = el('div', { class: 'light-dial', title: 'Direction de la lumiere' },
+    el('i'), el('b'))
+
+  const placerBoussole = () => {
+    const rad = (options.angle * Math.PI) / 180
+    const point = boussole.querySelector('b') as HTMLElement
+    point.style.left = `${50 + Math.cos(rad) * 34}%`
+    point.style.top = `${50 - Math.sin(rad) * 34}%`
+  }
+
+  const apply = () => {
+    ed.resetStroke()
+    const target = ed.peekCel()
+    if (!target) return
+    const ramps = extractRamps([target.bitmap])
+    const bilan = autoShade(target.bitmap, ramps, options)
+    const lisses = lissage > 0 ? antiAlias(target.bitmap, ramps, lissage) : 0
+    ed.events.emit('doc', undefined)
+    preview.replaceChildren(thumb(target.bitmap, 190))
+    info.textContent = bilan.changed || lisses
+      ? `${bilan.changed} pixels ombres sur ${bilan.ramps} matiere(s)`
+        + (lisses ? `, ${lisses} coins adoucis` : '')
+        + (poses ? ` · ${poses} passe(s) deja figee(s)` : '')
+      : 'Aucun pixel touche : le dessin n\'a pas assez de tons par matiere. '
+        + 'Ajoutez-en avec « Rampe de couleurs ».'
+  }
+
+  const dial = (e: PointerEvent) => {
+    const r = boussole.getBoundingClientRect()
+    const dx = e.clientX - (r.left + r.width / 2)
+    const dy = (r.top + r.height / 2) - e.clientY
+    options.angle = Math.round((Math.atan2(dy, dx) * 180) / Math.PI / 15) * 15
+    placerBoussole()
+    apply()
+  }
+  boussole.addEventListener('pointerdown', (e) => {
+    boussole.setPointerCapture(e.pointerId)
+    dial(e)
+    const move = (ev: PointerEvent) => dial(ev)
+    const up = () => {
+      boussole.removeEventListener('pointermove', move)
+      boussole.removeEventListener('pointerup', up)
+    }
+    boussole.addEventListener('pointermove', move)
+    boussole.addEventListener('pointerup', up)
+  })
+  placerBoussole()
+
+  const controls = el('div', { class: 'form-grid' },
+    el('label', null, 'Lumiere'),
+    el('div', { class: 'form-row' }, boussole,
+      el('span', { class: 'form-note', style: { flex: '1' } },
+        'Tirez dans le cadran : les surfaces tournees vers la lumiere montent '
+        + 'dans leur rampe, les autres descendent.')),
+    el('label', null, 'Force'),
+    slider(0, 1, options.strength, 0.05, (v) => { options.strength = v; apply() },
+      (v) => `${Math.round(v * 100)}%`),
+    el('label', null, 'Portee'),
+    slider(1, 8, options.radius, 1, (v) => { options.radius = v; apply() }, (v) => `${v} px`),
+    el('label', null, 'Contre-jour'),
+    checkbox('Liseré clair sur le bord oppose', options.rimLight, (v) => {
+      options.rimLight = v
+      apply()
+    }),
+    el('label', null, 'Adoucir'),
+    slider(0, 1, lissage, 0.25, (v) => { lissage = v; apply() },
+      (v) => (v === 0 ? 'non' : `${Math.round(v * 100)}%`)),
+  )
+
+  apply()
+  openModal({
+    title: 'Ombrage automatique',
+    icon: 'shading',
+    body: el('div', null,
+      el('p', { class: 'form-note' },
+        'La silhouette indique l\'orientation de chaque surface : un pixel pres '
+        + 'du bord gauche appartient a une paroi tournee vers la gauche. Chaque '
+        + 'pixel prend alors un autre ton de sa propre famille de couleurs — '
+        + 'aucune teinte etrangere n\'est introduite.'),
+      controls,
+      el('div', { class: 'form-section' }, 'Apercu'),
+      preview,
+      info,
+    ),
+    actions: [
+      {
+        label: 'Figer cette passe',
+        onClick: () => {
+          ed.commitStroke()
+          ed.beginStroke('Ombrage')
+          poses++
+          apply()
+          return false
+        },
+      },
+      { label: 'Fermer', onClick: () => { ed.cancelStroke(); return true } },
+      { label: 'Appliquer', primary: true, onClick: () => { ed.commitStroke(); return true } },
+    ],
+    onClose: () => { ed.cancelStroke() },
+  })
+}
+
+/**
+ * Fabrique une rampe autour de la couleur courante et l'ajoute a la palette.
+ * Trouver les tons d'une matiere est la premiere friction du pixel art : une
+ * ombre qui n'est qu'un gris plus sombre se voit tout de suite.
+ */
+export function rampDialog(ed: Editor): void {
+  const recipe = { ...DEFAULT_RECIPE }
+  let colors = buildRamp(ed.primary, recipe)
+
+  const bande = el('div', { style: { display: 'grid', gap: '6px' } })
+  const info = el('p', { class: 'form-note' })
+
+  const refresh = () => {
+    colors = buildRamp(ed.primary, recipe)
+    bande.replaceChildren(
+      el('div', { class: 'ramp-strip' }, ...colors.map((c) => el('i', {
+        style: { background: toCss(c) },
+        title: toHex(c),
+      }))),
+      el('div', { class: 'form-row' }, ...colors.map((c) => el('span', {
+        class: 'form-note', style: { flex: '1', textAlign: 'center', fontSize: '10px' },
+      }, toHex(c)))),
+    )
+    info.textContent = `${colors.length} tons autour de ${toHex(ed.primary)} — `
+      + `l\'ombre glisse de ${recipe.hueShift}° vers le froid, la lumiere autant vers le chaud.`
+  }
+
+  refresh()
+  openModal({
+    title: 'Rampe de couleurs',
+    icon: 'palette',
+    body: el('div', null,
+      el('p', { class: 'form-note' },
+        'Assombrir en ne baissant que la luminosite donne du gris. Une ombre '
+        + 'reelle glisse vers le bleu et une lumiere vers le jaune : c\'est ce '
+        + 'decalage de teinte qui distingue une rampe juste d\'une rampe fade.'),
+      bande,
+      info,
+      el('div', { class: 'form-grid' },
+        el('label', null, 'Tons'),
+        slider(3, 9, recipe.steps, 1, (v) => { recipe.steps = v; refresh() }, (v) => `${v}`),
+        el('label', null, 'Teinte'),
+        slider(0, 60, recipe.hueShift, 2, (v) => { recipe.hueShift = v; refresh() }, (v) => `${v}°`),
+        el('label', null, 'Contraste'),
+        slider(0.05, 0.3, recipe.contrast, 0.01, (v) => { recipe.contrast = v; refresh() },
+          (v) => `${Math.round(v * 100)}%`),
+        el('label', null, 'Ombres'),
+        slider(0, 0.5, recipe.shadowSaturation, 0.02,
+          (v) => { recipe.shadowSaturation = v; refresh() },
+          (v) => `saturation +${Math.round(v * 100)}%`),
+      ),
+    ),
+    actions: [
+      { label: 'Fermer', onClick: () => true },
+      {
+        label: 'Ajouter a la palette',
+        primary: true,
+        onClick: () => {
+          ed.run('Rampe de couleurs', () => {
+            for (const c of colors) ed.sprite.palette.add(c)
+          })
+          showToast(`${colors.length} tons ajoutes a la palette`, 'success')
+          return true
+        },
+      },
+    ],
   })
 }
