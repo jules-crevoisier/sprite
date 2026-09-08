@@ -163,6 +163,7 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
         layer: layer.id,
         rest: await decodePng(part.rest, data.width, data.height),
         weights: bytes,
+        version: 0,
       })
     }
   }

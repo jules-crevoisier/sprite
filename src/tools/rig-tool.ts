@@ -3,7 +3,7 @@ import type { Editor } from '../core/editor'
 import { snapshotStructure, restoreStructure } from '../core/history'
 import {
   applyX, applyY, bakePose, boneAngle, boneColor, createBone, deform, invert,
-  partFor, unbind, worldTransforms, type Bone, type Mat, type RigPart,
+  partFor, touchPart, unbind, worldTransforms, type Bone, type Mat, type RigPart,
 } from '../smart/rig'
 import type { Bitmap } from '../core/bitmap'
 import { ICONS } from '../ui/icons'
@@ -23,13 +23,27 @@ export const rigState = {
   weightBrush: 4,
 }
 
+/**
+ * Finesse de rotation selon le moment.
+ *
+ * Tirer un os demande une reponse immediate : une mesure par pixel suffit a
+ * juger la pose. Une frame produite, elle, sera regardee de pres : on paie
+ * alors les 64 mesures par pixel de la methode RotSprite, qui redresse les
+ * contours obliques.
+ */
+export const DRAG_QUALITY = 1 as const
+export const FRAME_QUALITY = 8 as const
+
 /** Traduit le reglage unique en parametres de deformation. */
 export const seamSettings = (level: number): { seamRadius: number; seamNeighbours: number; fillPasses: number } => {
   switch (Math.max(0, Math.min(3, Math.round(level)))) {
     case 0: return { seamRadius: 0, seamNeighbours: 8, fillPasses: 0 }
     case 1: return { seamRadius: 1, seamNeighbours: 5, fillPasses: 1 }
-    case 3: return { seamRadius: 2, seamNeighbours: 3, fillPasses: 2 }
-    default: return { seamRadius: 1, seamNeighbours: 4, fillPasses: 1 }
+    case 3: return { seamRadius: 2, seamNeighbours: 3, fillPasses: 3 }
+    // Deux passes de comblement : la premiere referme le gros de la fissure,
+    // la seconde son dernier pixel, la ou trois parties se rejoignent —
+    // epaule et hanche en particulier.
+    default: return { seamRadius: 1, seamNeighbours: 4, fillPasses: 2 }
   }
 }
 
@@ -104,8 +118,8 @@ export function syncRestFromCanvas(ed: Editor): boolean {
 
     const restApres = new Uint32Array(rest.u32)
     const poidsApres = new Uint8Array(weights)
-    annuler.push(() => { rest.u32.set(restAvant); weights.set(poidsAvant) })
-    refaire.push(() => { rest.u32.set(restApres); weights.set(poidsApres) })
+    annuler.push(() => { rest.u32.set(restAvant); weights.set(poidsAvant); touchPart(snap.part) })
+    refaire.push(() => { rest.u32.set(restApres); weights.set(poidsApres); touchPart(snap.part) })
   }
 
   invalidateBake()
@@ -126,7 +140,7 @@ export function syncRestFromCanvas(ed: Editor): boolean {
  * la frame courante. Le corps, l'arme et la cape suivent donc les memes os
  * en un seul geste.
  */
-export function refreshPose(ed: Editor): void {
+export function refreshPose(ed: Editor, quality: 1 | 2 | 4 | 8 = FRAME_QUALITY): void {
   const rig = ed.sprite.rig
   if (!rig.parts.length) return
   const rendus: Baked[] = []
@@ -140,7 +154,7 @@ export function refreshPose(ed: Editor): void {
     const size = part.rest.width * part.rest.height
     const sources = new Int32Array(size)
     const owners = new Uint8Array(size).fill(255)
-    const posed = deform(rig, part, { ...seamSettings(rigState.seam), sources, owners })
+    const posed = deform(rig, part, { ...seamSettings(rigState.seam), sources, owners, quality })
     if (!posed) continue
     cel.bitmap.copyFrom(posed)
     rendus.push({ cel, part, rest: part.rest, pixels: new Uint32Array(posed.u32), sources, owners })
@@ -161,7 +175,7 @@ export function writePoseToFrame(ed: Editor, frame: number): number {
   for (const part of rig.parts) {
     const index = ed.sprite.layers.findIndex((l) => l.id === part.layer)
     if (index < 0) continue
-    const posed = deform(rig, part, seamSettings(rigState.seam))
+    const posed = deform(rig, part, { ...seamSettings(rigState.seam), quality: FRAME_QUALITY })
     if (!posed) continue
     ed.sprite.ensureCel(index, frame).bitmap.copyFrom(posed)
     ecrits++
@@ -470,12 +484,15 @@ export const rigPoseTool: Tool = {
       bone.ty = poseDrag.baseTy + (applyY(poseDrag.parentInv, p.x, p.y) - poseDrag.startY)
     }
     ed.resetStroke()
-    refreshPose(ed)
+    refreshPose(ed, DRAG_QUALITY)
   },
 
   up(ed) {
     if (!poseDrag) return
     poseDrag = null
+    // Le geste fini, on repasse le rendu en finesse : c'est cette image que
+    // l'on regarde et qui partira dans une frame.
+    refreshPose(ed)
     ed.commitStroke()
     pushRigCommand(ed, 'Pose')
   },
@@ -519,6 +536,7 @@ function paintWeights(ed: Editor, p: PointerInfo): void {
     if (part.rest.data[at * 4 + 3] === 0) continue
     part.weights[at] = value
   }
+  touchPart(part)
   refreshPose(ed)
   ed.events.emit('settings', undefined)
 }
@@ -557,13 +575,17 @@ export const rigWeightTool: Tool = {
     if (same) return
     ed.pushCommand({
       label: 'Ponderation',
-      undo: () => { part.weights.set(before); refreshPose(ed) },
-      redo: () => { part.weights.set(after); refreshPose(ed) },
+      undo: () => { part.weights.set(before); touchPart(part); refreshPose(ed) },
+      redo: () => { part.weights.set(after); touchPart(part); refreshPose(ed) },
     })
   },
 
   cancel(ed) {
-    if (weightBefore && weightPart) { weightPart.weights.set(weightBefore); refreshPose(ed) }
+    if (weightBefore && weightPart) {
+      weightPart.weights.set(weightBefore)
+      touchPart(weightPart)
+      refreshPose(ed)
+    }
     weightBefore = null
     weightPart = null
   },

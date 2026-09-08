@@ -1,5 +1,5 @@
 import { Bitmap } from '../core/bitmap'
-import { fromHex, getA, type RGBA } from '../core/color'
+import { fromHex, type RGBA } from '../core/color'
 import { Sprite, Layer } from '../core/document'
 import { Palette } from '../core/palette'
 
@@ -13,46 +13,8 @@ function fill(bm: Bitmap, x0: number, y0: number, x1: number, y1: number, c: RGB
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) bm.set(x, y, c)
 }
 
-const SKIN = ramp('#c98d6b', '#e8b796', '#f7d8c0')
-const SHIRT = ramp('#1f3273', '#3b5dc9', '#6d8dee')
-const PANTS = ramp('#171d2e', '#333c57', '#4e5a7c')
-const HAIR = ramp('#33153a', '#5d275d', '#843f84')
-const BOOT = ramp('#0f1220', '#262b44', '#3d4460')
-const BELT = ramp('#4a2c1a', '#7a4a28', '#a86a3c')
-const OUTLINE = fromHex('#12141f')
 
-/**
- * Ombre tout le dessin d'un coup : lumiere sur les pixels dont le voisin du
- * haut est vide, ombre sur ceux dont le voisin du bas ou de droite l'est.
- * Chaque matiere obtient ses trois tons, ce dont les fonctions assistees ont
- * besoin pour reconnaitre les familles de couleurs.
- */
-function shade(bm: Bitmap, tones: Map<RGBA, Ramp>): void {
-  const source = bm.clone()
-  const solid = (x: number, y: number): boolean =>
-    x >= 0 && y >= 0 && x < bm.width && y < bm.height && getA(source.u32[y * bm.width + x]) !== 0
-  for (let y = 0; y < bm.height; y++) {
-    for (let x = 0; x < bm.width; x++) {
-      const r = tones.get(source.get(x, y))
-      if (!r) continue
-      if (!solid(x, y - 1)) bm.set(x, y, r[2])
-      else if (!solid(x, y + 1) || !solid(x + 1, y)) bm.set(x, y, r[0])
-    }
-  }
-}
 
-/** Cerne le dessin d'un trait sombre : la silhouette se detache. */
-function outline(bm: Bitmap, color: RGBA): void {
-  const source = bm.clone()
-  const solid = (x: number, y: number): boolean =>
-    x >= 0 && y >= 0 && x < bm.width && y < bm.height && getA(source.u32[y * bm.width + x]) !== 0
-  for (let y = 0; y < bm.height; y++) {
-    for (let x = 0; x < bm.width; x++) {
-      if (solid(x, y)) continue
-      if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) bm.set(x, y, color)
-    }
-  }
-}
 
 /**
  * Personnage de face sur 48x48, dessine pour se rigger proprement.
@@ -63,40 +25,97 @@ function outline(bm: Bitmap, color: RGBA): void {
  * continue. Les membres sont allonges dans l'axe de leur os, ce qui rend la
  * rotation lisible.
  */
+/*
+ * Personnage de demonstration, dessine pixel par pixel plutot que compose de
+ * rectangles : c'est lui qui sert de reference pour le squelette, les cycles
+ * et le demi-tour, donc il doit tenir la comparaison avec un vrai sprite.
+ *
+ * Chaque lettre est une couleur de la palette ci-dessous. Les membres sont
+ * separes par un contour et proportionnes pour qu'un os par segment tombe
+ * juste : epaule-coude, coude-main, hanche-genou, genou-pied.
+ */
+const CHARACTER_ART = [
+  '.........oooooooo.........',
+  '.......ooddddddddoo.......',
+  '......oddhhhhhhhhddo......',
+  '......odhllhhhhhhhdo......',
+  '......odhllhhhhhhhdo......',
+  '......odhhhhhhhhhhdo......',
+  '......odhsssssssHhdo......',
+  '......odhseesseeShdo......',
+  '......odhsssssssshdo......',
+  '......odhsSsssssShdo......',
+  '.......ohsSsssssSho.......',
+  '.......ooSssssssSoo.......',
+  '........oSSssssSSo........',
+  '.........osssso...........',
+  '........otttttttto........',
+  '....oooooutttttTToooo.....',
+  '....otttoutttttTTottto....',
+  '....otutoutttttTTotTto....',
+  '....otutoutttttTTotTto....',
+  '....otutoutttttTTotTto....',
+  '....oooooutttttTToooo.....',
+  '....ossooggggggggoosso....',
+  '....ossoogGgggGggoosso....',
+  '....ossoooooooooooosso....',
+  '....oSsoopppPPpppoosSo....',
+  '....ooooopppPPpppooooo....',
+  '........opppPPpppo........',
+  '........opppPPpppo........',
+  '........opppoopppo........',
+  '........opppooPppo........',
+  '........opppooPppo........',
+  '........oppPooPppo........',
+  '........oppPooPppo........',
+  '........obBbooBbBo........',
+  '.......obbBbooBbbBo.......',
+  '.......obbbboobbbbo.......',
+  '.......oooooooooooo.......',
+]
+
+const CHARACTER_PALETTE: Record<string, string> = {
+  'o': '#191325',
+  's': '#f2cba4',
+  'S': '#cc9169',
+  'H': '#ffe6c9',
+  'h': '#7b41ab',
+  'd': '#4c2172',
+  'l': '#a86ed8',
+  't': '#3d60cf',
+  'T': '#27409e',
+  'u': '#6488f4',
+  'p': '#3f4769',
+  'P': '#282e4a',
+  'b': '#251e35',
+  'B': '#3c3253',
+  'g': '#a8672f',
+  'G': '#70401b',
+  'e': '#191325',
+}
+
 export function demoCharacter(): Sprite {
   const sprite = new Sprite(48, 48, Palette.preset('DawnBringer 32'))
   sprite.name = 'demo_perso'
   sprite.pivot = { x: 0.5, y: 1 }
   const bm = new Bitmap(48, 48)
 
-  fill(bm, 20, 34, 27, 37, PANTS[1])       // bassin
-  fill(bm, 20, 38, 23, 43, PANTS[1])       // jambe gauche
-  fill(bm, 24, 38, 27, 43, PANTS[1])       // jambe droite
-  fill(bm, 19, 44, 23, 45, BOOT[1])        // botte gauche
-  fill(bm, 24, 44, 28, 45, BOOT[1])        // botte droite
-  fill(bm, 19, 21, 28, 31, SHIRT[1])       // torse
-  fill(bm, 19, 32, 28, 33, BELT[1])        // ceinture
-  fill(bm, 12, 22, 15, 32, SHIRT[1])       // bras gauche
-  fill(bm, 32, 22, 35, 32, SHIRT[1])       // bras droit
-  fill(bm, 12, 33, 15, 36, SKIN[1])        // main gauche
-  fill(bm, 32, 33, 35, 36, SKIN[1])        // main droite
-  fill(bm, 21, 19, 26, 21, SKIN[1])        // cou
-  fill(bm, 18, 8, 29, 19, SKIN[1])         // visage
-  fill(bm, 17, 4, 30, 9, HAIR[1])          // cheveux
-  fill(bm, 17, 8, 18, 13, HAIR[1])         // meche gauche
-  fill(bm, 29, 8, 30, 13, HAIR[1])         // meche droite
+  const artWidth = CHARACTER_ART[0].length
+  const artHeight = CHARACTER_ART.length
+  // Centre horizontalement, pose les pieds a deux pixels du bas : un sprite
+  // de jeu s'aligne sur le sol, pas sur le milieu de la toile.
+  const ox = Math.floor((48 - artWidth) / 2)
+  const oy = 48 - artHeight - 2
+  const couleurs = new Map<string, RGBA>()
+  for (const [lettre, hex] of Object.entries(CHARACTER_PALETTE)) couleurs.set(lettre, fromHex(hex))
 
-  shade(bm, new Map<RGBA, Ramp>([
-    [SKIN[1], SKIN], [SHIRT[1], SHIRT], [PANTS[1], PANTS],
-    [HAIR[1], HAIR], [BOOT[1], BOOT], [BELT[1], BELT],
-  ]))
-
-  // Visage pose apres l'ombrage, pour rester net.
-  fill(bm, 20, 13, 21, 14, OUTLINE)
-  fill(bm, 26, 13, 27, 14, OUTLINE)
-  fill(bm, 22, 17, 25, 17, SKIN[0])
-
-  outline(bm, OUTLINE)
+  for (let y = 0; y < artHeight; y++) {
+    const ligne = CHARACTER_ART[y]
+    for (let x = 0; x < ligne.length; x++) {
+      const couleur = couleurs.get(ligne[x])
+      if (couleur !== undefined) bm.set(ox + x, oy + y, couleur)
+    }
+  }
 
   const layer = new Layer('Personnage', 1)
   layer.cels[0] = { bitmap: bm, opacity: 255 }

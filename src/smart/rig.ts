@@ -56,7 +56,11 @@ function poseMatrix(cx: number, cy: number, angle: number, scale: number, tx: nu
  * marche fait plier « la jambe gauche », quel que soit son nom.
  */
 export type BoneRole =
-  | 'torso' | 'head' | 'armL' | 'armR' | 'legL' | 'legR'
+  | 'torso' | 'head'
+  // Membres en deux segments : un bras qui pivote d'un bloc reste une planche,
+  // c'est le coude et le genou qui font lire le mouvement.
+  | 'armL' | 'armR' | 'forearmL' | 'forearmR'
+  | 'legL' | 'legR' | 'shinL' | 'shinR'
   | 'tail' | 'wingL' | 'wingR' | 'none'
 
 export interface Bone {
@@ -79,6 +83,13 @@ export interface Bone {
   ey: number
   /** Ordre de dessin : un os de valeur superieure passe devant. */
   z: number
+  /**
+   * Portee de l'os, en pixels : la moitie de l'epaisseur de la partie qu'il
+   * commande. La liaison compare des distances rapportees a cette portee,
+   * faute de quoi un os de bras, mince mais proche, rafle le cote d'une tete
+   * pourtant commandee par un os central plus eloigne.
+   */
+  radius: number
   /* --- pose courante, relative au repos --- */
   angle: number
   tx: number
@@ -98,7 +109,19 @@ export interface RigPart {
   rest: Bitmap
   /** Pour chaque pixel du repos, l'index de l'os qui le porte ; 255 = libre. */
   weights: Uint8Array
+  /**
+   * Numero d'edition, a incrementer des que le repos ou les poids changent.
+   *
+   * Le repos est modifie sur place — par la ponderation comme par la reprise
+   * d'une retouche — donc son identite ne dit rien de son contenu. Sans ce
+   * compteur, la version agrandie gardee en cache resservirait un dessin
+   * perime et la retouche disparaitrait a la pose suivante.
+   */
+  version: number
 }
+
+/** Signale qu'un morceau a change : les caches qui en dependent l'apprennent. */
+export const touchPart = (part: RigPart): void => { part.version++ }
 
 /**
  * Demi-tour pseudo-3D. Le dessin n'a pas de profondeur reelle : on simule la
@@ -196,6 +219,8 @@ export function createBone(
     depth: 0,
     x, y, ex, ey,
     z: rig.bones.length,
+    // A defaut d'indication, une portee proportionnee a la longueur de l'os.
+    radius: Math.max(2, Math.hypot(ex - x, ey - y) * 0.35),
     angle: 0, tx: 0, ty: 0, scale: 1,
   }
   rig.bones.push(bone)
@@ -286,16 +311,22 @@ export function autoBind(rig: Rig, layer: number, rest: Bitmap, maxDistance = In
       for (let x = 0; x < rest.width; x++) {
         const i = y * rest.width + x
         if (getA(rest.u32[i]) === 0) continue
-        let best = 255, bestD = maxDistance
+        let best = 255, bestScore = Infinity, bestD = Infinity
         for (let b = 0; b < rig.bones.length && b < 255; b++) {
-          const d = distanceToBone(rig.bones[b], x + 0.5, y + 0.5)
-          if (d < bestD) { bestD = d; best = b }
+          const bone = rig.bones[b]
+          const d = distanceToBone(bone, x + 0.5, y + 0.5)
+          if (d > maxDistance) continue
+          // Distance rapportee a la portee de l'os : une tete large garde
+          // ses tempes, qu'un os de bras voisin lui prendrait autrement.
+          const score = d / Math.max(1, bone.radius)
+          if (score < bestScore) { bestScore = score; bestD = d; best = b }
         }
+        if (best !== 255 && bestD > maxDistance) best = 255
         weights[i] = best
       }
     }
   }
-  const part: RigPart = { layer, rest: rest.clone(), weights }
+  const part: RigPart = { layer, rest: rest.clone(), weights, version: 0 }
   const at = rig.parts.findIndex((p) => p.layer === layer)
   if (at >= 0) rig.parts[at] = part
   else rig.parts.push(part)
@@ -305,6 +336,89 @@ export function autoBind(rig: Rig, layer: number, rest: Bitmap, maxDistance = In
 /** Force l'affectation des pixels d'un masque a un os donne. */
 export function assignMask(part: RigPart, mask: Uint8Array, boneIndex: number): void {
   for (let i = 0; i < part.weights.length; i++) if (mask[i]) part.weights[i] = boneIndex
+}
+
+/* ------------------------------------------------------------------ */
+/* Agrandissement Scale2x, pour une rotation propre                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Agrandit deux fois une image en preservant les diagonales.
+ *
+ * Scale2x regarde les quatre voisins orthogonaux de chaque pixel et n'ecrit
+ * un voisin a la place du centre que lorsque deux voisins adjacents
+ * s'accordent contre les deux autres : c'est ce qui redresse un escalier en
+ * diagonale au lieu de le doubler. Aucune couleur nouvelle n'est inventee,
+ * ce qui compte en pixel art ou la palette est choisie.
+ */
+export function scale2x(src: Uint32Array, w: number, h: number): Uint32Array {
+  const dw = w * 2
+  const out = new Uint32Array(dw * h * 2)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = src[y * w + x]
+      const a = y > 0 ? src[(y - 1) * w + x] : p
+      const d = y < h - 1 ? src[(y + 1) * w + x] : p
+      const c = x > 0 ? src[y * w + (x - 1)] : p
+      const b = x < w - 1 ? src[y * w + (x + 1)] : p
+      const at = y * 2 * dw + x * 2
+      out[at] = c === a && c !== d && a !== b ? a : p
+      out[at + 1] = a === b && a !== c && b !== d ? b : p
+      out[at + dw] = d === c && d !== b && c !== a ? c : p
+      out[at + dw + 1] = b === d && b !== a && d !== c ? d : p
+    }
+  }
+  return out
+}
+
+/** Agrandissement au plus proche, pour une carte d'etiquettes. */
+function scaleNearest(src: Uint8Array, w: number, h: number, factor: number): Uint8Array {
+  const dw = w * factor
+  const out = new Uint8Array(dw * h * factor)
+  for (let y = 0; y < h * factor; y++) {
+    const sy = (y / factor) | 0
+    for (let x = 0; x < dw; x++) out[y * dw + x] = src[sy * w + ((x / factor) | 0)]
+  }
+  return out
+}
+
+/**
+ * Version agrandie d'une liaison, gardee en cache.
+ *
+ * C'est le coeur de la qualite de rotation. Tourner du pixel art au plus
+ * proche casse la grille : le contour se decoupe en marches irregulieres et
+ * des pixels disparaissent. La methode de RotSprite consiste a agrandir huit
+ * fois avec Scale2x, tourner a cette echelle, puis redescendre en votant :
+ * les bords redeviennent nets et la palette est preservee.
+ */
+interface Upscaled {
+  factor: number
+  pixels: Uint32Array
+  weights: Uint8Array
+  width: number
+  height: number
+}
+
+const upscaleCache = new WeakMap<RigPart, { version: number; data: Upscaled }>()
+
+function upscaledOf(part: RigPart, factor: number): Upscaled {
+  const hit = upscaleCache.get(part)
+  if (hit && hit.version === part.version && hit.data.factor === factor) return hit.data
+  let pixels = part.rest.u32
+  let w = part.rest.width, h = part.rest.height
+  for (let f = 1; f < factor; f *= 2) {
+    pixels = scale2x(pixels, w, h)
+    w *= 2; h *= 2
+  }
+  const data: Upscaled = {
+    factor,
+    pixels,
+    weights: scaleNearest(part.weights, part.rest.width, part.rest.height, factor),
+    width: w,
+    height: h,
+  }
+  upscaleCache.set(part, { version: part.version, data })
+  return data
 }
 
 /* ------------------------------------------------------------------ */
@@ -334,6 +448,16 @@ export interface DeformOptions {
    * vers le repos une retouche faite sur le dessin pose.
    */
   sources?: Int32Array
+  /**
+   * Finesse de la rotation, facteur d'agrandissement interne (1, 2, 4 ou 8).
+   *
+   * A 1 chaque pixel d'arrivee prend une seule mesure : c'est rapide, et
+   * suffisant pendant qu'on tire un os a la souris. Au-dela, la methode de
+   * RotSprite s'applique — agrandissement Scale2x, rotation a cette echelle,
+   * puis vote majoritaire au retour — et les contours obliques cessent de se
+   * decouper en marches. 8 est la valeur retenue pour les frames produites.
+   */
+  quality?: 1 | 2 | 4 | 8
 }
 
 /**
@@ -354,7 +478,10 @@ export function deform(rig: Rig, part: RigPart | null, options: DeformOptions = 
   const seamRadius = options.seamRadius ?? 1
   const fillPasses = options.fillPasses ?? 1
   const seamNeighbours = options.seamNeighbours ?? 4
-  const owners = options.owners
+  // Le proprietaire de chaque pixel d'arrivee est toujours calcule : c'est lui
+  // qui empeche le recollement de tisser une toile entre deux membres.
+  const owners = options.owners ?? new Uint8Array(rest.width * rest.height).fill(255)
+  if (options.owners) options.owners.fill(255)
   const sources = options.sources
   if (sources) sources.fill(-1)
   const w = rest.width, h = rest.height
@@ -384,6 +511,49 @@ export function deform(rig: Rig, part: RigPart | null, options: DeformOptions = 
     return color
   }
 
+  /* --- echantillonnage fin, facon RotSprite --- */
+  const quality = options.quality ?? 1
+  const fine = quality > 1 ? upscaledOf(part, quality) : null
+  const votes = new Map<RGBA, number>()
+
+  /**
+   * Couleur d'un pixel d'arrivee, mesuree sur la version agrandie.
+   *
+   * On prend `quality × quality` mesures dans le carre du pixel et l'on garde
+   * la couleur majoritaire. Un pixel dont moins de la moitie des mesures
+   * touchent de la matiere reste vide : c'est ce seuil qui garde un contour
+   * franc au lieu d'une frange.
+   */
+  const sampleFine = (index: number, inv: Mat, x: number, y: number): RGBA | null => {
+    if (!fine) return null
+    const k = fine.factor
+    votes.clear()
+    let pleins = 0
+    for (let sy = 0; sy < k; sy++) {
+      for (let sx = 0; sx < k; sx++) {
+        const px = x + (sx + 0.5) / k
+        const py = y + (sy + 0.5) / k
+        const rx = Math.floor(applyX(inv, px, py) * k)
+        const ry = Math.floor(applyY(inv, px, py) * k)
+        if (rx < 0 || ry < 0 || rx >= fine.width || ry >= fine.height) continue
+        const at = ry * fine.width + rx
+        if (fine.weights[at] !== index) continue
+        const color = fine.pixels[at]
+        if (getA(color) === 0) continue
+        pleins++
+        votes.set(color, (votes.get(color) ?? 0) + 1)
+      }
+    }
+    if (pleins * 2 < k * k) return null
+    let best: RGBA = 0, bestN = 0
+    for (const [color, n] of votes) if (n > bestN) { bestN = n; best = color }
+    // La source sert au report des retouches : on la prend au centre.
+    const cx = Math.floor(applyX(inv, x + 0.5, y + 0.5))
+    const cy = Math.floor(applyY(inv, x + 0.5, y + 0.5))
+    lastSource = cx >= 0 && cy >= 0 && cx < w && cy < h ? cy * w + cx : -1
+    return best
+  }
+
   // Passe 1 : echantillonnage exact. Elargir la recherche des ici gonflerait
   // la silhouette d'un pixel autour de chaque os.
   for (let y = 0; y < h; y++) {
@@ -393,20 +563,22 @@ export function deform(rig: Rig, part: RigPart | null, options: DeformOptions = 
       // qu'une partie du dessin, le reste reste en place.
       if (weights[restIndex] === 255 && getA(rest.u32[restIndex]) !== 0) {
         out.u32[restIndex] = rest.u32[restIndex]
-        if (owners) owners[restIndex] = 255
+        owners[restIndex] = 254   // pose mais sans os : ne se recolle a rien
         if (sources) sources[restIndex] = restIndex
         continue
       }
       for (const { bone, index } of order) {
         const inv = inverses.get(bone.id)!
-        const color = sampleAt(
-          index,
-          Math.floor(applyX(inv, x + 0.5, y + 0.5)),
-          Math.floor(applyY(inv, x + 0.5, y + 0.5)),
-        )
+        const color = fine
+          ? sampleFine(index, inv, x, y)
+          : sampleAt(
+              index,
+              Math.floor(applyX(inv, x + 0.5, y + 0.5)),
+              Math.floor(applyY(inv, x + 0.5, y + 0.5)),
+            )
         if (color !== null) {
           out.u32[restIndex] = color
-          if (owners) owners[restIndex] = index
+          owners[restIndex] = index
           if (sources) sources[restIndex] = lastSource
           break
         }
@@ -418,25 +590,44 @@ export function deform(rig: Rig, part: RigPart | null, options: DeformOptions = 
   // un vide deja entoure de matiere, donc jamais sur le contour exterieur.
   if (seamRadius > 0) {
     const filled = new Uint32Array(out.u32)
-    const neighbourCount = (x: number, y: number): number => {
-      let n = 0
+    const before = new Uint8Array(owners)
+    /**
+     * Voisinage d'un vide : combien de pixels pleins l'entourent, et
+     * appartiennent-ils tous au meme os.
+     *
+     * La question du proprietaire est decisive. Une fissure d'articulation
+     * est un vide au milieu d'un seul membre : la refermer est juste. Le
+     * creux entre un bras qui s'ecarte et le torse est borde par deux os
+     * differents : le combler tisserait une palme entre les deux, ce qui se
+     * voit immediatement sur un cycle de marche.
+     */
+    const survey = (x: number, y: number): { n: number; owner: number } => {
+      let n = 0, owner = -1, mixed = false
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue
           const nx = x + dx, ny = y + dy
           if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
-          if (getA(filled[ny * w + nx]) !== 0) n++
+          const at = ny * w + nx
+          if (getA(filled[at]) === 0) continue
+          n++
+          const o = before[at]
+          if (owner < 0) owner = o
+          else if (owner !== o) mixed = true
         }
       }
-      return n
+      return { n, owner: mixed ? -1 : owner }
     }
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x
         if (getA(filled[i]) !== 0) continue
-        if (neighbourCount(x, y) < seamNeighbours) continue
+        const autour = survey(x, y)
+        if (autour.n < seamNeighbours) continue
+        if (autour.owner < 0 || autour.owner >= 254) continue
         let color: RGBA | null = null
         for (const { bone, index } of order) {
+          if (index !== autour.owner) continue
           const inv = inverses.get(bone.id)!
           const fx = Math.floor(applyX(inv, x + 0.5, y + 0.5))
           const fy = Math.floor(applyY(inv, x + 0.5, y + 0.5))
@@ -448,7 +639,7 @@ export function deform(rig: Rig, part: RigPart | null, options: DeformOptions = 
               }
             }
           }
-          if (color !== null) { if (owners) owners[i] = index; break }
+          if (color !== null) { owners[i] = index; break }
         }
         if (color !== null) {
           out.u32[i] = color
@@ -458,7 +649,7 @@ export function deform(rig: Rig, part: RigPart | null, options: DeformOptions = 
     }
   }
 
-  for (let pass = 0; pass < fillPasses; pass++) fillHoles(out)
+  for (let pass = 0; pass < fillPasses; pass++) fillHoles(out, owners)
   return out
 }
 
@@ -467,9 +658,10 @@ export function deform(rig: Rig, part: RigPart | null, options: DeformOptions = 
  * majoritaire du voisinage. C'est ce qui referme les fentes apparues a
  * l'articulation quand un membre pivote.
  */
-function fillHoles(bm: Bitmap): number {
+function fillHoles(bm: Bitmap, owners: Uint8Array): number {
   const w = bm.width, h = bm.height
   const source = new Uint32Array(bm.u32)
+  const before = new Uint8Array(owners)
   let filled = 0
   const counts = new Map<number, number>()
 
@@ -479,23 +671,36 @@ function fillHoles(bm: Bitmap): number {
       if (getA(source[i]) !== 0) continue
       counts.clear()
       let neighbours = 0
+      let owner = -1, mixed = false
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue
           const nx = x + dx, ny = y + dy
           if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
-          const c = source[ny * w + nx]
+          const at = ny * w + nx
+          const c = source[at]
           if (getA(c) === 0) continue
           neighbours++
           counts.set(c, (counts.get(c) ?? 0) + 1)
+          const o = before[at]
+          if (owner < 0) owner = o
+          else if (owner !== o) mixed = true
         }
       }
       // Un pixel isole n'est pas un trou : on ne comble que ce qui est cerne
       // de toutes parts, sinon la matiere deborde de la silhouette.
       if (neighbours < 6) continue
+      // Un vide cerne par six voisins est un vrai trou, meme quand ses bords
+      // appartiennent a deux os : c'est le cas de l'epaule et de la hanche,
+      // ou trois parties se rejoignent. C'est le recollement de la passe
+      // precedente, bien plus permissif, qui doit s'en tenir a un seul os
+      // pour ne pas tisser de palme entre un bras ecarte et le corps.
+      if (owner < 0) continue
+      void mixed
       let best = 0, bestN = 0
       for (const [color, n] of counts) if (n > bestN) { bestN = n; best = color }
       bm.u32[i] = best
+      owners[i] = mixed ? 254 : owner
       filled++
     }
   }
@@ -588,6 +793,7 @@ export function bakePose(
     weights[at] = bone
     out.adopted++
   }
+  if (out.changed + out.adopted > 0) touchPart(part)
   return out
 }
 

@@ -22,6 +22,12 @@ interface TemplateBone {
    * le personnage pivote vers la droite.
    */
   depth?: number
+  /**
+   * Demi-epaisseur de la partie commandee, en fraction de la largeur de la
+   * boite. C'est elle qui empeche un os mince de rafler les pixels d'une
+   * partie large voisine lors de la liaison.
+   */
+  radius?: number
 }
 
 export interface RigTemplate {
@@ -40,20 +46,24 @@ export const RIG_TEMPLATES: RigTemplate[] = [
   {
     id: 'humanoid-front',
     label: 'Humanoide de face',
-    hint: 'Torse, tete, deux bras, deux jambes',
-    // Proportions d'un personnage debout, bras le long du corps : la tete
-    // occupe le tiers haut, le torse s'arrete a la taille, et les os des
-    // bras passent dans l'axe des bras plutot qu'en diagonale.
+    hint: 'Dix os : membres en deux segments, coudes et genoux articules',
+    // Un os par segment de membre. Un bras d'un seul os pivote comme une
+    // planche ; avec le coude, la main decrit un arc et la marche se lit.
+    // Les coordonnees suivent les proportions du personnage de demonstration.
     bones: [
-      { name: 'torse', x: 0.5, y: 0.7, ex: 0.5, ey: 0.4, parent: null, role: 'torso' },
-      { name: 'tete', x: 0.5, y: 0.4, ex: 0.5, ey: 0.03, parent: 0, role: 'head' },
+      { name: 'torse', x: 0.47, y: 0.68, ex: 0.47, ey: 0.38, parent: null, role: 'torso', radius: 0.34 },
+      { name: 'tete', x: 0.47, y: 0.35, ex: 0.47, ey: 0.03, parent: 0, role: 'head', radius: 0.34 },
       // De face, les deux bras sont a la meme profondeur : c'est leur abscisse
       // qui les separe, et la rotation la transforme en profondeur. Un ecart
       // de profondeur ici les ferait converger au lieu de tourner.
-      { name: 'bras G', x: 0.1, y: 0.43, ex: 0.1, ey: 0.78, parent: 0, role: 'armL', depth: 0.06 },
-      { name: 'bras D', x: 0.9, y: 0.43, ex: 0.9, ey: 0.78, parent: 0, role: 'armR', depth: 0.06 },
-      { name: 'jambe G', x: 0.4, y: 0.7, ex: 0.4, ey: 0.98, parent: 0, role: 'legL', depth: 0 },
-      { name: 'jambe D', x: 0.6, y: 0.7, ex: 0.6, ey: 0.98, parent: 0, role: 'legR', depth: 0 },
+      { name: 'bras G', x: 0.11, y: 0.4, ex: 0.11, ey: 0.54, parent: 0, role: 'armL', depth: 0.06, radius: 0.11 },
+      { name: 'avant-bras G', x: 0.11, y: 0.54, ex: 0.11, ey: 0.68, parent: 2, role: 'forearmL', depth: 0.06, radius: 0.11 },
+      { name: 'bras D', x: 0.86, y: 0.4, ex: 0.86, ey: 0.54, parent: 0, role: 'armR', depth: 0.06, radius: 0.11 },
+      { name: 'avant-bras D', x: 0.86, y: 0.54, ex: 0.86, ey: 0.68, parent: 4, role: 'forearmR', depth: 0.06, radius: 0.11 },
+      { name: 'cuisse G', x: 0.36, y: 0.68, ex: 0.36, ey: 0.84, parent: 0, role: 'legL', radius: 0.16 },
+      { name: 'tibia G', x: 0.36, y: 0.84, ex: 0.36, ey: 0.98, parent: 6, role: 'shinL', radius: 0.16 },
+      { name: 'cuisse D', x: 0.64, y: 0.68, ex: 0.64, ey: 0.84, parent: 0, role: 'legR', radius: 0.16 },
+      { name: 'tibia D', x: 0.64, y: 0.84, ex: 0.64, ey: 0.98, parent: 8, role: 'shinR', radius: 0.16 },
     ],
   },
   {
@@ -61,12 +71,16 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     label: 'Humanoide de profil',
     hint: 'Membres avant et arriere separes, pour une marche',
     bones: [
-      { name: 'torse', x: 0.5, y: 0.7, ex: 0.48, ey: 0.4, parent: null, role: 'torso' },
-      { name: 'tete', x: 0.48, y: 0.4, ex: 0.44, ey: 0.04, parent: 0, role: 'head' },
-      { name: 'bras arriere', x: 0.56, y: 0.44, ex: 0.68, ey: 0.76, parent: 0, role: 'armR', depth: -0.12 },
-      { name: 'bras avant', x: 0.42, y: 0.44, ex: 0.3, ey: 0.76, parent: 0, role: 'armL', depth: 0.12 },
-      { name: 'jambe arriere', x: 0.54, y: 0.7, ex: 0.64, ey: 0.98, parent: 0, role: 'legR', depth: -0.08 },
-      { name: 'jambe avant', x: 0.46, y: 0.7, ex: 0.36, ey: 0.98, parent: 0, role: 'legL', depth: 0.08 },
+      { name: 'torse', x: 0.5, y: 0.7, ex: 0.48, ey: 0.4, parent: null, role: 'torso', radius: 0.34 },
+      { name: 'tete', x: 0.48, y: 0.4, ex: 0.44, ey: 0.04, parent: 0, role: 'head', radius: 0.34 },
+      { name: 'bras arriere', x: 0.56, y: 0.44, ex: 0.62, ey: 0.6, parent: 0, role: 'armR', depth: -0.12 },
+      { name: 'avant-bras arriere', x: 0.62, y: 0.6, ex: 0.68, ey: 0.76, parent: 2, role: 'forearmR', depth: -0.12 },
+      { name: 'bras avant', x: 0.42, y: 0.44, ex: 0.36, ey: 0.6, parent: 0, role: 'armL', depth: 0.12 },
+      { name: 'avant-bras avant', x: 0.36, y: 0.6, ex: 0.3, ey: 0.76, parent: 4, role: 'forearmL', depth: 0.12 },
+      { name: 'cuisse arriere', x: 0.54, y: 0.7, ex: 0.6, ey: 0.85, parent: 0, role: 'legR', depth: -0.08 },
+      { name: 'tibia arriere', x: 0.6, y: 0.85, ex: 0.64, ey: 0.98, parent: 6, role: 'shinR', depth: -0.08 },
+      { name: 'cuisse avant', x: 0.46, y: 0.7, ex: 0.4, ey: 0.85, parent: 0, role: 'legL', depth: 0.08 },
+      { name: 'tibia avant', x: 0.4, y: 0.85, ex: 0.36, ey: 0.98, parent: 8, role: 'shinL', depth: 0.08 },
     ],
   },
   {
@@ -74,8 +88,8 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     label: 'Quadrupede',
     hint: 'Corps, tete, queue et quatre pattes',
     bones: [
-      { name: 'corps', x: 0.72, y: 0.46, ex: 0.28, ey: 0.42, parent: null, role: 'torso' },
-      { name: 'tete', x: 0.28, y: 0.42, ex: 0.08, ey: 0.28, parent: 0, role: 'head' },
+      { name: 'corps', x: 0.72, y: 0.46, ex: 0.28, ey: 0.42, parent: null, role: 'torso', radius: 0.34 },
+      { name: 'tete', x: 0.28, y: 0.42, ex: 0.08, ey: 0.28, parent: 0, role: 'head', radius: 0.34 },
       { name: 'queue', x: 0.72, y: 0.46, ex: 0.95, ey: 0.3, parent: 0, role: 'tail' },
       { name: 'patte AV G', x: 0.32, y: 0.5, ex: 0.28, ey: 0.97, parent: 0, role: 'armL', depth: 0.08 },
       { name: 'patte AV D', x: 0.4, y: 0.5, ex: 0.4, ey: 0.97, parent: 0, role: 'armR', depth: -0.08 },
@@ -88,12 +102,12 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     label: 'Oiseau',
     hint: 'Deux ailes battantes, tete et queue',
     bones: [
-      { name: 'corps', x: 0.58, y: 0.6, ex: 0.4, ey: 0.4, parent: null, role: 'torso' },
-      { name: 'tete', x: 0.4, y: 0.4, ex: 0.26, ey: 0.22, parent: 0, role: 'head' },
+      { name: 'corps', x: 0.58, y: 0.6, ex: 0.4, ey: 0.4, parent: null, role: 'torso', radius: 0.34 },
+      { name: 'tete', x: 0.4, y: 0.4, ex: 0.26, ey: 0.22, parent: 0, role: 'head', radius: 0.34 },
       { name: 'aile G', x: 0.48, y: 0.44, ex: 0.1, ey: 0.28, parent: 0, role: 'wingL', depth: 0.14 },
       { name: 'aile D', x: 0.54, y: 0.44, ex: 0.9, ey: 0.28, parent: 0, role: 'wingR', depth: -0.14 },
       { name: 'queue', x: 0.58, y: 0.6, ex: 0.88, ey: 0.72, parent: 0, role: 'tail' },
-      { name: 'pattes', x: 0.52, y: 0.62, ex: 0.5, ey: 0.94, parent: 0, role: 'legL' },
+      { name: 'pattes', x: 0.52, y: 0.62, ex: 0.5, ey: 0.94, parent: 0, role: 'legL', radius: 0.16 },
     ],
   },
   {
@@ -101,8 +115,8 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     label: 'Arbre',
     hint: 'Tronc et branches, pour un feuillage qui ondule',
     bones: [
-      { name: 'tronc', x: 0.5, y: 0.99, ex: 0.5, ey: 0.55, parent: null, role: 'torso' },
-      { name: 'cime', x: 0.5, y: 0.55, ex: 0.5, ey: 0.08, parent: 0, role: 'head' },
+      { name: 'tronc', x: 0.5, y: 0.99, ex: 0.5, ey: 0.55, parent: null, role: 'torso', radius: 0.34 },
+      { name: 'cime', x: 0.5, y: 0.55, ex: 0.5, ey: 0.08, parent: 0, role: 'head', radius: 0.34 },
       { name: 'branche G', x: 0.5, y: 0.58, ex: 0.14, ey: 0.32, parent: 0, role: 'armL', depth: 0.1 },
       { name: 'branche D', x: 0.5, y: 0.58, ex: 0.86, ey: 0.32, parent: 0, role: 'armR', depth: -0.1 },
     ],
@@ -112,7 +126,7 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     label: 'Membre simple',
     hint: 'Deux os enchaines : ideal pour essayer la pose',
     bones: [
-      { name: 'haut', x: 0.5, y: 0.08, ex: 0.5, ey: 0.52, parent: null, role: 'torso' },
+      { name: 'haut', x: 0.5, y: 0.08, ex: 0.5, ey: 0.52, parent: null, role: 'torso', radius: 0.34 },
       { name: 'bas', x: 0.5, y: 0.52, ex: 0.5, ey: 0.95, parent: 0, role: 'armL' },
     ],
   },
@@ -152,6 +166,7 @@ export function applyTemplate(
     )
     made.role = bone.role
     made.depth = (bone.depth ?? 0) * box.w
+    if (bone.radius !== undefined) made.radius = Math.max(1, bone.radius * box.w)
     created.push(made.id)
   }
   resetPose(rig)

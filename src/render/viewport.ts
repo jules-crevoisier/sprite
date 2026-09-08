@@ -341,6 +341,8 @@ export class Viewport {
     const w = part.rest.width, h = part.rest.height
     if (!this.owners || this.owners.length !== w * h) this.owners = new Uint8Array(w * h)
     this.owners.fill(255)
+    // La carte d'influence n'a pas besoin de finesse : seule compte
+    // l'appartenance de chaque pixel.
     deform(rig, part, { ...seamSettings(rigState.seam), owners: this.owners })
 
     this.weightCanvas.width = w

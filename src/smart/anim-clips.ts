@@ -45,6 +45,37 @@ const bump = (t: number, at: number, width: number): number => {
   const d = Math.abs(t - at) / width
   return d >= 1 ? 0 : Math.cos(d * Math.PI / 2) ** 2
 }
+/**
+ * Meme rampe, mais sur un cycle qui boucle : la distance est prise sur le
+ * cercle, de sorte qu'une bosse posee pres de 0 deborde correctement sur la
+ * fin du cycle au lieu d'etre coupee.
+ */
+const bumpLoop = (t: number, at: number, width: number): number => {
+  let d = Math.abs(((t - at) % 1 + 1.5) % 1 - 0.5) / width
+  if (d >= 1) return 0
+  d = Math.max(0, d)
+  return Math.cos(d * Math.PI / 2) ** 2
+}
+
+/**
+ * Interpolation douce entre des poses cles reparties sur le cycle.
+ *
+ * Une marche n'est pas un sinus : la jambe d'appui reste tendue et balaie
+ * regulierement, tandis que la jambe libre plie franchement le genou pour
+ * passer le pied. Decrire les quatre poses cles — contact, bas, passage,
+ * haut — donne le bon rythme la ou une seule sinusoide donne un balancement
+ * de pendule.
+ */
+const keys = (values: number[]) => (t: number): number => {
+  const n = values.length
+  const p = ((t % 1) + 1) % 1 * n
+  const i = Math.floor(p)
+  const f = p - i
+  const a = values[i % n]
+  const b = values[(i + 1) % n]
+  // Lissage cosinus : les poses cles sont tenues, les passages adoucis.
+  return a + (b - a) * (1 - Math.cos(f * Math.PI)) / 2
+}
 
 export const ANIM_CLIPS: AnimClip[] = [
   {
@@ -58,51 +89,65 @@ export const ANIM_CLIPS: AnimClip[] = [
       head: { angle: (t) => sin(t, 0.12) * 0.045 },
       armL: { angle: (t) => sin(t, 0.25) * 0.05 },
       armR: { angle: (t) => -sin(t, 0.25) * 0.05 },
+      forearmL: { angle: (t) => -0.06 + sin(t, 0.4) * 0.05 },
+      forearmR: { angle: (t) => -0.06 - sin(t, 0.4) * 0.05 },
     },
   },
   {
     id: 'walk',
     label: 'Marche',
-    hint: 'Jambes et bras en opposition, corps qui monte et descend',
+    hint: 'Contact, bas, passage, haut — genoux et coudes articules',
     needs: ['legL', 'legR'],
     frames: 8, ms: 110, loop: true,
     channels: {
-      // Le corps monte deux fois par cycle : une fois par appui.
-      //
-      // Le balancement lateral est en cosinus, pas en sinus : un sinus
-      // s'annule aux deux poses de passage, qui rendaient alors la meme
-      // image et gachaient une frame sur huit. Son amplitude depasse le
-      // pixel, sinon le decalage disparait a l'arrondi.
+      // Le corps est au plus bas au contact et au plus haut au passage :
+      // c'est ce va-et-vient, pas le balancement des jambes, qui donne le poids.
       torso: {
-        ty: (t) => -Math.abs(sin(t)) * 0.016,
+        ty: keys([0.004, 0.012, -0.010, 0.002]),
         tx: (t) => sin(t, 0.25) * 0.035,
         angle: (t) => sin(t, 0.25) * 0.03,
       },
       head: { angle: (t) => -sin(t, 0.25) * 0.04 },
-      legL: { angle: (t) => sin(t) * 0.5 },
-      legR: { angle: (t) => sin(t, 0.5) * 0.5 },
-      // Bras a contretemps des jambes : c'est ce qui fait lire la marche.
-      armL: { angle: (t) => sin(t, 0.5) * 0.36 },
-      armR: { angle: (t) => sin(t) * 0.36 },
+
+      // Cuisse gauche : en avant au contact, en arriere une demi-periode plus
+      // tard. Le tibia reste tendu a l'appui et plie fort pour passer le pied.
+      legL: { angle: keys([0.42, 0.14, -0.16, -0.40]) },
+      shinL: { angle: (t) => -0.10 - bumpLoop(t, 0.66, 0.34) * 0.72 },
+      legR: { angle: (t) => keys([0.42, 0.14, -0.16, -0.40])(t + 0.5) },
+      shinR: { angle: (t) => -0.10 - bumpLoop(t + 0.5, 0.66, 0.34) * 0.72 },
+
+      // Bras a contretemps des jambes, coude toujours un peu flechi.
+      armL: { angle: (t) => keys([-0.34, -0.12, 0.14, 0.32])(t) },
+      forearmL: { angle: (t) => -0.20 - bumpLoop(t, 0.2, 0.4) * 0.28 },
+      armR: { angle: (t) => keys([-0.34, -0.12, 0.14, 0.32])(t + 0.5) },
+      forearmR: { angle: (t) => -0.20 - bumpLoop(t + 0.5, 0.2, 0.4) * 0.28 },
     },
   },
   {
     id: 'run',
     label: 'Course',
-    hint: 'Meme principe que la marche, amplitude et buste penches',
+    hint: 'Buste penche, grandes foulees, genoux tres flechis',
     needs: ['legL', 'legR'],
     frames: 8, ms: 70, loop: true,
     channels: {
       torso: {
-        ty: (t) => -Math.abs(sin(t)) * 0.03 - 0.01,
+        ty: keys([0.006, 0.022, -0.030, -0.004]),
         tx: (t) => sin(t, 0.25) * 0.06,
-        angle: (t) => 0.16 + sin(t, 0.25) * 0.05,
+        angle: (t) => 0.2 + sin(t, 0.25) * 0.05,
       },
-      head: { angle: (t) => -0.14 - sin(t, 0.25) * 0.06 },
-      legL: { angle: (t) => sin(t) * 0.9 },
-      legR: { angle: (t) => sin(t, 0.5) * 0.9 },
-      armL: { angle: (t) => sin(t, 0.5) * 0.75 },
-      armR: { angle: (t) => sin(t) * 0.75 },
+      head: { angle: (t) => -0.18 - sin(t, 0.25) * 0.06 },
+
+      // La course ramene le talon haut sous la cuisse : le tibia plie bien
+      // plus qu'a la marche, et la jambe arriere reste flechie a la poussee.
+      legL: { angle: keys([0.85, 0.2, -0.3, -0.7]) },
+      shinL: { angle: (t) => -0.25 - bumpLoop(t, 0.62, 0.42) * 1.5 },
+      legR: { angle: (t) => keys([0.85, 0.2, -0.3, -0.7])(t + 0.5) },
+      shinR: { angle: (t) => -0.25 - bumpLoop(t + 0.5, 0.62, 0.42) * 1.5 },
+
+      armL: { angle: (t) => keys([-0.75, -0.2, 0.35, 0.7])(t) },
+      forearmL: { angle: () => -1.1 },
+      armR: { angle: (t) => keys([-0.75, -0.2, 0.35, 0.7])(t + 0.5) },
+      forearmR: { angle: () => -1.1 },
     },
   },
   {
@@ -114,10 +159,16 @@ export const ANIM_CLIPS: AnimClip[] = [
     channels: {
       // Le corps s'ecrase, se detend, retombe : une seule courbe pilote tout.
       torso: { ty: (t) => (t < 0.25 ? t * 0.16 : -bump(t, 0.62, 0.5) * 0.13) },
-      legL: { angle: (t) => (t < 0.25 ? 0.55 : -bump(t, 0.6, 0.55) * 0.4) },
-      legR: { angle: (t) => (t < 0.25 ? -0.55 : bump(t, 0.6, 0.55) * 0.4) },
+      // Flexion des genoux a l'appel, extension a la detente, retour flechi
+      // a la reception : c'est le tibia qui porte l'essentiel du geste.
+      legL: { angle: (t) => (t < 0.25 ? 0.45 : -bump(t, 0.6, 0.55) * 0.35) },
+      legR: { angle: (t) => (t < 0.25 ? -0.45 : bump(t, 0.6, 0.55) * 0.35) },
+      shinL: { angle: (t) => (t < 0.25 ? -0.9 : -bump(t, 0.95, 0.35) * 0.7) },
+      shinR: { angle: (t) => (t < 0.25 ? -0.9 : -bump(t, 0.95, 0.35) * 0.7) },
       armL: { angle: (t) => (t < 0.25 ? 0.5 : -bump(t, 0.55, 0.6) * 1.5) },
       armR: { angle: (t) => (t < 0.25 ? -0.5 : bump(t, 0.55, 0.6) * 1.5) },
+      forearmL: { angle: (t) => (t < 0.25 ? -0.6 : -bump(t, 0.5, 0.6) * 0.5) },
+      forearmR: { angle: (t) => (t < 0.25 ? -0.6 : -bump(t, 0.5, 0.6) * 0.5) },
       head: { angle: (t) => bump(t, 0.15, 0.4) * 0.12 },
     },
   },
@@ -129,8 +180,12 @@ export const ANIM_CLIPS: AnimClip[] = [
     frames: 5, ms: 70, loop: false,
     channels: {
       // Armer lentement, frapper vite : l'elan se lit dans l'ecart des poses.
+      // Armer le bras haut derriere, puis abattre : l'avant-bras suit avec
+      // un temps de retard, ce qui donne le fouette du coup.
       armR: { angle: (t) => (t < 0.35 ? -t * 3.4 : -1.2 + (t - 0.35) * 4.6) },
+      forearmR: { angle: (t) => (t < 0.4 ? -t * 2.6 : -1.05 + (t - 0.4) * 2.6) },
       armL: { angle: (t) => (t < 0.35 ? t * 0.9 : 0.3 - (t - 0.35) * 0.5) },
+      forearmL: { angle: () => -0.45 },
       torso: { angle: (t) => (t < 0.35 ? -t * 0.5 : -0.18 + (t - 0.35) * 0.9), tx: (t) => bump(t, 0.7, 0.4) * 0.03 },
       head: { angle: (t) => (t < 0.35 ? t * 0.3 : 0.1 - (t - 0.35) * 0.45) },
       legL: { angle: (t) => bump(t, 0.7, 0.5) * 0.22 },
@@ -168,8 +223,12 @@ export const ANIM_CLIPS: AnimClip[] = [
       head: { angle: (t) => -bump(t, 0, 0.9) * 0.5 + bump(t, 0.6, 0.4) * 0.15 },
       armL: { angle: (t) => bump(t, 0, 1) * 0.95 },
       armR: { angle: (t) => -bump(t, 0.1, 1) * 0.95 },
+      forearmL: { angle: (t) => -bump(t, 0.15, 0.9) * 0.7 },
+      forearmR: { angle: (t) => -bump(t, 0.15, 0.9) * 0.7 },
       legL: { angle: (t) => -bump(t, 0.2, 0.9) * 0.28 },
       legR: { angle: (t) => bump(t, 0.4, 0.9) * 0.28 },
+      shinL: { angle: (t) => -bump(t, 0.3, 0.9) * 0.45 },
+      shinR: { angle: (t) => -bump(t, 0.3, 0.9) * 0.3 },
     },
   },
   {

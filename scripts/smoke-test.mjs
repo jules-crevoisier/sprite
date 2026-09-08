@@ -252,7 +252,7 @@ const guided = await page.evaluate(async () => {
 
   suivant()
   await jusqua(6)
-  const bras = ed.sprite.rig.bones.find((b) => b.name === 'bras G')
+  const bras = ed.sprite.rig.bones.find((b) => b.role === 'armL')
   bras.angle = -1
   refreshPose(ed)
   out.avance.push(await jusqua(7))
@@ -285,16 +285,24 @@ const perso = await page.evaluate(async () => {
   applyTemplate(rig, RIG_TEMPLATES.find((t) => t.id === 'humanoid-front'), rest, sprite)
   const part = rigApi.autoBind(rig, sprite.layers[0].id, rest)
 
-  const index = (name) => rig.bones.findIndex((b) => b.name === name)
+  // Les os sont designes par leur role : la composition des modeles change,
+  // pas la fonction de chaque os dans le corps.
+  const index = (role) => rig.bones.findIndex((b) => b.role === role)
   const at = (x, y) => part.weights[y * rest.width + x]
-  // Chaque membre doit revenir a son propre os, pas a celui du voisin.
+  const roleAt = (x, y) => rig.bones[at(x, y)]?.role ?? 'aucun'
+  // Chaque partie doit revenir a son propre os, pas a celui du voisin.
   const out = {
-    brasG: at(13, 27) === index('bras G'),
-    brasD: at(34, 27) === index('bras D'),
-    torse: at(23, 27) === index('torse'),
-    tete: at(23, 12) === index('tete'),
-    jambeG: at(21, 41) === index('jambe G'),
-    jambeD: at(26, 41) === index('jambe D'),
+    brasG: roleAt(16, 26) === 'armL',
+    brasD: roleAt(31, 26) === 'armR',
+    avantBrasG: roleAt(16, 32) === 'forearmL',
+    torse: roleAt(23, 28) === 'torso',
+    tete: roleAt(23, 15) === 'head',
+    // La tempe est le piege : un os de bras voisin, mince mais proche, la
+    // raflerait si la liaison ne tenait pas compte de la portee des os.
+    tempe: roleAt(18, 16) === 'head',
+    cuisseG: roleAt(21, 36) === 'legL',
+    tibiaG: roleAt(21, 43) === 'shinL',
+    cuisseD: roleAt(26, 36) === 'legR',
   }
 
   // Aucun pixel opaque ne doit rester sans os.
@@ -304,11 +312,14 @@ const perso = await page.evaluate(async () => {
   }
 
   // Une pose franche ne doit pas ouvrir de fente dans la matiere.
-  const by = (n) => rig.bones[index(n)]
-  by('bras G').angle = -1.5
-  by('bras D').angle = 1.5
-  by('jambe G').angle = 0.4
-  const posed = rigApi.deform(rig, part, { seamRadius: 1, seamNeighbours: 4, fillPasses: 1 })
+  const by = (role) => rig.bones[index(role)]
+  by('armL').angle = -1.2
+  by('armR').angle = 1.2
+  by('legL').angle = 0.4
+  by('shinL').angle = -0.5
+  // Les memes reglages que l'editeur applique par defaut.
+  const { seamSettings, rigState } = await import('/src/tools/index.ts')
+  const posed = rigApi.deform(rig, part, { ...seamSettings(rigState.seam), quality: 8 })
   let fentes = 0
   for (let y = 1; y < posed.height - 1; y++) {
     for (let x = 1; x < posed.width - 1; x++) {
@@ -327,7 +338,7 @@ const perso = await page.evaluate(async () => {
 })
 
 check('le personnage lie chaque membre a son os',
-  perso.brasG && perso.brasD && perso.torse && perso.tete && perso.jambeG && perso.jambeD,
+  Object.entries(perso).filter(([k]) => k !== 'tousLies' && k !== 'fentes').every(([, v]) => v),
   JSON.stringify(perso))
 check('aucun pixel du personnage ne reste sans os', perso.tousLies)
 check('une pose franche n\'ouvre pas de fente', perso.fentes === 0, `${perso.fentes} fentes`)
@@ -354,7 +365,7 @@ const modes = await page.evaluate(async () => {
   ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
   app.rigPanel.bind()
   const rig = ed.sprite.rig
-  const arm = rig.bones.findIndex((b) => b.name === 'bras G')
+  const arm = rig.bones.findIndex((b) => b.role === 'armL')
   rigState.selected = rig.bones[arm].id
   app.setTool('rig-weight')
   const part = rig.parts[0]
@@ -503,15 +514,17 @@ const allerRetour = await page.evaluate(async () => {
   const rig = ed.sprite.rig
 
   // On leve le bras, puis on rend la pose sur la toile.
-  const bras = rig.bones.find((b) => b.name === 'bras G')
+  const bras = rig.bones.find((b) => b.role === 'armL')
   bras.angle = 0.5
   refreshPose(ed)
 
   // Un pixel qui appartient au bras, dans la pose.
   const part = rig.parts[0]
+  // La finesse doit etre celle du rendu : a qualite differente, les frontieres
+  // ne tombent pas au meme endroit et l'on peindrait a cote du membre.
   const n = part.rest.width * part.rest.height
   const owners = new Uint8Array(n).fill(255)
-  deform(rig, part, { ...seamSettings(rigState.seam), owners })
+  deform(rig, part, { ...seamSettings(rigState.seam), owners, quality: 8 })
   const indexBras = rig.bones.indexOf(bras)
   const cible = owners.indexOf(indexBras)
   if (cible < 0) return { erreur: 'aucun pixel du bras' }
@@ -699,14 +712,20 @@ const multi = await page.evaluate(async () => {
   const app = window.pixelforge, ed = app.ed
 
   ed.loadSprite(demoCharacter())
-  const arme = new Layer('Epee', ed.frameCount)
-  arme.cels[0] = ed.sprite.makeCel()
-  for (let y = 14; y <= 30; y++) arme.cels[0].bitmap.set(8, y, fromHex('#c0c8d8'))
-  ed.sprite.layers.push(arme)
-  ed.events.emit('reload', undefined)
-
   app.setMode('rig')
   ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.sprite.layers[0].cels[0].bitmap, ed.sprite))
+
+  // L'epee est posee dans la main gauche, reperee par l'os plutot que par des
+  // coordonnees en dur : le personnage peut etre redessine sans casser le test.
+  const main = ed.sprite.rig.bones.find((b) => b.role === 'forearmL')
+  const arme = new Layer('Epee', ed.frameCount)
+  arme.cels[0] = ed.sprite.makeCel()
+  const mx = Math.round(main.ex)
+  for (let y = Math.round(main.ey) - 12; y <= Math.round(main.ey) + 2; y++) {
+    arme.cels[0].bitmap.set(mx, y, fromHex('#c0c8d8'))
+  }
+  ed.sprite.layers.push(arme)
+  ed.events.emit('reload', undefined)
   ed.setActiveLayer(0); app.rigPanel.bind()
   ed.setActiveLayer(1); app.rigPanel.bind()
   await new Promise((r) => setTimeout(r, 150))
@@ -873,7 +892,12 @@ const palette = await page.evaluate(async () => {
   ed.events.emit('reload', undefined)
   await new Promise((r) => setTimeout(r, 250))
 
-  const bleu = fromHex('#3b5dc9')
+  // La couleur la plus employee du dessin : le test survit a un changement
+  // de personnage.
+  const usage = new Map()
+  for (const v of ed.peekCel().bitmap.u32) if (v) usage.set(v, (usage.get(v) ?? 0) + 1)
+  let bleu = 0, mieux = 0
+  for (const [c, n] of usage) if (n > mieux) { mieux = n; bleu = c }
   const rouge = fromHex('#c93b5d')
   const compte = (c) => { let n = 0; for (const v of ed.peekCel().bitmap.u32) if (v === c) n++; return n }
   const index = ed.sprite.palette.colors.indexOf(bleu)
@@ -912,6 +936,125 @@ check('la retouche ne laisse qu\'une entree dans l\'historique',
   palette.etiquette === 'Retoucher la palette', String(palette.etiquette))
 check('annuler rend au sprite et a la palette leur couleur',
   palette.annule.bleu === palette.avant && palette.annule.rouge === 0 && palette.annule.palette)
+
+/* --- qualite de rotation : la methode RotSprite --- */
+const rotation = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { autoBind, deform, scale2x } = await import('/src/smart/rig.ts')
+  const { getA } = await import('/src/core/color.ts')
+
+  // Scale2x doit redresser une diagonale sans inventer de couleur.
+  const src = new Uint32Array(9)
+  const A = 0xff0000ff, B = 0xff00ff00
+  src.set([A, A, B, A, A, B, A, A, B])
+  const grand = scale2x(src, 3, 3)
+  const couleurs = new Set(grand)
+  const inventees = [...couleurs].filter((c) => c !== A && c !== B && c !== 0).length
+
+  const sprite = demoCharacter()
+  const rest = sprite.layers[0].cels[0].bitmap
+  const rig = sprite.rig
+  applyTemplate(rig, RIG_TEMPLATES[0], rest, sprite)
+  const part = autoBind(rig, sprite.layers[0].id, rest)
+  rig.bones.find((b) => b.role === 'armL').angle = -0.9
+  rig.bones.find((b) => b.role === 'armR').angle = 0.9
+
+  // Rugosite : pixel plein dont au plus deux voisins orthogonaux sont pleins.
+  // Une rotation au plus proche en fabrique le long des obliques.
+  const rugosite = (b) => {
+    let n = 0
+    for (let y = 1; y < b.height - 1; y++) for (let x = 1; x < b.width - 1; x++) {
+      if (!getA(b.u32[y * b.width + x])) continue
+      let k = 0
+      if (getA(b.u32[(y - 1) * b.width + x])) k++
+      if (getA(b.u32[(y + 1) * b.width + x])) k++
+      if (getA(b.u32[y * b.width + x - 1])) k++
+      if (getA(b.u32[y * b.width + x + 1])) k++
+      if (k <= 2) n++
+    }
+    return n
+  }
+  const palette = (b) => new Set([...b.u32].filter((c) => getA(c) !== 0))
+  const rapide = deform(rig, part, { quality: 1 })
+  const fin = deform(rig, part, { quality: 8 })
+  const dedans = [...palette(fin)].every((c) => palette(rest).has(c))
+  return {
+    inventees,
+    grandeur: grand.length,
+    rugositeRapide: rugosite(rapide),
+    rugositeFine: rugosite(fin),
+    paletteRespectee: dedans,
+  }
+})
+check('Scale2x agrandit sans inventer de couleur',
+  rotation.inventees === 0 && rotation.grandeur === 36, `${rotation.inventees} couleurs inventees`)
+check('la rotation fine lisse les obliques',
+  rotation.rugositeFine < rotation.rugositeRapide,
+  `${rotation.rugositeRapide} -> ${rotation.rugositeFine} coins isoles`)
+check('la rotation fine n\'introduit aucune couleur etrangere', rotation.paletteRespectee)
+
+/* --- membres a deux segments --- */
+const segments = await page.evaluate(async () => {
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { emptyRig } = await import('/src/smart/rig.ts')
+  const { ANIM_CLIPS } = await import('/src/smart/anim-clips.ts')
+  const ed = window.pixelforge.ed
+  const rig = emptyRig()
+  applyTemplate(rig, RIG_TEMPLATES.find((t) => t.id === 'humanoid-front'),
+    ed.sprite.layers[0].cels[0].bitmap, ed.sprite)
+  const roles = rig.bones.map((b) => b.role)
+  const marche = ANIM_CLIPS.find((c) => c.id === 'walk')
+  return {
+    os: rig.bones.length,
+    coudes: roles.includes('forearmL') && roles.includes('forearmR'),
+    genoux: roles.includes('shinL') && roles.includes('shinR'),
+    // Le cycle doit reellement piloter les nouveaux segments.
+    marchePlieLesGenoux: !!marche.channels.shinL && !!marche.channels.shinR,
+    // Chaque segment bas descend de son segment haut.
+    chaines: rig.bones.filter((b) => b.role.startsWith('forearm') || b.role.startsWith('shin'))
+      .every((b) => {
+        const parent = rig.bones.find((p) => p.id === b.parent)
+        return parent && (parent.role.startsWith('arm') || parent.role.startsWith('leg'))
+      }),
+  }
+})
+check('l\'humanoide a des membres en deux segments',
+  segments.coudes && segments.genoux && segments.os === 10, `${segments.os} os`)
+check('les segments bas descendent des segments hauts', segments.chaines)
+check('la marche plie genoux et coudes', segments.marchePlieLesGenoux)
+
+/* --- la liaison tient compte de la portee des os --- */
+const portee = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { autoBind } = await import('/src/smart/rig.ts')
+  const sprite = demoCharacter()
+  const rest = sprite.layers[0].cels[0].bitmap
+  const rig = sprite.rig
+  applyTemplate(rig, RIG_TEMPLATES[0], rest, sprite)
+  const part = autoBind(rig, sprite.layers[0].id, rest)
+  // Boite des pixels que chaque os s'est attribues.
+  const boites = rig.bones.map((b, i) => {
+    let y0 = 1e9, y1 = -1
+    for (let k = 0; k < part.weights.length; k++) if (part.weights[k] === i) {
+      const y = (k / rest.width) | 0
+      y0 = Math.min(y0, y); y1 = Math.max(y1, y)
+    }
+    return { role: b.role, y0, y1, racine: Math.round(Math.min(b.y, b.ey)) }
+  })
+  const bras = boites.filter((b) => b.role === 'armL' || b.role === 'armR')
+  const tete = boites.find((b) => b.role === 'head')
+  const torse = boites.find((b) => b.role === 'torso')
+  return {
+    // Un os de bras ne doit pas remonter chercher des pixels au-dessus de
+    // son epaule : ce serait la tempe, et la tete se dechirerait a la pose.
+    brasSousLEpaule: bras.every((b) => b.y0 >= b.racine - 1),
+    teteAuDessusDuTorse: tete.y1 < torse.y0,
+  }
+})
+check('un os de bras ne remonte pas voler la tempe', portee.brasSousLEpaule)
+check('la tete et le torse ne se disputent pas le cou', portee.teteAuDessusDuTorse)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
