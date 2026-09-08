@@ -35,7 +35,7 @@ const PALETTE: Record<string, string> = {
 /* Pieces                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Tete de face, oreilles comprises. 14 x 16. */
+/** Tete de face, oreilles comprises. */
 const TETE = [
   '.oo........oo.',
   'oFFo......oFFo',
@@ -66,8 +66,8 @@ const TETE_MI_CLOS = TETE.map((l, i) =>
 
 /**
  * Tete ecrasee : une ligne de moins, et deux colonnes de plus sur les
- * joues. 16 x 15, 186 pixels — exactement la masse de la tete au repos.
- * Un ecrasement deplace la matiere, il ne l'efface pas.
+ * joues. Un ecrasement deplace la matiere, il ne l'efface pas — l'egalite
+ * des masses est verifiee par le test, pas affirmee ici.
  */
 const TETE_ECRASEE = [
   '..oo........oo..',
@@ -108,7 +108,7 @@ const CORPS = [
   'oFFFFFFFFFFo',
 ]
 
-/** Corps ecrase : une ligne de moins, deux colonnes de plus. 94 pixels. */
+/** Corps ecrase : une ligne de moins, deux colonnes de plus. */
 const CORPS_ECRASE = [
   '.oFFFFFFFFFFo.',
   'oFFFwwwwwwFFFo',
@@ -119,7 +119,7 @@ const CORPS_ECRASE = [
   '.oFFFFFFFFFFo.',
 ]
 
-/** Corps etire : une ligne de plus, une colonne de moins. 90 pixels. */
+/** Corps etire : une ligne de plus, et les flancs rentres. */
 const CORPS_ETIRE = [
   'oFFFFFFFFFFo',
   '.oFFwwwwFFo.',
@@ -142,6 +142,8 @@ const CORPS_ETIRE = [
  * decalage entier.
  */
 const PATTE = [
+  'oFFo',
+  'oFFo',
   'oFFo',
   'oFFo',
   'oFFo',

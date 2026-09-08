@@ -38,7 +38,7 @@ const CORPS_X = 10
  */
 const CORPS_Y = 18
 /** Les pattes montent sous le corps : six lignes restent en vue au repos. */
-const SOL = 26
+const SOL = 24
 const PATTE_GX = 11
 const PATTE_DX = 17
 
@@ -101,9 +101,45 @@ export function lignesDePatteVisibles(p: Pose): number {
   const basDuCorps = p.corps[1] + (p.corpsArt ?? CORPS_NORMAL).length
   let mini = 99
   for (const [, y] of [p.patteG, p.patteD]) {
-    mini = Math.min(mini, y + 6 - Math.max(y, basDuCorps))
+    mini = Math.min(mini, y + HAUTEUR_PATTE - Math.max(y, basDuCorps))
   }
   return Math.max(0, mini)
+}
+
+/** Hauteur du dessin de patte, semelle comprise. */
+const HAUTEUR_PATTE = 8
+/** Derniere ligne du cadre : c'est le sol. */
+const LIGNE_DU_SOL = 31
+
+/**
+ * Vrai si au moins une semelle touche le sol.
+ *
+ * Une image de contact ou les deux pieds sont en l'air fait clignoter le bas
+ * de la silhouette : sur une marche a cent dix millisecondes, ca bat quatre
+ * fois par seconde et le personnage a l'air de flotter.
+ */
+export function piedAuSol(p: Pose): boolean {
+  return [p.patteG, p.patteD].some(([, y]) => y + HAUTEUR_PATTE - 1 === LIGNE_DU_SOL)
+}
+
+/**
+ * Pieds poses qui glissent d'une image a l'autre.
+ *
+ * Un pied qui porte ne se deplace pas : c'est le corps qui passe au-dessus
+ * de lui. Une semelle qui derape est ce qui fait qu'un personnage patine au
+ * lieu de marcher, et cela ne se voit pas image par image.
+ */
+export function semellesQuiGlissent(a: Pose, b: Pose): number {
+  const paires: [[number, number], [number, number]][] = [
+    [a.patteG, b.patteG], [a.patteD, b.patteD],
+  ]
+  let n = 0
+  for (const [avant, apres] of paires) {
+    const poseeAvant = avant[1] + HAUTEUR_PATTE - 1 === LIGNE_DU_SOL
+    const poseeApres = apres[1] + HAUTEUR_PATTE - 1 === LIGNE_DU_SOL
+    if (poseeAvant && poseeApres && avant[0] !== apres[0]) n++
+  }
+  return n
 }
 
 /**
@@ -200,6 +236,10 @@ const REPOS: Reglage[] = [
 /**
  * Marche de face.
  *
+ * Le corps descend a l'appui et remonte au passage : contact, creux,
+ * passage, remontee. Sans ce creux, le contact et le temps bas sont a la
+ * meme hauteur et le corps ne s'enfonce jamais sous la charge.
+ *
  * Le corps passe par zero entre les deux appuis au lieu de sauter d'un
  * cote a l'autre : moins un, moins un, zero, zero, plus un, plus un, zero,
  * zero. Un balancement en creneau teleporte le personnage de deux pixels
@@ -209,13 +249,13 @@ const REPOS: Reglage[] = [
  * horizontal appartient au corps, qui passe au-dessus d'eux.
  */
 const MARCHE: Reglage[] = [
-  { corps: [-1, 1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
+  { corps: [-1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [-1, 1], tete: [0, 1], gauche: [0, 0], droite: [0, -2], queue: 'basmilieu' },
-  { corps: [0, -1], tete: [-1, 1], gauche: [0, -1], droite: [0, -4], queue: 'basse' },
+  { corps: [0, -1], tete: [-1, 1], gauche: [0, 0], droite: [0, -4], queue: 'basse' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
-  { corps: [1, 1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
+  { corps: [1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [1, 1], tete: [0, 1], gauche: [0, -2], droite: [0, 0], queue: 'basmilieu' },
-  { corps: [0, -1], tete: [1, 1], gauche: [0, -4], droite: [0, -1], queue: 'basse' },
+  { corps: [0, -1], tete: [1, 1], gauche: [0, -4], droite: [0, 0], queue: 'basse' },
   { corps: [0, 0], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
 ]
 
@@ -226,11 +266,11 @@ const MARCHE: Reglage[] = [
  */
 const COURSE: Reglage[] = [
   { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -2], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -4], droite: [0, -3], queue: 'basse' },
+  { corps: [-1, -2], tete: [0, 1], gauche: [0, -3], droite: [0, -2], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -4], droite: [0, -1], queue: 'basse' },
   { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -2], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -3], droite: [0, -4], queue: 'basse' },
+  { corps: [1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -3], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -1], droite: [0, -4], queue: 'basse' },
 ]
 
 /**
@@ -244,11 +284,11 @@ const COURSE: Reglage[] = [
  */
 const SAUT: Reglage[] = [
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'haute' },
-  { corps: [0, -2], corpsArt: 'etire', tete: [0, 1], gauche: [0, -2], droite: [0, -2], queue: 'basse' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -4], droite: [0, -4], queue: 'basmilieu' },
-  { corps: [0, -2], corpsArt: 'etire', tete: [0, 0], gauche: [0, -2], droite: [0, -2], queue: 'milieu' },
-  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [-1, 0], droite: [1, 0], queue: 'fouet' },
-  { corps: [0, -1], tete: [0, 0], gauche: [0, -1], droite: [0, -1], queue: 'basse' },
+  { corps: [0, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
+  { corps: [0, -4], tete: [0, 1], gauche: [0, -5], droite: [0, -5], queue: 'basmilieu' },
+  { corps: [0, -3], corpsArt: 'etire', tete: [0, 0], gauche: [0, -3], droite: [0, -3], queue: 'milieu' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
+  { corps: [0, -1], tete: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basse' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
@@ -265,10 +305,11 @@ const SAUT: Reglage[] = [
  */
 const ATTAQUE: Reglage[] = [
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
-  { corps: [0, 0], gauche: [0, -1], droite: [0, -1], queue: 'basmilieu' },
+  { corps: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
   { corps: [0, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
-  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [-1, 0], droite: [1, 0], queue: 'haute' },
-  { corps: [0, 1], tete: [0, 1], gauche: [-1, -1], droite: [1, -1], queue: 'fouet' },
+  { corps: [0, -1], gauche: [-1, -1], droite: [1, -1], queue: 'milieu' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'haute' },
+  { corps: [0, 1], tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
@@ -283,9 +324,9 @@ const ATTAQUE: Reglage[] = [
 const DEGATS: Reglage[] = [
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', queue: 'milieu' },
   { corps: [-3, 2], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'fouet' },
-  { corps: [-1, 1], teteArt: 'clin', tete: [-1, 1], gauche: [-1, 0], droite: [-1, 0], queue: 'basse' },
-  { corps: [0, 1], teteArt: 'miclos', gauche: [-1, -2], droite: [-1, 0], queue: 'basmilieu' },
-  { corps: [0, 0], queue: 'milieu' },
+  { corps: [-1, 1], teteArt: 'clin', tete: [-1, 1], gauche: [0, -2], droite: [-2, 0], queue: 'basse' },
+  { corps: [0, 1], teteArt: 'miclos', gauche: [0, 0], droite: [-2, -2], queue: 'basmilieu' },
+  { corps: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
 ]
 
 export const CLIPS_PIXL: ClipMascotte[] = [

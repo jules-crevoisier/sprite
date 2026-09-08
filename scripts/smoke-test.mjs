@@ -1738,7 +1738,7 @@ check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
 
 /* --- mascotte et ses cycles --- */
 const mascotte = await page.evaluate(async () => {
-  const { CLIPS_PIXL, debordsDePatte, lignesDePatteVisibles, patteDecrochee, spritePixl } = await import('/src/ui/mascot-clips.ts')
+  const { CLIPS_PIXL, debordsDePatte, lignesDePatteVisibles, patteDecrochee, piedAuSol, semellesQuiGlissent, spritePixl } = await import('/src/ui/mascot-clips.ts')
   const { imageDePose, TAILLE } = await import('/src/ui/mascot-anim.ts')
 
   /**
@@ -1770,7 +1770,7 @@ const mascotte = await page.evaluate(async () => {
     return n
   }
 
-  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], lignesMin: 99 }
+  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], piedsEnLair: [], glissements: [], lignesMin: 99 }
   for (const clip of CLIPS_PIXL) {
     bilan.cycles++
     const bmps = clip.poses.map(imageDePose)
@@ -1785,6 +1785,13 @@ const mascotte = await page.evaluate(async () => {
       if (lignes < 2) bilan.pattesAvalees.push(`${clip.id}#${i + 1} (${lignes})`)
       // Une patte restee au sol pendant que le corps monte pend dans le vide.
       if (patteDecrochee(clip.poses[i])) bilan.pattesPendantes.push(`${clip.id}#${i + 1}`)
+      // Une image de contact sans semelle au sol fait clignoter le bas de la
+      // silhouette : sur un cycle a cent dix millisecondes, quatre fois par
+      // seconde. On tolere le vol la ou il est le sujet.
+      const enVol = (clip.id === 'saut' && i >= 1 && i <= 3)
+        || (clip.id === 'course' && i % 3 !== 0)
+        || (clip.id === 'attaque' && (i === 2 || i === 3))
+      if (!enVol && !piedAuSol(clip.poses[i])) bilan.piedsEnLair.push(`${clip.id}#${i + 1}`)
       bilan.lignesMin = Math.min(bilan.lignesMin, lignes)
       let n = 0, x0 = 99, x1 = -1, y0 = 99
       for (let y = 0; y < TAILLE; y++) for (let x = 0; x < TAILLE; x++) {
@@ -1796,6 +1803,14 @@ const mascotte = await page.evaluate(async () => {
       // Sortir par le haut ou les cotes, en revanche, coupe le dessin.
       if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1}`)
     })
+    // Un pied qui porte ne se deplace pas : c'est le corps qui passe
+    // au-dessus de lui. Une semelle qui derape fait patiner le personnage.
+    for (let i = 0; i < clip.poses.length; i++) {
+      const suivant = (i + 1) % clip.poses.length
+      if (!clip.loop && suivant === 0) continue
+      const n = semellesQuiGlissent(clip.poses[i], clip.poses[suivant])
+      if (n) bilan.glissements.push(`${clip.id} ${i + 1}->${suivant + 1}`)
+    }
     for (let a = 0; a < bmps.length; a++) for (let b = a + 1; b < bmps.length; b++) {
       let d = 0
       for (let k = 0; k < bmps[a].u32.length; k++) if (bmps[a].u32[k] !== bmps[b].u32[k]) d++
@@ -1822,6 +1837,13 @@ check('aucune patte ne deborde du torse', mascotte.debords === 0, `${mascotte.de
 check('rien ne sort du cadre', mascotte.horsCadre.length === 0, mascotte.horsCadre.join(', '))
 check('la masse reste stable dans un cycle', mascotte.masseMax < 0.12,
   `${(mascotte.masseMax * 100).toFixed(1)}% d'ecart au pire`)
+check('les images de contact gardent un pied au sol', mascotte.piedsEnLair.length === 0,
+  mascotte.piedsEnLair.join(', '))
+// Le seul derapage voulu est celui du choc : le personnage encaisse et ses
+// deux pieds ripent. Partout ailleurs, une semelle qui bouge est du patinage.
+check('aucune semelle ne patine, sauf sous le choc',
+  mascotte.glissements.length === 1 && mascotte.glissements[0] === 'degats 1->2',
+  mascotte.glissements.join(', ') || 'aucun')
 check('aucune patte ne pend sous un corps monte', mascotte.pattesPendantes.length === 0,
   mascotte.pattesPendantes.join(', '))
 check('aucune patte n\'est avalee par le torse', mascotte.pattesAvalees.length === 0,
