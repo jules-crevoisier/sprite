@@ -255,6 +255,11 @@ function pose(r: Reglage = {}): Pose {
  *
  * Le souffle fait exactement huit images, comme le clip : une periode de
  * six dans un cycle de huit bafouille au raccord, une fois par tour.
+ *
+ * La tete descend d'un pixel par image et jamais de deux. Le retour la
+ * faisait tomber de 7 a 5 d'un coup pendant que le corps n'en bougeait que
+ * d'un : sur un cycle qui tourne, ce seul intervalle double se voit comme
+ * une coupure. Hauteurs de tete : 5, 6, 7, 7, 7, 6, 5, 5.
  */
 const REPOS: Reglage[] = [
   { corps: [0, 0], tete: [0, 0], queue: 'milieu' },
@@ -262,7 +267,7 @@ const REPOS: Reglage[] = [
   { corps: [0, 1], tete: [-1, 1], queue: 'basmilieu' },
   { corps: [0, 1], tete: [0, 1], queue: 'basse' },
   { corps: [0, 1], tete: [1, 1], queue: 'basmilieu' },
-  { corps: [0, 0], tete: [1, 0], queue: 'basmilieu' },
+  { corps: [0, 0], tete: [1, 1], queue: 'basmilieu' },
   { corps: [0, 0], teteArt: 'clin', tete: [0, 0], queue: 'milieu' },
   { corps: [0, 0], teteArt: 'miclos', tete: [-1, 0], queue: 'milieu' },
 ]
