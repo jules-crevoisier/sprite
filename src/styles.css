@@ -303,6 +303,19 @@ button { cursor: pointer; }
 .opt > label { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
 .opt-sep { width: 1px; height: 20px; background: var(--line); flex: none; }
 .opt-hint { color: var(--text-faint); font-size: 12px; margin-left: auto; padding-left: 16px; white-space: nowrap; }
+.opt-note { color: var(--text-faint); font-size: 11px; white-space: nowrap; flex: none; }
+.opt-note.warn { color: var(--warn); }
+/* Empreinte du pinceau et motif de tramage : damier derriere, pour que la
+   transparence se voie. */
+.brush-preview {
+  image-rendering: pixelated;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background:
+    linear-gradient(45deg, #ffffff10 25%, transparent 25%, transparent 75%, #ffffff10 75%),
+    var(--bg-0);
+  background-size: 6px 6px;
+}
 
 /* Un segmente ne se comprime pas : sur une fenetre etroite c'est le titre du
    document qui cede la place, pas la bascule de mode. */
@@ -539,6 +552,14 @@ input[type="range"]::-moz-range-thumb {
   border-bottom: 1px solid var(--line);
 }
 .bone-branch.is-root::before, .bone-branch.is-root::after { display: none; }
+/* Reglages de l'os choisi, sous sa ligne : role et profondeur. */
+.bone-extra {
+  display: flex; align-items: center; gap: 10px;
+  padding-right: 6px; padding-bottom: 3px;
+  font-size: 10.5px; color: var(--text-faint);
+}
+.bone-extra label { display: flex; align-items: center; gap: 4px; }
+
 .bone-parent {
   display: flex; align-items: center; gap: 4px; flex: none;
   font-size: 10.5px; color: var(--text-faint);

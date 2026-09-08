@@ -3,7 +3,7 @@ import type { Editor } from '../core/editor'
 import { snapshotStructure, restoreStructure } from '../core/history'
 import {
   applyX, applyY, bakePose, boneAngle, boneColor, createBone, deform, invert,
-  worldTransforms, type Bone, type Mat,
+  partFor, unbind, worldTransforms, type Bone, type Mat, type RigPart,
 } from '../smart/rig'
 import type { Bitmap } from '../core/bitmap'
 import { ICONS } from '../ui/icons'
@@ -48,21 +48,23 @@ const dist = (ax: number, ay: number, bx: number, by: number): number => Math.hy
  */
 interface Baked {
   cel: Cel
+  part: RigPart
   rest: Bitmap
-  pose: string
   pixels: Uint32Array
   sources: Int32Array
   owners: Uint8Array
 }
 
-let baked: Baked | null = null
+/** Un rendu memorise par calque relie, plus la pose commune a tous. */
+let baked: Baked[] = []
+let bakedPose = ''
 
 /** Signature de la pose : deux rendus ne sont comparables qu'a pose egale. */
 const poseSignature = (ed: Editor): string =>
   ed.sprite.rig.bones.map((b) => `${b.id}:${b.angle.toFixed(5)}:${b.tx}:${b.ty}:${b.scale}`).join('|')
 
 /** Oublie le rendu memorise : le document a change sous nos pieds. */
-export function invalidateBake(): void { baked = null }
+export function invalidateBake(): void { baked = []; bakedPose = '' }
 
 /**
  * Reporte vers le dessin de repos les retouches faites sur la toile depuis
@@ -71,57 +73,106 @@ export function invalidateBake(): void { baked = null }
  * cas la toile n'est pas comparable et on ne toucherait pas au bon pixel.
  */
 export function syncRestFromCanvas(ed: Editor): boolean {
-  const snap = baked
-  if (!snap) return false
+  if (!baked.length) return false
   const rig = ed.sprite.rig
-  const cel = ed.peekCel()
-  if (!cel || cel !== snap.cel || rig.rest !== snap.rest || !rig.weights) return false
-  if (poseSignature(ed) !== snap.pose) return false
-  if (cel.bitmap.u32.length !== snap.pixels.length) return false
+  // La pose doit etre celle du rendu : sinon la toile qu'on lit vient d'une
+  // autre pose et l'on reporterait la retouche sur le mauvais pixel.
+  if (poseSignature(ed) !== bakedPose) { invalidateBake(); return false }
 
-  let dirty = false
-  for (let i = 0; i < snap.pixels.length; i++) {
-    if (cel.bitmap.u32[i] !== snap.pixels[i]) { dirty = true; break }
+  const annuler: (() => void)[] = []
+  const refaire: (() => void)[] = []
+
+  for (const snap of baked) {
+    // Le morceau doit toujours exister et porter le meme repos.
+    if (!rig.parts.includes(snap.part) || snap.part.rest !== snap.rest) continue
+    const cel = snap.cel
+    if (cel.bitmap.u32.length !== snap.pixels.length) continue
+
+    let retouche = false
+    for (let i = 0; i < snap.pixels.length; i++) {
+      if (cel.bitmap.u32[i] !== snap.pixels[i]) { retouche = true; break }
+    }
+    if (!retouche) continue
+
+    const rest = snap.part.rest
+    const weights = snap.part.weights
+    const posed = { u32: snap.pixels, width: rest.width, height: rest.height } as Bitmap
+    const restAvant = new Uint32Array(rest.u32)
+    const poidsAvant = new Uint8Array(weights)
+    const bilan = bakePose(rig, snap.part, posed, snap.sources, snap.owners, cel.bitmap)
+    if (bilan.changed + bilan.adopted === 0) continue
+
+    const restApres = new Uint32Array(rest.u32)
+    const poidsApres = new Uint8Array(weights)
+    annuler.push(() => { rest.u32.set(restAvant); weights.set(poidsAvant) })
+    refaire.push(() => { rest.u32.set(restApres); weights.set(poidsApres) })
   }
-  if (!dirty) return false
 
-  const posed = { u32: snap.pixels, width: rig.rest.width, height: rig.rest.height } as Bitmap
-  const restBefore = new Uint32Array(rig.rest.u32)
-  const weightsBefore = new Uint8Array(rig.weights)
-  const result = bakePose(rig, posed, snap.sources, snap.owners, cel.bitmap)
-  baked = null
-  if (result.changed + result.adopted === 0) return false
+  invalidateBake()
+  if (!annuler.length) return false
 
   // La retouche entre dans l'historique : annuler le trait doit aussi
   // annuler son report vers le repos.
-  const rest = rig.rest
-  const restAfter = new Uint32Array(rest.u32)
-  const weightsAfter = new Uint8Array(rig.weights)
   ed.pushCommand({
     label: 'Retouche reprise dans le squelette',
-    undo: () => { rest.u32.set(restBefore); rig.weights?.set(weightsBefore) },
-    redo: () => { rest.u32.set(restAfter); rig.weights?.set(weightsAfter) },
+    undo: () => { for (const f of annuler) f() },
+    redo: () => { for (const f of refaire) f() },
   })
   return true
 }
 
-/** Recalcule le dessin pose et l'ecrit dans la case active. */
+/**
+ * Recalcule le dessin pose de chaque calque relie et l'ecrit dans sa case a
+ * la frame courante. Le corps, l'arme et la cape suivent donc les memes os
+ * en un seul geste.
+ */
 export function refreshPose(ed: Editor): void {
   const rig = ed.sprite.rig
-  if (!rig.rest || !rig.weights) return
-  const cel = ed.peekCel()
-  if (!cel) return
-  const size = rig.rest.width * rig.rest.height
-  const sources = new Int32Array(size)
-  const owners = new Uint8Array(size).fill(255)
-  const posed = deform(rig, { ...seamSettings(rigState.seam), sources, owners })
-  if (!posed) return
-  cel.bitmap.copyFrom(posed)
-  baked = {
-    cel, rest: rig.rest, pose: poseSignature(ed),
-    pixels: new Uint32Array(posed.u32), sources, owners,
+  if (!rig.parts.length) return
+  const rendus: Baked[] = []
+
+  for (const part of rig.parts) {
+    const index = ed.sprite.layers.findIndex((l) => l.id === part.layer)
+    if (index < 0) continue
+    const layer = ed.sprite.layers[index]
+    if (layer.locked) continue
+    const cel = ed.sprite.ensureCel(index, ed.activeFrame)
+    const size = part.rest.width * part.rest.height
+    const sources = new Int32Array(size)
+    const owners = new Uint8Array(size).fill(255)
+    const posed = deform(rig, part, { ...seamSettings(rigState.seam), sources, owners })
+    if (!posed) continue
+    cel.bitmap.copyFrom(posed)
+    rendus.push({ cel, part, rest: part.rest, pixels: new Uint32Array(posed.u32), sources, owners })
   }
+
+  baked = rendus
+  bakedPose = poseSignature(ed)
   ed.events.emit('doc', undefined)
+}
+
+/**
+ * Ecrit la pose courante dans une frame donnee, pour chaque calque relie.
+ * Retourne le nombre de calques effectivement dessines.
+ */
+export function writePoseToFrame(ed: Editor, frame: number): number {
+  const rig = ed.sprite.rig
+  let ecrits = 0
+  for (const part of rig.parts) {
+    const index = ed.sprite.layers.findIndex((l) => l.id === part.layer)
+    if (index < 0) continue
+    const posed = deform(rig, part, seamSettings(rigState.seam))
+    if (!posed) continue
+    ed.sprite.ensureCel(index, frame).bitmap.copyFrom(posed)
+    ecrits++
+  }
+  return ecrits
+}
+
+/** Liaison du calque actif, celui que les outils de squelette modifient. */
+export function activePart(ed: Editor): RigPart | null {
+  const layer = ed.sprite.layers[ed.activeLayer]
+  return layer ? partFor(ed.sprite.rig, layer.id) : null
 }
 
 /** Transformation du parent d'un os, ou l'identite pour une racine. */
@@ -330,8 +381,7 @@ export const rigBoneTool: Tool = {
       const bone = createBone(ed.sprite.rig, drag.x, drag.y, p.x, p.y, drag.parent)
       rigState.selected = bone.id
       // Les poids referencent les os par index : une nouvelle liaison s'impose.
-      ed.sprite.rig.weights = null
-      ed.sprite.rig.rest = null
+      unbind(ed.sprite.rig)
     }
     pushRigCommand(ed, drag.kind === 'create' ? 'Nouvel os' : 'Deplacer un os')
     ed.events.emit('doc', undefined)
@@ -449,22 +499,25 @@ export const rigPoseTool: Tool = {
 /* ------------------------------------------------------------------ */
 
 let weightBefore: Uint8Array | null = null
+let weightPart: RigPart | null = null
 
 function paintWeights(ed: Editor, p: PointerInfo): void {
   const rig = ed.sprite.rig
-  if (!rig.weights || !rig.rest) return
+  // La ponderation porte sur le calque actif : chaque morceau a ses poids.
+  const part = activePart(ed)
+  if (!part) return
   const index = rig.bones.findIndex((b) => b.id === rigState.selected)
   if (index < 0) return
   const value = p.alt || p.button === 2 ? 255 : index
   const offsets = brushOffsets(rigState.weightBrush, 'circle')
-  const w = rig.rest.width, h = rig.rest.height
+  const w = part.rest.width, h = part.rest.height
   for (let i = 0; i < offsets.length; i += 2) {
     const x = p.px + offsets[i], y = p.py + offsets[i + 1]
     if (x < 0 || y < 0 || x >= w || y >= h) continue
     const at = y * w + x
     // Seuls les pixels dessines portent une influence.
-    if (rig.rest.data[at * 4 + 3] === 0) continue
-    rig.weights[at] = value
+    if (part.rest.data[at * 4 + 3] === 0) continue
+    part.weights[at] = value
   }
   refreshPose(ed)
   ed.events.emit('settings', undefined)
@@ -482,10 +535,11 @@ export const rigWeightTool: Tool = {
 
   down(ed, p) {
     syncRestFromCanvas(ed)
-    const rig = ed.sprite.rig
-    if (!rig.weights) { ed.toast('Liez d\'abord les pixels au squelette', 'error'); return }
+    const part = activePart(ed)
+    if (!part) { ed.toast('Liez d\'abord ce calque au squelette', 'error'); return }
     if (rigState.selected === null) { ed.toast('Choisissez un os a ponderer', 'error'); return }
-    weightBefore = new Uint8Array(rig.weights)
+    weightBefore = new Uint8Array(part.weights)
+    weightPart = part
     paintWeights(ed, p)
   },
 
@@ -493,24 +547,25 @@ export const rigWeightTool: Tool = {
 
   up(ed) {
     const before = weightBefore
+    const part = weightPart
     weightBefore = null
-    const rig = ed.sprite.rig
-    if (!before || !rig.weights) return
-    const after = new Uint8Array(rig.weights)
+    weightPart = null
+    if (!before || !part) return
+    const after = new Uint8Array(part.weights)
     let same = true
     for (let i = 0; i < before.length; i++) if (before[i] !== after[i]) { same = false; break }
     if (same) return
     ed.pushCommand({
       label: 'Ponderation',
-      undo: () => { rig.weights = new Uint8Array(before); refreshPose(ed) },
-      redo: () => { rig.weights = new Uint8Array(after); refreshPose(ed) },
+      undo: () => { part.weights.set(before); refreshPose(ed) },
+      redo: () => { part.weights.set(after); refreshPose(ed) },
     })
   },
 
   cancel(ed) {
-    const rig = ed.sprite.rig
-    if (weightBefore && rig.weights) { rig.weights = new Uint8Array(weightBefore); refreshPose(ed) }
+    if (weightBefore && weightPart) { weightPart.weights.set(weightBefore); refreshPose(ed) }
     weightBefore = null
+    weightPart = null
   },
 
   overlay(ed, o, p) {

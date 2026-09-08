@@ -248,7 +248,7 @@ const guided = await page.evaluate(async () => {
 
   app.rigPanel.bind()
   out.avance.push(await jusqua(5))
-  out.rigLie = !!ed.sprite.rig.rest
+  out.rigLie = ed.sprite.rig.parts.length > 0
 
   suivant()
   await jusqua(6)
@@ -283,10 +283,10 @@ const perso = await page.evaluate(async () => {
   const rest = sprite.layers[0].cels[0].bitmap
   const rig = sprite.rig
   applyTemplate(rig, RIG_TEMPLATES.find((t) => t.id === 'humanoid-front'), rest, sprite)
-  rigApi.autoBind(rig, rest)
+  const part = rigApi.autoBind(rig, sprite.layers[0].id, rest)
 
   const index = (name) => rig.bones.findIndex((b) => b.name === name)
-  const at = (x, y) => rig.weights[y * rest.width + x]
+  const at = (x, y) => part.weights[y * rest.width + x]
   // Chaque membre doit revenir a son propre os, pas a celui du voisin.
   const out = {
     brasG: at(13, 27) === index('bras G'),
@@ -300,7 +300,7 @@ const perso = await page.evaluate(async () => {
   // Aucun pixel opaque ne doit rester sans os.
   out.tousLies = true
   for (let i = 0; i < rest.u32.length; i++) {
-    if (getA(rest.u32[i]) !== 0 && rig.weights[i] === 255) { out.tousLies = false; break }
+    if (getA(rest.u32[i]) !== 0 && part.weights[i] === 255) { out.tousLies = false; break }
   }
 
   // Une pose franche ne doit pas ouvrir de fente dans la matiere.
@@ -308,7 +308,7 @@ const perso = await page.evaluate(async () => {
   by('bras G').angle = -1.5
   by('bras D').angle = 1.5
   by('jambe G').angle = 0.4
-  const posed = rigApi.deform(rig, { seamRadius: 1, seamNeighbours: 4, fillPasses: 1 })
+  const posed = rigApi.deform(rig, part, { seamRadius: 1, seamNeighbours: 4, fillPasses: 1 })
   let fentes = 0
   for (let y = 1; y < posed.height - 1; y++) {
     for (let x = 1; x < posed.width - 1; x++) {
@@ -357,16 +357,17 @@ const modes = await page.evaluate(async () => {
   const arm = rig.bones.findIndex((b) => b.name === 'bras G')
   rigState.selected = rig.bones[arm].id
   app.setTool('rig-weight')
-  const w = rig.rest.width
+  const part = rig.parts[0]
+  const w = part.rest.width
   const cible = 24 * w + 22
-  const avant = rig.weights[cible]
+  const avant = part.weights[cible]
   const tool = (await import('/src/tools/index.ts')).TOOLS['rig-weight']
   const at = (x, y) => ({ x, y, px: x, py: y, startPx: x, startPy: y, prevPx: x, prevPy: y, shift: false, alt: false, ctrl: false, button: 0, pressure: 1 })
   tool.down(ed, at(22, 24))
   tool.up(ed, at(22, 24))
-  const apres = rig.weights[cible]
+  const apres = part.weights[cible]
   ed.undo()
-  const annule = rig.weights[cible]
+  const annule = part.weights[cible]
 
   app.setMode('draw')
   return {
@@ -507,9 +508,10 @@ const allerRetour = await page.evaluate(async () => {
   refreshPose(ed)
 
   // Un pixel qui appartient au bras, dans la pose.
-  const n = rig.rest.width * rig.rest.height
+  const part = rig.parts[0]
+  const n = part.rest.width * part.rest.height
   const owners = new Uint8Array(n).fill(255)
-  deform(rig, { ...seamSettings(rigState.seam), owners })
+  deform(rig, part, { ...seamSettings(rigState.seam), owners })
   const indexBras = rig.bones.indexOf(bras)
   const cible = owners.indexOf(indexBras)
   if (cible < 0) return { erreur: 'aucun pixel du bras' }
@@ -523,10 +525,10 @@ const allerRetour = await page.evaluate(async () => {
   app.setMode('rig')
   const estRouge = (c) => getA(c) > 200 && getR(c) > 200 && getG(c) < 60 && getB(c) < 60
   let dansRepos = 0, osPorteur = null
-  for (let i = 0; i < rig.rest.u32.length; i++) {
-    if (!estRouge(rig.rest.u32[i])) continue
+  for (let i = 0; i < part.rest.u32.length; i++) {
+    if (!estRouge(part.rest.u32[i])) continue
     dansRepos++
-    osPorteur = rig.bones[rig.weights[i]]?.name ?? 'libre'
+    osPorteur = rig.bones[part.weights[i]]?.name ?? 'libre'
   }
 
   // Une nouvelle pose doit emmener la retouche avec l'os, sans reliaison.
@@ -686,6 +688,176 @@ check('un bouton applique la duree a toutes les frames',
   cadence.bouton && cadence.toutes, cadence.bouton ? 'appliquee' : 'bouton absent')
 check('l\'application a toutes les frames est annulable',
   cadence.apres < cadence.total, `${cadence.apres}/${cadence.total} encore a 120 ms`)
+
+/* --- un squelette pilote plusieurs calques --- */
+const multi = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { Layer } = await import('/src/core/document.ts')
+  const { fromHex, getA } = await import('/src/core/color.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { refreshPose } = await import('/src/tools/index.ts')
+  const app = window.pixelforge, ed = app.ed
+
+  ed.loadSprite(demoCharacter())
+  const arme = new Layer('Epee', ed.frameCount)
+  arme.cels[0] = ed.sprite.makeCel()
+  for (let y = 14; y <= 30; y++) arme.cels[0].bitmap.set(8, y, fromHex('#c0c8d8'))
+  ed.sprite.layers.push(arme)
+  ed.events.emit('reload', undefined)
+
+  app.setMode('rig')
+  ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.sprite.layers[0].cels[0].bitmap, ed.sprite))
+  ed.setActiveLayer(0); app.rigPanel.bind()
+  ed.setActiveLayer(1); app.rigPanel.bind()
+  await new Promise((r) => setTimeout(r, 150))
+
+  const premier = (i) => {
+    const bm = ed.sprite.cel(i, 0).bitmap
+    for (let k = 0; k < bm.u32.length; k++) if (getA(bm.u32[k])) return `${k % bm.width},${(k / bm.width) | 0}`
+    return null
+  }
+  const avant = { corps: premier(0), epee: premier(1) }
+  const bras = ed.sprite.rig.bones.find((b) => b.role === 'armL')
+  bras.angle = -1
+  refreshPose(ed)
+  const apres = { corps: premier(0), epee: premier(1) }
+  return { calques: ed.sprite.rig.parts.length, avant, apres }
+})
+check('un squelette peut piloter plusieurs calques', multi.calques === 2, `${multi.calques} calques relies`)
+check('un calque annexe suit l\'os qui le porte',
+  multi.avant.epee !== multi.apres.epee, `epee ${multi.avant.epee} -> ${multi.apres.epee}`)
+
+/* --- les modeles marquent le role de chaque os --- */
+const roles = await page.evaluate(async () => {
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { emptyRig } = await import('/src/smart/rig.ts')
+  const { ANIM_CLIPS, clipFits } = await import('/src/smart/anim-clips.ts')
+  const ed = window.pixelforge.ed
+  const out = {}
+  for (const t of RIG_TEMPLATES) {
+    const rig = emptyRig()
+    applyTemplate(rig, t, ed.sprite.layers[0].cels[0].bitmap, ed.sprite)
+    out[t.id] = {
+      sansRole: rig.bones.filter((b) => b.role === 'none').length,
+      cycles: ANIM_CLIPS.filter((c) => clipFits(c, rig)).map((c) => c.id),
+    }
+  }
+  return out
+})
+check('chaque modele marque le role de ses os',
+  Object.values(roles).every((r) => r.sansRole === 0),
+  Object.entries(roles).map(([k, v]) => `${k}:${v.sansRole}`).join(' '))
+check('un humanoide sait marcher et courir',
+  roles['humanoid-front'].cycles.includes('walk') && roles['humanoid-front'].cycles.includes('run'))
+check('seul un oiseau se voit proposer le vol',
+  roles['bird'].cycles.includes('fly') && !roles['humanoid-front'].cycles.includes('fly'))
+
+/* --- les cycles produisent de vraies poses distinctes --- */
+const cycles = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { ANIM_CLIPS, clipFits } = await import('/src/smart/anim-clips.ts')
+  const { getA } = await import('/src/core/color.ts')
+  const app = window.pixelforge, ed = app.ed
+  const out = {}
+  for (const clip of ANIM_CLIPS) {
+    ed.loadSprite(demoCharacter())
+    app.setMode('rig')
+    ed.run('m', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
+    app.rigPanel.bind()
+    if (!clipFits(clip, ed.sprite.rig)) { out[clip.id] = 'inapplicable'; continue }
+    const repos = ed.peekCel().bitmap.clone()
+    const plein = (b) => { let n = 0; for (const c of b.u32) if (getA(c)) n++; return n }
+    app.rigPanel.generateClip(clip)
+    await new Promise((r) => setTimeout(r, 60))
+    const frames = []
+    for (let f = 0; f < ed.frameCount; f++) frames.push(ed.sprite.cel(0, f).bitmap)
+    const sig = (b) => { let h = 0; for (const c of b.u32) h = (h * 31 + c) | 0; return h }
+    out[clip.id] = {
+      frames: ed.frameCount,
+      distinctes: new Set(frames.map(sig)).size,
+      tag: ed.sprite.tags.length === 1 && ed.sprite.tags[0].to === ed.frameCount - 1,
+      duree: ed.sprite.frameDurations.every((d) => d === clip.ms),
+      // La deformation ne doit ni evaporer ni gonfler le personnage.
+      conservation: Math.round((frames.reduce((a, b) => a + plein(b), 0) / frames.length) / plein(repos) * 100),
+    }
+  }
+  return out
+})
+const jouables = Object.entries(cycles).filter(([, v]) => v !== 'inapplicable')
+check('chaque frame d\'un cycle est une pose differente',
+  jouables.every(([, v]) => v.distinctes === v.frames),
+  jouables.map(([k, v]) => `${k}:${v.distinctes}/${v.frames}`).join(' '))
+check('chaque cycle pose un tag sur ses frames', jouables.every(([, v]) => v.tag))
+check('chaque cycle applique sa cadence', jouables.every(([, v]) => v.duree))
+check('les cycles ne deforment pas la silhouette',
+  jouables.every(([, v]) => v.conservation >= 85 && v.conservation <= 115),
+  jouables.map(([k, v]) => `${k}:${v.conservation}%`).join(' '))
+
+/* --- demi-tour pseudo-3D --- */
+const tour = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const app = window.pixelforge, ed = app.ed
+  ed.loadSprite(demoCharacter())
+  app.setMode('rig')
+  ed.run('m', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
+  app.rigPanel.bind()
+  app.rigPanel.generateTurn(8)
+  await new Promise((r) => setTimeout(r, 80))
+  const largeurs = []
+  for (let f = 0; f < ed.frameCount; f++) largeurs.push(ed.sprite.cel(0, f).bitmap.trimBounds().w)
+  return {
+    frames: ed.frameCount,
+    largeurs,
+    // Le profil doit garder du corps : sans plancher il se reduirait a un trait.
+    profilTient: Math.min(...largeurs) >= largeurs[0] * 0.3,
+    seRetrecit: largeurs[2] < largeurs[0],
+    turnRelache: ed.sprite.rig.turn === null,
+    tag: ed.sprite.tags.some((t) => t.name === 'tour'),
+  }
+})
+check('le demi-tour produit un tour complet en frames', tour.frames === 8 && tour.tag, tour.largeurs.join(','))
+check('le personnage se retrecit en tournant', tour.seRetrecit)
+check('le profil garde du corps au lieu d\'un trait', tour.profilTient,
+  `${Math.min(...tour.largeurs)} px contre ${tour.largeurs[0]} de face`)
+check('le demi-tour ne reste pas accroche au squelette', tour.turnRelache)
+
+/* --- formes de pinceau et tramage --- */
+const pinceau = await page.evaluate(async () => {
+  const { brushOffsets } = await import('/src/tools/algorithms.ts')
+  const compte = (t, f) => brushOffsets(t, f).length / 2
+  return {
+    // A la taille 2, une ligne doit rester une ligne, pas devenir un carre.
+    ligne2: compte(2, 'h-line'),
+    carre2: compte(2, 'square'),
+    ligne5: compte(5, 'h-line'),
+    rond5: compte(5, 'circle'),
+    carre5: compte(5, 'square'),
+    losange5: compte(5, 'diamond'),
+  }
+})
+check('une brosse en ligne reste fine aux tailles paires',
+  pinceau.ligne2 === 2 && pinceau.carre2 === 4, `ligne ${pinceau.ligne2} px, carre ${pinceau.carre2} px`)
+check('les cinq formes de pinceau different vraiment',
+  new Set([pinceau.ligne5, pinceau.rond5, pinceau.carre5, pinceau.losange5]).size === 4,
+  `ligne ${pinceau.ligne5}, rond ${pinceau.rond5}, carre ${pinceau.carre5}, losange ${pinceau.losange5}`)
+
+const apercus = await page.evaluate(async () => {
+  const app = window.pixelforge, ed = app.ed
+  app.setMode('draw')
+  app.setTool('pencil')
+  ed.updateSettings({ brushSize: 5, brushShape: 'diamond', ditherPattern: 'bayer4', ditherRatio: 0.5 })
+  await new Promise((r) => setTimeout(r, 200))
+  const barre = document.getElementById('optionsbar')
+  return {
+    apercus: barre.querySelectorAll('canvas.brush-preview').length,
+    note: (barre.textContent ?? '').includes('Secondaire transparente'),
+  }
+})
+check('la barre d\'options montre l\'empreinte du pinceau et le tramage',
+  apercus.apercus === 2, `${apercus.apercus} apercus`)
+check('un tramage sans couleur secondaire est signale', apercus.note)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 

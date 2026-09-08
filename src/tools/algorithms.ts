@@ -128,8 +128,11 @@ export function brushOffsets(size: number, shape: BrushShape): Int16Array {
       switch (shape) {
         case 'square': inside = true; break
         case 'diamond': inside = Math.abs(dx) + Math.abs(dy) <= rad; break
-        case 'h-line': inside = Math.abs(dy) < 0.6; break
-        case 'v-line': inside = Math.abs(dx) < 0.6; break
+        // Une taille paire n'a pas de rangee centrale : on prend celle dont
+        // le decalage est nul, sinon les deux passaient et la ligne devenait
+        // un carre — les cinq formes se ressemblaient toutes a la taille 2.
+        case 'h-line': inside = y - intOff === 0; break
+        case 'v-line': inside = x - intOff === 0; break
         default: inside = dx * dx + dy * dy <= thr
       }
       if (inside) out.push(x - intOff, y - intOff)

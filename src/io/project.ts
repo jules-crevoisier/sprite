@@ -19,12 +19,21 @@ interface LayerJson {
   blendMode: BlendMode
   cels: (CelJson | null)[]
 }
-interface RigJson {
-  bones: Bone[]
+interface RigPartJson {
+  /** Rang du calque relie dans la pile. */
+  layer: number
   /** Dessin de reference encode en PNG. */
   rest: string | null
   /** Table des poids, un octet par pixel, encodee en base64. */
   weights: string | null
+}
+
+interface RigJson {
+  bones: Bone[]
+  parts?: RigPartJson[]
+  /** Ancien format : une seule liaison, sur le premier calque. */
+  rest?: string | null
+  weights?: string | null
 }
 
 interface ProjectJson {
@@ -59,8 +68,13 @@ export function serializeSprite(sprite: Sprite): string {
     slices: sprite.slices.map((s) => ({ ...s, color: toHex(s.color) })),
     rig: {
       bones: sprite.rig.bones.map((b) => ({ ...b })),
-      rest: sprite.rig.rest ? sprite.rig.rest.toCanvas().toDataURL('image/png') : null,
-      weights: sprite.rig.weights ? bytesToBase64(sprite.rig.weights) : null,
+      // Un morceau par calque relie : le calque est repere par son rang,
+      // seul identifiant stable une fois le fichier relu.
+      parts: sprite.rig.parts.map((p) => ({
+        layer: sprite.layers.findIndex((l) => l.id === p.layer),
+        rest: p.rest.toCanvas().toDataURL('image/png'),
+        weights: bytesToBase64(p.weights),
+      })).filter((p) => p.layer >= 0),
     },
     layers: sprite.layers.map((l) => ({
       name: l.name,
@@ -127,14 +141,29 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
 
   sprite.rig = emptyRig()
   if (data.rig?.bones?.length) {
-    sprite.rig.bones = data.rig.bones.map((b) => ({ ...b }))
+    sprite.rig.bones = data.rig.bones.map((b) => ({
+      ...b,
+      // Les projets d'avant les roles et la profondeur n'en portent pas.
+      role: b.role ?? 'none',
+      depth: b.depth ?? 0,
+    }))
     seedBoneIds(Math.max(...sprite.rig.bones.map((b) => b.id)))
-    if (data.rig.rest) sprite.rig.rest = await decodePng(data.rig.rest, data.width, data.height)
-    if (data.rig.weights) {
-      const bytes = base64ToBytes(data.rig.weights)
+
+    // Format actuel : une liaison par calque.
+    const brut = data.rig.parts
+      // Format precedent : une seule liaison, celle du premier calque.
+      ?? (data.rig.rest ? [{ layer: 0, rest: data.rig.rest, weights: data.rig.weights }] : [])
+    for (const part of brut) {
+      const layer = sprite.layers[part.layer]
+      if (!layer || !part.rest || !part.weights) continue
+      const bytes = base64ToBytes(part.weights)
       // Une toile redimensionnee entre deux sessions invalide la liaison.
-      sprite.rig.weights = bytes.length === data.width * data.height ? bytes : null
-      if (!sprite.rig.weights) sprite.rig.rest = null
+      if (bytes.length !== data.width * data.height) continue
+      sprite.rig.parts.push({
+        layer: layer.id,
+        rest: await decodePng(part.rest, data.width, data.height),
+        weights: bytes,
+      })
     }
   }
 

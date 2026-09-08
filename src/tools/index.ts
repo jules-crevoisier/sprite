@@ -13,7 +13,10 @@ import { rigBoneTool, rigPoseTool, rigWeightTool } from './rig-tool'
 
 export * from './types'
 export { beginMove, applyMove, endMove } from './select-tools'
-export { rigState, refreshPose, seamSettings, bonePoints, syncRestFromCanvas, invalidateBake } from './rig-tool'
+export {
+  rigState, refreshPose, seamSettings, bonePoints, syncRestFromCanvas,
+  invalidateBake, activePart, writePoseToFrame,
+} from './rig-tool'
 
 /** Outils du mode dessin, dans l'ordre de la barre d'outils. */
 export const DRAW_TOOLS: Tool[] = [

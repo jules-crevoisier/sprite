@@ -5,7 +5,7 @@ import { compositeFrame } from './composite'
 import { TOOLS, toolById, type PointerInfo, type Tool } from '../tools'
 import { eyedropperTool } from '../tools/draw-tools'
 import { brushOffsets } from '../tools/algorithms'
-import { deform, boneColor } from '../smart/rig'
+import { deform, boneColor, partFor } from '../smart/rig'
 import { rigState, seamSettings } from '../tools'
 import { fromHex, getR, getG, getB, toCss } from '../core/color'
 
@@ -334,11 +334,14 @@ export class Viewport {
   private drawWeights(ctx: CanvasRenderingContext2D, ox: number, oy: number, dw: number, dh: number): void {
     const ed = this.ed
     const rig = ed.sprite.rig
-    if (!rig.rest || !rig.weights || !rig.bones.length) return
-    const w = rig.rest.width, h = rig.rest.height
+    // La carte montre l'influence sur le calque en cours d'edition.
+    const layer = ed.sprite.layers[ed.activeLayer]
+    const part = layer ? partFor(rig, layer.id) : null
+    if (!part || !rig.bones.length) return
+    const w = part.rest.width, h = part.rest.height
     if (!this.owners || this.owners.length !== w * h) this.owners = new Uint8Array(w * h)
     this.owners.fill(255)
-    deform(rig, { ...seamSettings(rigState.seam), owners: this.owners })
+    deform(rig, part, { ...seamSettings(rigState.seam), owners: this.owners })
 
     this.weightCanvas.width = w
     this.weightCanvas.height = h

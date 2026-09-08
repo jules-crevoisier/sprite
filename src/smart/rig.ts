@@ -50,11 +50,28 @@ function poseMatrix(cx: number, cy: number, angle: number, scale: number, tx: nu
 /* Modele                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Fonction d'un os dans le corps. C'est ce qui permet aux animations
+ * preenregistrees de s'appliquer a n'importe quel squelette : un cycle de
+ * marche fait plier « la jambe gauche », quel que soit son nom.
+ */
+export type BoneRole =
+  | 'torso' | 'head' | 'armL' | 'armR' | 'legL' | 'legR'
+  | 'tail' | 'wingL' | 'wingR' | 'none'
+
 export interface Bone {
   id: number
   name: string
   /** Identifiant de l'os parent, ou null pour une racine. */
   parent: number | null
+  /** Fonction dans le corps, pour les animations preenregistrees. */
+  role: BoneRole
+  /**
+   * Position devant / derriere le plan du dessin, en pixels. Sert au demi-tour
+   * pseudo-3D : un bras place devant passe de l'autre cote quand le
+   * personnage pivote. 0 = dans le plan.
+   */
+  depth: number
   /** Extremites de l'os dans la pose de repos, en pixels sprite. */
   x: number
   y: number
@@ -69,15 +86,85 @@ export interface Bone {
   scale: number
 }
 
-export interface Rig {
-  bones: Bone[]
+/**
+ * Un calque relie au squelette. Un personnage tient rarement sur un seul
+ * calque : le corps, l'arme et la cape se suivent, chacun avec sa propre
+ * liaison mais commande par les memes os.
+ */
+export interface RigPart {
+  /** Identifiant du calque porte par ce morceau. */
+  layer: number
   /** Dessin de reference sur lequel les pixels ont ete lies. */
-  rest: Bitmap | null
+  rest: Bitmap
   /** Pour chaque pixel du repos, l'index de l'os qui le porte ; 255 = libre. */
-  weights: Uint8Array | null
+  weights: Uint8Array
 }
 
-export const emptyRig = (): Rig => ({ bones: [], rest: null, weights: null })
+/**
+ * Demi-tour pseudo-3D. Le dessin n'a pas de profondeur reelle : on simule la
+ * rotation autour d'un axe vertical en ecrasant horizontalement le sprite et
+ * en faisant passer les membres d'un cote a l'autre selon leur profondeur.
+ */
+export interface Turn {
+  /** Angle de rotation autour de l'axe vertical, en radians. */
+  angle: number
+  /** Abscisse de l'axe de rotation, en pixels sprite. */
+  axis: number
+}
+
+export interface Rig {
+  bones: Bone[]
+  /** Calques relies, dans l'ordre ou ils ont ete lies. */
+  parts: RigPart[]
+  /** Demi-tour en cours, ou null. Etat de travail : jamais enregistre. */
+  turn: Turn | null
+}
+
+export const emptyRig = (): Rig => ({ bones: [], parts: [], turn: null })
+
+/**
+ * Ecrasement horizontal minimal. Un corps vu de profil n'est pas un trait :
+ * il garde a peu pres la moitie de sa largeur de face. Sans ce plancher, un
+ * quart de tour reduirait le personnage a une colonne d'un pixel, ce que le
+ * cosinus seul donnerait. Le resultat reste une base a retoucher : le dessin
+ * n'a pas de vrai dos.
+ */
+const TURN_MIN_WIDTH = 0.45
+
+/** Facteur d'ecrasement horizontal pour un angle donne. */
+export const turnSquash = (angle: number): number =>
+  Math.max(TURN_MIN_WIDTH, Math.abs(Math.cos(angle))) * (Math.cos(angle) < 0 ? -1 : 1)
+
+/**
+ * Profondeur d'un os apres rotation : c'est elle qui decide qui passe
+ * devant. Un bras place devant le corps se retrouve derriere quand le
+ * personnage pivote de l'autre cote.
+ */
+export function turnedDepth(bone: Bone, turn: Turn): number {
+  const u = (bone.x + bone.ex) / 2 - turn.axis
+  return -u * Math.sin(turn.angle) + bone.depth * Math.cos(turn.angle)
+}
+
+/**
+ * Matrice du demi-tour pour un os : ecrasement autour de l'axe, plus le
+ * decalage horizontal du a sa profondeur. C'est ce decalage qui fait tourner
+ * le personnage plutot que simplement l'aplatir.
+ */
+function turnMatrix(bone: Bone, turn: Turn): Mat {
+  const k = turnSquash(turn.angle)
+  const dx = bone.depth * Math.sin(turn.angle)
+  return [k, 0, 0, 1, turn.axis * (1 - k) + dx, 0]
+}
+
+/** Liaison d'un calque donne, ou null s'il n'est pas relie. */
+export const partFor = (rig: Rig, layer: number): RigPart | null =>
+  rig.parts.find((p) => p.layer === layer) ?? null
+
+/** Vrai des qu'au moins un calque est relie. */
+export const isBound = (rig: Rig): boolean => rig.parts.length > 0
+
+/** Oublie toutes les liaisons : les poids designent les os par index. */
+export const unbind = (rig: Rig): void => { rig.parts = [] }
 
 /**
  * Couleurs d'identification des os. Elles servent a montrer sur la toile a
@@ -105,6 +192,8 @@ export function createBone(
     id: newBoneId(),
     name: name ?? `os ${rig.bones.length + 1}`,
     parent,
+    role: 'none',
+    depth: 0,
     x, y, ex, ey,
     z: rig.bones.length,
     angle: 0, tx: 0, ty: 0, scale: 1,
@@ -144,21 +233,30 @@ export function canParent(rig: Rig, childId: number, parentId: number | null): b
  */
 export function worldTransforms(rig: Rig): Map<number, Mat> {
   const byId = new Map(rig.bones.map((b) => [b.id, b]))
-  const cache = new Map<number, Mat>()
+  const chaine = new Map<number, Mat>()
 
   const resolve = (bone: Bone, depth = 0): Mat => {
-    const hit = cache.get(bone.id)
+    const hit = chaine.get(bone.id)
     if (hit) return hit
     const local = poseMatrix(bone.x, bone.y, bone.angle, bone.scale, bone.tx, bone.ty)
     const parent = bone.parent !== null ? byId.get(bone.parent) : undefined
     // La profondeur est bornee : une hierarchie corrompue ne doit pas boucler.
     const world = parent && depth < 32 ? mul(resolve(parent, depth + 1), local) : local
-    cache.set(bone.id, world)
+    chaine.set(bone.id, world)
     return world
   }
 
   for (const bone of rig.bones) resolve(bone)
-  return cache
+  if (!rig.turn || Math.abs(rig.turn.angle) < 1e-4) return chaine
+
+  // Le demi-tour s'applique une fois la hierarchie resolue : chaque os y
+  // ajoute sa propre profondeur, ce qu'un enchainement de parents ne saurait
+  // pas faire sans dupliquer l'ecrasement a chaque etage.
+  const out = new Map<number, Mat>()
+  for (const bone of rig.bones) {
+    out.set(bone.id, mul(turnMatrix(bone, rig.turn), chaine.get(bone.id) ?? IDENTITY))
+  }
+  return out
 }
 
 /* ------------------------------------------------------------------ */
@@ -181,7 +279,7 @@ function distanceToBone(bone: Bone, px: number, py: number): number {
  * L'affectation est exclusive : en pixel art, un melange de poids brouille
  * les contours au lieu de les preserver.
  */
-export function autoBind(rig: Rig, rest: Bitmap, maxDistance = Infinity): void {
+export function autoBind(rig: Rig, layer: number, rest: Bitmap, maxDistance = Infinity): RigPart {
   const weights = new Uint8Array(rest.width * rest.height).fill(255)
   if (rig.bones.length) {
     for (let y = 0; y < rest.height; y++) {
@@ -197,14 +295,16 @@ export function autoBind(rig: Rig, rest: Bitmap, maxDistance = Infinity): void {
       }
     }
   }
-  rig.rest = rest.clone()
-  rig.weights = weights
+  const part: RigPart = { layer, rest: rest.clone(), weights }
+  const at = rig.parts.findIndex((p) => p.layer === layer)
+  if (at >= 0) rig.parts[at] = part
+  else rig.parts.push(part)
+  return part
 }
 
 /** Force l'affectation des pixels d'un masque a un os donne. */
-export function assignMask(rig: Rig, mask: Uint8Array, boneIndex: number): void {
-  if (!rig.weights) return
-  for (let i = 0; i < rig.weights.length; i++) if (mask[i]) rig.weights[i] = boneIndex
+export function assignMask(part: RigPart, mask: Uint8Array, boneIndex: number): void {
+  for (let i = 0; i < part.weights.length; i++) if (mask[i]) part.weights[i] = boneIndex
 }
 
 /* ------------------------------------------------------------------ */
@@ -246,10 +346,10 @@ export interface DeformOptions {
  * point source, puis par un comblement majoritaire : c'est ce qui regenere
  * les pixels manquants quand un bras s'ecarte du corps.
  */
-export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
-  const rest = rig.rest
-  const weights = rig.weights
-  if (!rest || !weights || !rig.bones.length) return null
+export function deform(rig: Rig, part: RigPart | null, options: DeformOptions = {}): Bitmap | null {
+  if (!part || !rig.bones.length) return null
+  const rest = part.rest
+  const weights = part.weights
 
   const seamRadius = options.seamRadius ?? 1
   const fillPasses = options.fillPasses ?? 1
@@ -261,10 +361,14 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
   const out = new Bitmap(w, h)
 
   const world = worldTransforms(rig)
-  // Les os de z eleve sont testes en premier : ils passent devant.
+  // Les os de z eleve sont testes en premier : ils passent devant. Pendant un
+  // demi-tour, c'est la profondeur tournee qui commande : un bras passe
+  // derriere le corps des que le personnage s'est assez retourne.
+  const turn = rig.turn
+  const rang = (b: Bone): number => (turn ? turnedDepth(b, turn) * 100 + b.z * 0.01 : b.z)
   const order = rig.bones
     .map((bone, index) => ({ bone, index }))
-    .sort((a, b) => b.bone.z - a.bone.z)
+    .sort((a, b) => rang(b.bone) - rang(a.bone))
   const inverses = new Map<number, Mat>()
   for (const { bone } of order) inverses.set(bone.id, invert(world.get(bone.id) ?? IDENTITY))
 
@@ -425,15 +529,15 @@ export interface BakeResult {
  */
 export function bakePose(
   rig: Rig,
+  part: RigPart,
   posed: Bitmap,
   sources: Int32Array,
   owners: Uint8Array,
   edited: Bitmap,
 ): BakeResult {
-  const rest = rig.rest
-  const weights = rig.weights
+  const rest = part.rest
+  const weights = part.weights
   const out: BakeResult = { changed: 0, adopted: 0 }
-  if (!rest || !weights) return out
   if (edited.width !== rest.width || edited.height !== rest.height) return out
 
   const w = rest.width, h = rest.height

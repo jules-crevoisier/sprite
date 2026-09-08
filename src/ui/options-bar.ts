@@ -1,9 +1,63 @@
 import type { Editor } from '../core/editor'
-import { DITHER_PATTERNS, type BrushShape } from '../tools/algorithms'
+import { getA, toCss } from '../core/color'
+import { DITHER_PATTERNS, brushOffsets, dither, type BrushShape } from '../tools/algorithms'
 import type { PaintMode } from '../tools/painter'
 import { rigState, refreshPose, toolById } from '../tools'
 import { el, clear, slider, checkbox, select, segmented } from './dom'
 import { icon } from './icons'
+
+/**
+ * Dessine l'empreinte exacte du pinceau. Sans elle, changer de forme en
+ * dessous de trois pixels ne montre rien : toutes les formes donnent alors
+ * le meme carre, et le reglage passe pour inutile.
+ */
+function brushPreview(size: number, shape: BrushShape): HTMLElement {
+  const offsets = brushOffsets(size, shape)
+  let min = 0, max = 0
+  for (let i = 0; i < offsets.length; i++) {
+    min = Math.min(min, offsets[i])
+    max = Math.max(max, offsets[i])
+  }
+  const span = Math.max(1, max - min + 1)
+  const cell = Math.max(1, Math.min(3, Math.floor(22 / span)))
+  const canvas = el('canvas', {
+    width: span * cell, height: span * cell,
+    class: 'brush-preview',
+    title: `${offsets.length / 2} pixels poses par pointe`,
+  })
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = '#9aa3ba'
+    for (let i = 0; i < offsets.length; i += 2) {
+      ctx.fillRect((offsets[i] - min) * cell, (offsets[i + 1] - min) * cell, cell, cell)
+    }
+  }
+  return el('div', { class: 'opt' }, canvas)
+}
+
+/** Apercu du motif de tramage, avec les deux couleurs reellement posees. */
+function ditherPreview(ed: Editor): HTMLElement {
+  const s = ed.settings
+  const cell = 3, span = 8
+  const canvas = el('canvas', {
+    width: span * cell, height: span * cell,
+    class: 'brush-preview',
+    title: 'Melange des couleurs primaire et secondaire',
+  })
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    for (let y = 0; y < span; y++) {
+      for (let x = 0; x < span; x++) {
+        const on = dither(s.ditherPattern, x, y, s.ditherRatio)
+        const color = on ? ed.primary : ed.secondary
+        if (getA(color) === 0) continue
+        ctx.fillStyle = toCss(color)
+        ctx.fillRect(x * cell, y * cell, cell, cell)
+      }
+    }
+  }
+  return el('div', { class: 'opt' }, canvas)
+}
 
 const SHAPES: { value: BrushShape; icon: string; title: string }[] = [
   { value: 'circle', icon: '<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="currentColor"/></svg>', title: 'Ronde' },
@@ -68,10 +122,16 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
   if (opts.has('brush')) {
     add(el('div', { class: 'opt' },
       el('label', null, 'Taille'),
-      slider(1, 64, s.brushSize, 1, (v) => { ed.updateSettings({ brushSize: v }) }, (v) => `${v}px`),
+      slider(1, 64, s.brushSize, 1, (v) => { ed.updateSettings({ brushSize: v }); refresh() }, (v) => `${v}px`),
     ))
     add(segmented(SHAPES.map((sh) => ({ value: sh.value, icon: sh.icon, title: sh.title })), s.brushShape,
       (v) => { ed.updateSettings({ brushShape: v }); refresh() }))
+    // L'empreinte reelle, dessinee : c'est la seule facon de voir ce que la
+    // forme change, et pourquoi elle ne change rien en dessous de 3 pixels.
+    add(brushPreview(s.brushSize, s.brushShape))
+    if (s.brushSize < 3) {
+      add(el('div', { class: 'opt-note' }, 'La forme agit a partir de 3 px'))
+    }
   }
 
   if (opts.has('opacity')) {
@@ -102,8 +162,14 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
         (v) => { ed.updateSettings({ ditherPattern: v }); refresh() }),
     ))
     if (s.ditherPattern !== 'none') {
-      add(slider(0, 1, s.ditherRatio, 0.05, (v) => ed.updateSettings({ ditherRatio: v }),
+      add(slider(0, 1, s.ditherRatio, 0.05, (v) => { ed.updateSettings({ ditherRatio: v }); refresh() },
         (v) => `${Math.round(v * 100)}%`))
+      add(ditherPreview(ed))
+      // Le tramage melange deux couleurs. Avec une secondaire transparente il
+      // ne fait que trouer le trait, ce qui se lit comme un bug.
+      if (getA(ed.secondary) === 0) {
+        add(el('div', { class: 'opt-note warn' }, 'Secondaire transparente : le tramage troue le trait'))
+      }
     }
   }
 

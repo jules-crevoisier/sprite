@@ -1,4 +1,5 @@
 import { fromHex } from '../core/color'
+import { isBound } from '../smart/rig'
 
 import { demoBall, demoCharacter, demoGrassBlock } from './demo-content'
 import type { App } from './app'
@@ -115,9 +116,9 @@ export function buildLessons(app: App): Lesson[] {
           enter: () => app.setTool('rig-bone'),
         },
         {
-          text: 'Liez maintenant les pixels : chacun rejoint l\'os le plus proche. C\'est cette liaison qui permettra de deformer le dessin.',
+          text: 'Reliez maintenant le calque du personnage : chaque pixel rejoint l\'os le plus proche. Un projet a plusieurs calques ? Cochez-les tous, ils suivront ensemble.',
           target: q('[data-panel="rig"] button'),
-          done: () => !!ed.sprite.rig.rest,
+          done: () => isBound(ed.sprite.rig),
         },
         {
           text: 'Chaque couleur sur la toile montre l\'os qui porte le pixel : rouge le torse, orange la tete, jaune et vert les bras. C\'est la lecture la plus directe de ce qui va bouger avec quoi.',

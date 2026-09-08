@@ -1,12 +1,15 @@
 import type { Editor } from '../core/editor'
 import {
-  applyPose, autoBind, boneColor, canParent, capturePose, deform, lerpPose,
-  resetPose, type Bone, type Pose,
+  applyPose, autoBind, boneColor, canParent, capturePose, isBound, lerpPose,
+  partFor, resetPose, unbind, type Bone, type BoneRole, type Pose,
 } from '../smart/rig'
 import { RIG_TEMPLATES, applyTemplate } from '../smart/rig-presets'
-import { rigState, refreshPose, seamSettings, syncRestFromCanvas } from '../tools'
+import { ANIM_CLIPS, clipFits, clipPoses, clipTouches, type AnimClip } from '../smart/anim-clips'
+import { rigState, refreshPose, syncRestFromCanvas, writePoseToFrame } from '../tools'
 import { el, clear, iconButton, numberInput, slider } from './dom'
+import { genId } from '../core/document'
 import { icon } from './icons'
+import { fromHex } from '../core/color'
 import { confirmDialog, openMenu, showToast } from './overlay'
 
 /**
@@ -48,8 +51,9 @@ export class RigPanel {
   private signature(): string {
     const rig = this.rig
     return [
-      rig.bones.map((b) => `${b.id}/${b.name}/${b.parent ?? '-'}/${b.z}`).join(','),
-      rig.rest ? 'lie' : 'libre',
+      rig.bones.map((b) => `${b.id}/${b.name}/${b.parent ?? '-'}/${b.z}/${b.role}/${b.depth}`).join(','),
+      rig.parts.map((p) => p.layer).join('+') || 'libre',
+      this.ed.activeLayer,
       // Le rattachement ne s'affiche que sur l'os choisi : la selection
       // change donc bien le HTML de la liste.
       rigState.selected,
@@ -67,7 +71,7 @@ export class RigPanel {
     this.drawn = this.signature()
     clear(this.body)
     const rig = this.rig
-    const bound = !!rig.rest && !!rig.weights
+    const bound = isBound(rig)
 
     if (!rig.bones.length) {
       this.body.append(
@@ -95,19 +99,14 @@ export class RigPanel {
         'Selectionnez un os pour changer son rattachement.'))
     }
 
-    // --- liaison ---
-    this.body.appendChild(el('div', { class: 'form-section' }, 'Liaison'))
-    this.body.appendChild(el('button', {
-      class: `btn ${bound ? '' : 'primary'}`,
-      style: { width: '100%' },
-      html: icon('bone', 14),
-      onclick: () => this.bind(),
-    }, el('span', null, bound ? 'Relier les pixels' : 'Lier les pixels au squelette')))
+    // --- liaison, un calque a la fois ---
+    this.body.appendChild(el('div', { class: 'form-section' }, 'Calques relies'))
+    this.body.appendChild(this.layerBindings())
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
       bound
-        ? 'Les pixels suivent le squelette. Vous pouvez repasser en mode Dessin, retoucher, et revenir : '
-          + 'la retouche est reprise sans reliaison. Le pinceau Ponderer montre et corrige les frontieres.'
-        : 'A faire une fois les os places : chaque pixel rejoint l\'os le plus proche.'))
+        ? 'Les calques coches suivent le squelette : corps, arme et cape bougent ensemble. '
+          + 'Vous pouvez repasser en mode Dessin, retoucher, et revenir sans relier a nouveau.'
+        : 'Cochez les calques a articuler : chaque pixel rejoindra l\'os le plus proche.'))
 
     if (!bound) return
 
@@ -153,6 +152,168 @@ export class RigPanel {
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
       'Memorisez une pose, deplacez le squelette, puis generez les frames : ',
       'l\'interpolation produit le mouvement complet.'))
+
+    this.animationSection()
+    this.turnSection()
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Animations preenregistrees                                        */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Cycles tout faits. Ils s'appliquent par le role des os, pas par leur nom :
+   * un squelette d'oiseau recoit le vol, un humanoide la marche.
+   */
+  private animationSection(): void {
+    const rig = this.rig
+    this.body.appendChild(el('div', { class: 'form-section' }, 'Animations toutes faites'))
+
+    const grid = el('div', { style: { display: 'grid', gap: '3px' } })
+    for (const clip of ANIM_CLIPS) {
+      const possible = clipFits(clip, rig)
+      const touches = clipTouches(clip, rig)
+      grid.appendChild(el('button', {
+        class: 'layer-row',
+        disabled: !possible || !touches.length,
+        title: possible
+          ? `${clip.hint}\n${clip.frames} frames a ${clip.ms} ms — bouge : ${touches.join(', ') || 'rien'}`
+          : `Ce cycle demande des os marques ${clip.needs.join(', ')}`,
+        style: { opacity: possible && touches.length ? '1' : '.4' },
+        onclick: () => this.generateClip(clip),
+      },
+        el('span', { html: icon('film', 12), style: { color: 'var(--accent)', display: 'flex', flex: 'none' } }),
+        el('span', { class: 'lname' }, clip.label),
+        el('span', { style: { fontSize: '10.5px', color: 'var(--text-faint)', flex: 'none' } },
+          `${clip.frames}f`),
+      ))
+    }
+    this.body.appendChild(grid)
+    this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
+      'Chaque cycle cherche les os par leur role — torse, tete, bras, jambes, ailes — ',
+      'et produit ses frames avec un tag. Servez-vous-en comme base : la pose de ',
+      'chaque frame reste modifiable.'))
+  }
+
+  /** Deroule un cycle en frames, a la suite de la frame courante. */
+  private generateClip(clip: AnimClip): void {
+    syncRestFromCanvas(this.ed)
+    const ed = this.ed
+    const rig = this.rig
+    const base = capturePose(rig)
+    const poses = clipPoses(rig, clip, clip.frames, base)
+    const from = ed.activeFrame
+
+    ed.run(`Animation « ${clip.label} »`, () => {
+      poses.forEach((pose, i) => {
+        // La premiere pose remplace la frame courante, les suivantes en
+        // ajoutent : le cycle demarre donc la ou l'on se trouve.
+        const at = from + i
+        if (i > 0) ed.sprite.duplicateFrame(from, at)
+        applyPose(rig, pose)
+        writePoseToFrame(ed, at)
+        ed.sprite.frameDurations[at] = clip.ms
+      })
+      applyPose(rig, base)
+      ed.sprite.tags.push({
+        id: genId(),
+        name: clip.label.toLowerCase(),
+        from, to: from + poses.length - 1,
+        direction: 'forward',
+        repeat: 0,
+        color: fromHex('#6c8cff'),
+      })
+    })
+    refreshPose(ed)
+    ed.setActiveFrame(from)
+    showToast(`« ${clip.label} » : ${poses.length} frames et un tag`, 'success')
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Demi-tour pseudo-3D                                               */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Fait pivoter le personnage sur lui-meme. Le dessin n'a pas de profondeur :
+   * on l'ecrase horizontalement et on fait passer les membres d'un cote a
+   * l'autre selon la profondeur de leur os. C'est une base a retoucher, pas
+   * un profil fini.
+   */
+  private turnSection(): void {
+    const ed = this.ed
+    const rig = this.rig
+    this.body.appendChild(el('div', { class: 'form-section' }, 'Demi-tour (pseudo-3D)'))
+
+    const degres = Math.round(((rig.turn?.angle ?? 0) * 180) / Math.PI)
+    this.body.appendChild(el('div', { class: 'opt' },
+      el('label', { style: { width: '58px' } }, 'Angle'),
+      slider(-90, 90, degres, 5, (v) => {
+        rig.turn = v === 0 ? null : { angle: (v * Math.PI) / 180, axis: this.turnAxis() }
+        refreshPose(ed)
+        ed.events.emit('settings', undefined)
+      }, (v) => `${v}°`),
+    ))
+
+    const count = numberInput(8, () => {}, { min: 2, max: 24, width: '58px' })
+    this.body.appendChild(el('div', { class: 'form-row', style: { marginTop: '4px' } },
+      count,
+      el('button', {
+        class: 'btn sm',
+        onclick: () => this.generateTurn(Math.max(2, Number(count.value))),
+      }, 'Tour complet'),
+    ))
+    this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
+      'Reglez la profondeur de chaque os (le champ « Devant / derriere » ',
+      'apparait sur l\'os choisi) : c\'est elle qui fait passer un bras derriere ',
+      'le corps. Le resultat est une base a reprendre, le dessin n\'ayant pas ',
+      'de vraie epaisseur.'))
+  }
+
+  /** Axe de rotation : le milieu du squelette. */
+  private turnAxis(): number {
+    const bones = this.rig.bones
+    if (!bones.length) return this.ed.sprite.width / 2
+    let min = Infinity, max = -Infinity
+    for (const b of bones) {
+      min = Math.min(min, b.x, b.ex)
+      max = Math.max(max, b.x, b.ex)
+    }
+    return (min + max) / 2
+  }
+
+  /** Genere un tour complet en frames, de face a face. */
+  private generateTurn(steps: number): void {
+    syncRestFromCanvas(this.ed)
+    const ed = this.ed
+    const rig = this.rig
+    const axis = this.turnAxis()
+    const from = ed.activeFrame
+    const avant = rig.turn
+
+    ed.run('Tour sur soi-meme', () => {
+      for (let i = 0; i < steps; i++) {
+        const at = from + i
+        if (i > 0) ed.sprite.duplicateFrame(from, at)
+        const angle = (i / steps) * Math.PI * 2
+        // Au-dela d'un quart de tour on repart de l'autre cote : le dessin
+        // n'a pas de dos, on montre donc son miroir plutot qu'un vide.
+        rig.turn = i === 0 ? null : { angle, axis }
+        writePoseToFrame(ed, at)
+        ed.sprite.frameDurations[at] = 100
+      }
+      ed.sprite.tags.push({
+        id: genId(),
+        name: 'tour',
+        from, to: from + steps - 1,
+        direction: 'forward',
+        repeat: 0,
+        color: fromHex('#a06cff'),
+      })
+    })
+    rig.turn = avant
+    refreshPose(ed)
+    ed.setActiveFrame(from)
+    showToast(`Tour en ${steps} frames — a retoucher`, 'success')
   }
 
   /**
@@ -283,7 +444,50 @@ export class RigPanel {
       }),
     )
     row.dataset.bone = String(bone.id)
-    return row
+    if (!selected) return row
+
+    // Reglages de l'os choisi : sa fonction dans le corps, qui commande les
+    // animations toutes faites, et sa profondeur, qui commande le demi-tour.
+    const wrap = el('div', { style: { display: 'grid', gap: '2px' } }, row)
+    wrap.appendChild(el('div', {
+      class: 'bone-extra',
+      style: { paddingLeft: `${19 + depth * 13}px` },
+    },
+      el('label', null, 'role', this.roleSelect(bone)),
+      el('label', { title: 'Positif : devant le corps. Negatif : derriere. Sert au demi-tour.' },
+        'devant', numberInput(Math.round(bone.depth), (v) => {
+          this.ed.run('Profondeur d\'un os', () => { bone.depth = v })
+          refreshPose(this.ed)
+        }, { min: -64, max: 64, width: '46px' })),
+    ))
+    wrap.dataset.bone = String(bone.id)
+    return wrap
+  }
+
+  /** Fonction de l'os dans le corps : c'est la cle des cycles tout faits. */
+  private roleSelect(bone: Bone): HTMLElement {
+    const roles: { value: BoneRole; label: string }[] = [
+      { value: 'none', label: '—' },
+      { value: 'torso', label: 'torse' },
+      { value: 'head', label: 'tete' },
+      { value: 'armL', label: 'bras G' },
+      { value: 'armR', label: 'bras D' },
+      { value: 'legL', label: 'jambe G' },
+      { value: 'legR', label: 'jambe D' },
+      { value: 'wingL', label: 'aile G' },
+      { value: 'wingR', label: 'aile D' },
+      { value: 'tail', label: 'queue' },
+    ]
+    const select = el('select', {
+      style: { height: '20px', fontSize: '11px', width: '78px' },
+      onchange: () => {
+        this.ed.run('Role d\'un os', () => { bone.role = select.value as BoneRole })
+        this.render()
+      },
+    }, ...roles.map((r) => el('option', { value: r.value, selected: bone.role === r.value }, r.label)))
+    select.addEventListener('mousedown', (e) => e.stopPropagation())
+    select.addEventListener('click', (e) => e.stopPropagation())
+    return select
   }
 
   /* ---------------------------------------------------------------- */
@@ -314,21 +518,69 @@ export class RigPanel {
     ], 'right')
   }
 
-  /** Lie les pixels de la case active au squelette. */
-  bind(): void {
-    const cel = this.ed.peekCel()
-    if (!cel) { showToast('Aucune case active', 'error'); return }
-    if (cel.bitmap.isEmpty()) { showToast('Dessinez le personnage avant de lier', 'error'); return }
-    this.ed.run('Lier au squelette', () => {
+  /**
+   * Un interrupteur par calque : cocher relie ses pixels au squelette, tous
+   * les calques coches se deforment ensemble. C'est ce qui permet d'animer un
+   * personnage reparti sur plusieurs calques, arme et cape comprises.
+   */
+  private layerBindings(): HTMLElement {
+    const ed = this.ed
+    const list = el('div', { style: { display: 'grid', gap: '2px' } })
+    for (let i = ed.sprite.layers.length - 1; i >= 0; i--) {
+      const layer = ed.sprite.layers[i]
+      const lie = !!partFor(this.rig, layer.id)
+      const cel = ed.sprite.cel(i, ed.activeFrame)
+      const vide = !cel || cel.bitmap.isEmpty()
+      list.appendChild(el('div', {
+        class: `layer-row ${i === ed.activeLayer ? 'active' : ''}`,
+        onclick: () => this.toggleLayer(i),
+      },
+        el('span', {
+          html: icon(lie ? 'bone' : 'close', 12),
+          style: { color: lie ? 'var(--ok)' : 'var(--text-faint)', display: 'flex', flex: 'none' },
+        }),
+        el('span', { class: 'lname' }, layer.name),
+        el('span', {
+          style: { fontSize: '10.5px', color: 'var(--text-faint)', flex: 'none' },
+        }, lie ? 'relie' : vide ? 'vide' : 'libre'),
+      ))
+    }
+    return list
+  }
+
+  /** Relie ou detache un calque. */
+  private toggleLayer(index: number): void {
+    const ed = this.ed
+    const layer = ed.sprite.layers[index]
+    if (!layer) return
+    if (partFor(this.rig, layer.id)) {
+      ed.run('Detacher un calque', () => {
+        this.rig.parts = this.rig.parts.filter((p) => p.layer !== layer.id)
+      })
+      showToast(`« ${layer.name} » ne suit plus le squelette`, 'info')
+      this.render()
+      return
+    }
+    const cel = ed.sprite.cel(index, ed.activeFrame)
+    if (!cel || cel.bitmap.isEmpty()) {
+      showToast(`« ${layer.name} » est vide sur cette frame`, 'error')
+      return
+    }
+    ed.run('Lier un calque', () => {
+      // Relier alors qu'une pose est en cours figerait cette pose comme
+      // repos : on repart donc du dessin au repos.
       resetPose(this.rig)
-      autoBind(this.rig, cel.bitmap)
+      autoBind(this.rig, layer.id, cel.bitmap)
     })
-    this.ed.updateSettings({ tool: 'rig-pose' })
+    ed.updateSettings({ tool: 'rig-pose' })
     // Le dessin reprend sa place : la carte des os ne reste pas sur l'ecran.
-    this.ed.showWeights = false
-    showToast('Pixels lies : tirez le bout d\'un os pour poser', 'success')
+    ed.showWeights = false
+    showToast(`« ${layer.name} » relie — tirez le bout d\'un os`, 'success')
     this.render()
   }
+
+  /** Relie le calque actif : point d'entree du tutoriel et des tests. */
+  bind(): void { this.toggleLayer(this.ed.activeLayer) }
 
   private resetPose(): void {
     if (!this.rig.bones.length) return
@@ -351,25 +603,22 @@ export class RigPanel {
       for (const child of rig.bones) if (child.parent === bone.id) child.parent = bone.parent
       rig.bones.splice(index, 1)
       // Les poids referencent les os par index : ils ne valent plus rien.
-      rig.weights = null
-      rig.rest = null
+      unbind(rig)
     })
     if (rigState.selected === bone.id) rigState.selected = null
     showToast('Os supprime — reliez les pixels', 'info')
     this.render()
   }
 
-  /** Fige la pose courante dans une nouvelle frame. */
+  /** Fige la pose courante dans une nouvelle frame, tous calques relies. */
   private frameFromPose(): void {
     syncRestFromCanvas(this.ed)
-    const posed = deform(this.rig, seamSettings(rigState.seam))
-    if (!posed) { showToast('Liez d\'abord les pixels', 'error'); return }
+    if (!isBound(this.rig)) { showToast('Liez d\'abord un calque', 'error'); return }
     const ed = this.ed
     const at = ed.activeFrame + 1
     ed.run('Frame depuis la pose', () => {
       ed.sprite.duplicateFrame(ed.activeFrame, at)
-      const cel = ed.sprite.layers[ed.activeLayer].cels[at]
-      if (cel) cel.bitmap.copyFrom(posed)
+      writePoseToFrame(ed, at)
     })
     ed.setActiveFrame(at)
     showToast('Frame creee', 'success')
@@ -387,12 +636,9 @@ export class RigPanel {
     ed.run('Frames intermediaires', () => {
       for (let i = 1; i <= steps; i++) {
         applyPose(rig, lerpPose(this.poseA!, poseB, i / steps))
-        const posed = deform(rig, seamSettings(rigState.seam))
-        if (!posed) continue
         const at = from + i
         ed.sprite.duplicateFrame(from, at)
-        const cel = ed.sprite.layers[ed.activeLayer].cels[at]
-        if (cel) cel.bitmap.copyFrom(posed)
+        writePoseToFrame(ed, at)
       }
       applyPose(rig, poseB)
     })

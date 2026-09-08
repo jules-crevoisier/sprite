@@ -1,6 +1,6 @@
 import { Bitmap, type Rect } from './bitmap'
 import type { Cel, Layer, Sprite, Slice, Tag } from './document'
-import type { Bone } from '../smart/rig'
+import type { Bone, RigPart } from '../smart/rig'
 import type { BlendMode } from './blend'
 
 export interface Command {
@@ -141,8 +141,12 @@ export interface StructureSnapshot {
   paletteName: string
   /** Squelette : os, dessin de reference et table des poids. */
   bones: Bone[]
-  rigRest: Bitmap | null
-  rigWeights: Uint8Array | null
+  /**
+   * Liaisons des calques. Le dessin de repos est partage par reference : il
+   * ne change pas d'identite au fil des commandes, contrairement aux poids
+   * qui sont copies pour rester independants.
+   */
+  rigParts: RigPart[]
 }
 
 /**
@@ -172,8 +176,7 @@ export function snapshotStructure(sprite: Sprite): StructureSnapshot {
     paletteColors: [...sprite.palette.colors],
     paletteName: sprite.palette.name,
     bones: sprite.rig.bones.map((b) => ({ ...b })),
-    rigRest: sprite.rig.rest,
-    rigWeights: sprite.rig.weights ? new Uint8Array(sprite.rig.weights) : null,
+    rigParts: sprite.rig.parts.map((p) => ({ ...p, weights: new Uint8Array(p.weights) })),
   }
 }
 
@@ -196,8 +199,7 @@ export function restoreStructure(sprite: Sprite, snap: StructureSnapshot): void 
   sprite.palette.colors = [...snap.paletteColors]
   sprite.palette.name = snap.paletteName
   sprite.rig.bones = snap.bones.map((b) => ({ ...b }))
-  sprite.rig.rest = snap.rigRest
-  sprite.rig.weights = snap.rigWeights ? new Uint8Array(snap.rigWeights) : null
+  sprite.rig.parts = snap.rigParts.map((p) => ({ ...p, weights: new Uint8Array(p.weights) }))
 }
 
 /**
