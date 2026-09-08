@@ -2687,6 +2687,19 @@ check('ouvrir un projet du Drive le charge et retient son fichier',
   ouvert.nom === 'projet-drive' && ouvert.lien === 'fichier-ui' && ouvert.fermee,
   `${ouvert.nom} / ${ouvert.lien}`)
 
+// `ClipId` est une union figee et `clipDe` retombe silencieusement sur le
+// premier cycle quand l'identifiant lui est inconnu : un septieme cycle
+// ajoute a CLIPS_PIXL s'afficherait donc en repos sans que rien ne le dise.
+const cyclesNommables = await page.evaluate(async () => {
+  const { imagesDuClip } = await import('/src/ui/mascot-view.ts')
+  const { CLIPS_PIXL } = await import('/src/ui/mascot-clips.ts')
+  return CLIPS_PIXL
+    .filter((c) => imagesDuClip(c.id).length !== c.poses.length)
+    .map((c) => c.id)
+})
+check('chaque cycle est joignable par son identifiant', cyclesNommables.length === 0,
+  cyclesNommables.join(', ') || 'les six repondent')
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()
