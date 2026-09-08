@@ -13,6 +13,7 @@ import { el, checkbox, numberInput, select, slider } from './dom'
 import { ICONS } from './icons'
 import { zoomablePreview } from './preview-zoom'
 import { openModal, showToast } from './overlay'
+import { videAvecPixl } from './mascot-ui'
 
 const SIZE_PRESETS: [string, number, number][] = [
   ['Tuile 16', 16, 16],
@@ -664,8 +665,9 @@ export function slicesDialog(ed: Editor): void {
   const render = () => {
     body.replaceChildren()
     if (!ed.sprite.slices.length) {
-      body.appendChild(el('p', { class: 'form-note' },
-        'Aucune zone. Selectionnez une region puis utilisez « Nouvelle zone depuis la selection » pour definir un pivot ou une decoupe 9-slice.'))
+      body.appendChild(videAvecPixl('Aucune zone', 'repos',
+        'Selectionnez une region puis « Nouvelle zone depuis la selection » '
+        + 'pour definir un pivot ou une decoupe 9-slice.'))
       return
     }
     for (const slice of ed.sprite.slices) {

@@ -272,6 +272,30 @@ basculiez de mode, que vous posiez le modèle, que vous liiez les pixels et
 que vous tiriez le bras — une flèche animée sur la toile montre exactement
 le geste à faire.
 
+## Pixl
+
+![Les six cycles de Pixl](docs/pixl.png)
+
+La mascotte de PixelForge est un chat de 32×32 pixels, avec six cycles
+d'animation faits image par image : repos, marche, course, saut, attaque,
+dégâts. Elle a été dessinée dans l'éditeur, et c'est le seul argument qui
+compte pour un logiciel de sprites.
+
+Elle n'est donc pas rangée dans une démo : elle tient le logo et l'icône de
+l'onglet, elle accueille au premier lancement, elle accompagne les leçons —
+elle saute quand une étape est réussie, elle fait les cent pas quand on
+cherche — et elle occupe les endroits où il n'y a rien à montrer, comme une
+recherche sans résultat.
+
+Deux règles la tiennent à sa place : elle ne bouge jamais toute seule dans un
+coin permanent de l'écran, et elle quitte la zone de dessin dès le premier
+trait. Quand le système demande de limiter les animations
+(`prefers-reduced-motion`), elle garde une pose fixe.
+
+`Fichier ▸ Ouvrir la mascotte animée` la charge dans l'éditeur avec ses six
+tags déjà posés. Et quelqu'un qui s'obstine sur le logo finira par la voir
+faire autre chose.
+
 ## Deux modes de travail
 
 L'éditeur bascule entre **Dessin** et **Squelette** depuis la barre du haut,
