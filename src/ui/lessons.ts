@@ -44,6 +44,35 @@ export function buildLessons(app: App): Lesson[] {
           auto: () => { ed.undo() },
           autoLabel: 'Annuler',
         },
+        {
+          text: 'Deux reglages de la barre du haut se ressemblent sans faire la meme chose. '
+            + 'La FORME du pinceau decide quels pixels sont poses a chaque point du trait : '
+            + 'ronde, carree, losange, ou une simple ligne. Montez la taille a 6 et changez de forme — '
+            + 'l\'apercu, a cote, dessine le trait tel qu\'il sortira.',
+          target: q('#optionsbar'),
+          enter: () => {
+            app.setTool('pencil')
+            ed.updateSettings({ brushSize: 6, brushShape: 'circle', ditherPattern: 'none' })
+          },
+          done: () => ed.settings.brushShape !== 'circle',
+        },
+        {
+          text: 'Le TRAMAGE, lui, ne change pas la forme : il decide quelle couleur recoit chaque pixel pose. '
+            + 'Le motif alterne la principale et la secondaire pour simuler une teinte intermediaire absente de la palette. '
+            + 'Choisissez d\'abord une couleur secondaire au clic droit dans la palette, sinon il ne melange rien : il troue le trait.',
+          target: q('#optionsbar'),
+          enter: () => {
+            ed.setSecondary(fromHex('#6488f4'))
+            ed.updateSettings({ ditherPattern: 'bayer4', ditherRatio: 0.5 })
+          },
+          done: () => ed.settings.ditherPattern !== 'none',
+        },
+        {
+          text: 'En resume : la forme dit OU les pixels tombent, le tramage dit AVEC QUOI ils sont peints. '
+            + 'Dessinez un trait pour voir les deux agir ensemble.',
+          enter: setMark,
+          done: () => ed.history.depth > mark,
+        },
       ],
     },
 
@@ -89,6 +118,25 @@ export function buildLessons(app: App): Lesson[] {
           },
           autoLabel: 'Creer le tag idle',
           done: () => ed.sprite.tags.length > 0,
+        },
+        {
+          text: 'Le tag se manipule a la souris : glissez-le pour le deplacer, tirez ses bords pour l\'etendre. Deux tags qui se chevauchent s\'empilent sur deux bandes.',
+          target: q('.tl-tag'),
+        },
+        {
+          text: 'La duree se regle par frame, et le bouton voisin l\'applique a toutes d\'un coup — c\'est le cas le plus courant : une seule cadence pour l\'animation entiere.',
+          target: q('#timeline button[title^="Appliquer cette duree"]'),
+        },
+        {
+          text: 'La courbe de vitesse, a cote, repartit le temps autrement. Choisissez « Arrivee douce » puis appliquez-la : les dernieres images durent plus longtemps, le mouvement se pose. La duree totale ne change pas.',
+          target: q('#timeline select'),
+          enter: () => { setMark(); ed.easing = 'ease-out' },
+          auto: () => {
+            const btn = document.querySelector<HTMLElement>('#timeline button[title^="Repartir les durees"]')
+            btn?.click()
+          },
+          autoLabel: 'Repartir les durees',
+          done: () => new Set(ed.sprite.frameDurations).size > 1,
         },
       ],
     },
@@ -159,18 +207,59 @@ export function buildLessons(app: App): Lesson[] {
           enter: () => { app.setTool('rig-pose'); setMark() },
           done: () => ed.frameCount > 1,
         },
+        {
+          text: 'Plus rapide encore : la liste « Animations toutes faites ». Un cycle n\'est pas une suite d\'images figees mais une courbe par fonction d\'os — il s\'applique donc a n\'importe quel squelette qui porte les bons os. Lancez « Marche ».',
+          target: q('[data-panel="rig"]'),
+          enter: () => { app.runCommand('frame.first'); setMark() },
+          done: () => ed.sprite.tags.some((t) => t.name === 'marche'),
+        },
+        {
+          text: 'Huit frames et un tag, d\'un clic. Les poses restent modifiables : le cycle est une base, pas un verrou. Un cycle grise reclame des os que ce squelette n\'a pas — le vol demande des ailes.',
+          target: q('[data-panel="rig"]'),
+        },
+        {
+          text: 'Un personnage tient rarement sur un calque. Cochez plusieurs calques dans « Calques relies » : corps, arme et cape suivent alors les memes os, chacun avec sa propre carte de poids.',
+          target: q('[data-panel="rig"]'),
+        },
+        {
+          text: 'Enfin, montez la souplesse d\'un os — une cape, une queue, une meche. Il cesse de suivre le corps a l\'image pres : il traine derriere, depasse a l\'arret, puis se stabilise. Ce retard se dessinait a la main ; ici il se calcule.',
+          target: q('[data-panel="rig"]'),
+        },
       ],
     },
     {
       id: 'assiste',
-      title: 'Detail et variantes',
-      hint: 'Texturer et decliner sans repeindre',
+      title: 'Dessin assiste',
+      hint: 'Rampes, ombrage, detail et variantes',
       icon: 'smart',
       setup: () => ed.loadSprite(demoGrassBlock()),
       steps: [
         {
-          text: 'Une tuile d\'herbe a plat. On va lui donner du relief sans poser un pixel a la main.',
+          text: 'Une tuile d\'herbe a plat. Les quatre outils qui suivent font le travail ingrat : '
+            + 'trouver des tons, poser des ombres, texturer, decliner. Aucun n\'invente de couleur '
+            + 'qui ne soit deja dans le dessin.',
           target: q('#canvas'),
+        },
+        {
+          text: 'D\'abord les tons. Une ombre obtenue en baissant seulement la luminosite donne du gris : '
+            + 'les vraies ombres glissent vers le bleu, les lumieres vers le jaune. '
+            + '« Rampe de couleurs » (Ctrl+Maj+G) fabrique la famille complete autour de la couleur courante.',
+          enter: setMark,
+          auto: () => { app.runCommand('sprite.ramp') },
+          autoLabel: 'Ouvrir la rampe',
+        },
+        {
+          text: 'Maintenant l\'ombrage. La silhouette suffit a deviner l\'orientation des surfaces : '
+            + 'un pixel pres du bord gauche appartient a une paroi tournee vers la gauche. '
+            + 'Ouvrez « Ombrage automatique » (Ctrl+Maj+O) et tirez dans le cadran de lumiere.',
+          enter: setMark,
+          auto: () => { app.runCommand('sprite.shade') },
+          autoLabel: 'Ouvrir l\'ombrage',
+        },
+        {
+          text: 'Chaque pixel a pris un autre ton de sa propre famille : la palette reste la votre, '
+            + 'et la silhouette n\'a pas bouge. Le curseur « Adoucir » casse en plus les marches '
+            + 'd\'escalier des diagonales, avec la meme regle.',
         },
         {
           text: 'Ouvrez « Ajouter du detail » (Ctrl+Maj+D), choisissez la matiere Herbe, puis cliquez Ajouter deux fois : les passes se cumulent. « Varier » relance le tirage.',

@@ -7,54 +7,46 @@ import { el, clear, slider, checkbox, select, segmented } from './dom'
 import { icon } from './icons'
 
 /**
- * Dessine l'empreinte exacte du pinceau. Sans elle, changer de forme en
- * dessous de trois pixels ne montre rien : toutes les formes donnent alors
- * le meme carre, et le reglage passe pour inutile.
+ * Apercu d'un trait reel, pose avec les reglages courants.
+ *
+ * Deux reglages voisins agissent sur des choses differentes, et rien ne le
+ * disait : la forme du pinceau decide *quels pixels* sont poses a chaque
+ * point du trait, le tramage decide *quelle couleur* recoit chacun d'eux.
+ * Montrer les deux separement n'y suffisait pas — un tramage a couleur
+ * secondaire transparente troue le trait, ce qui ressemble a s'y meprendre a
+ * un pinceau plus fin. On dessine donc le trait tel qu'il sortira.
  */
-function brushPreview(size: number, shape: BrushShape): HTMLElement {
-  const offsets = brushOffsets(size, shape)
-  let min = 0, max = 0
-  for (let i = 0; i < offsets.length; i++) {
-    min = Math.min(min, offsets[i])
-    max = Math.max(max, offsets[i])
-  }
-  const span = Math.max(1, max - min + 1)
-  const cell = Math.max(1, Math.min(3, Math.floor(22 / span)))
-  const canvas = el('canvas', {
-    width: span * cell, height: span * cell,
-    class: 'brush-preview',
-    title: `${offsets.length / 2} pixels poses par pointe`,
-  })
-  const ctx = canvas.getContext('2d')
-  if (ctx) {
-    ctx.fillStyle = '#9aa3ba'
-    for (let i = 0; i < offsets.length; i += 2) {
-      ctx.fillRect((offsets[i] - min) * cell, (offsets[i + 1] - min) * cell, cell, cell)
-    }
-  }
-  return el('div', { class: 'opt' }, canvas)
-}
-
-/** Apercu du motif de tramage, avec les deux couleurs reellement posees. */
-function ditherPreview(ed: Editor): HTMLElement {
+function strokePreview(ed: Editor): HTMLElement {
   const s = ed.settings
-  const cell = 3, span = 8
+  const offsets = brushOffsets(s.brushSize, s.brushShape)
+  const W = 46, H = 22, cell = 1
   const canvas = el('canvas', {
-    width: span * cell, height: span * cell,
-    class: 'brush-preview',
-    title: 'Melange des couleurs primaire et secondaire',
+    width: W, height: H,
+    class: 'brush-preview stroke',
+    title: `Trait reel : ${offsets.length / 2} pixel(s) par pointe`
+      + (s.ditherPattern === 'none' ? '' : ', tramage applique'),
   })
   const ctx = canvas.getContext('2d')
-  if (ctx) {
-    for (let y = 0; y < span; y++) {
-      for (let x = 0; x < span; x++) {
+  if (!ctx) return el('div', { class: 'opt' }, canvas)
+
+  // Un trait courbe : il montre a la fois l'epaisseur, la forme de la pointe
+  // et, sur les obliques, ce que le tramage fait du remplissage.
+  const poser = (px: number, py: number) => {
+    for (let i = 0; i < offsets.length; i += 2) {
+      const x = px + offsets[i], y = py + offsets[i + 1]
+      if (x < 0 || y < 0 || x >= W || y >= H) continue
+      let color = ed.primary
+      if (s.ditherPattern !== 'none') {
         const on = dither(s.ditherPattern, x, y, s.ditherRatio)
-        const color = on ? ed.primary : ed.secondary
-        if (getA(color) === 0) continue
-        ctx.fillStyle = toCss(color)
-        ctx.fillRect(x * cell, y * cell, cell, cell)
+        color = on ? ed.primary : ed.secondary
       }
+      if (getA(color) === 0) continue
+      ctx.fillStyle = toCss(color)
+      ctx.fillRect(x * cell, y * cell, cell, cell)
     }
+  }
+  for (let t = 0; t <= 1; t += 0.02) {
+    poser(Math.round(4 + t * (W - 9)), Math.round(H / 2 + Math.sin(t * Math.PI) * -5))
   }
   return el('div', { class: 'opt' }, canvas)
 }
@@ -115,8 +107,7 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
         (v) => { rigState.seam = v; refreshPose(ed) },
         (v) => seamLabels[v] ?? ''),
     ))
-    if (tool.hint) add(el('div', { class: 'opt-hint' }, tool.hint))
-    return
+      return
   }
 
   if (opts.has('brush')) {
@@ -126,12 +117,10 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
     ))
     add(segmented(SHAPES.map((sh) => ({ value: sh.value, icon: sh.icon, title: sh.title })), s.brushShape,
       (v) => { ed.updateSettings({ brushShape: v }); refresh() }))
-    // L'empreinte reelle, dessinee : c'est la seule facon de voir ce que la
+    // Le trait tel qu'il sortira : c'est la seule facon de voir ce que la
     // forme change, et pourquoi elle ne change rien en dessous de 3 pixels.
-    add(brushPreview(s.brushSize, s.brushShape))
-    if (s.brushSize < 3) {
-      add(el('div', { class: 'opt-note' }, 'La forme agit a partir de 3 px'))
-    }
+    add(strokePreview(ed))
+    if (s.brushSize < 3) add(el('div', { class: 'opt-note' }, 'inerte sous 3 px'))
   }
 
   if (opts.has('opacity')) {
@@ -164,12 +153,19 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
     if (s.ditherPattern !== 'none') {
       add(slider(0, 1, s.ditherRatio, 0.05, (v) => { ed.updateSettings({ ditherRatio: v }); refresh() },
         (v) => `${Math.round(v * 100)}%`))
-      add(ditherPreview(ed))
-      // Le tramage melange deux couleurs. Avec une secondaire transparente il
-      // ne fait que trouer le trait, ce qui se lit comme un bug.
-      if (getA(ed.secondary) === 0) {
-        add(el('div', { class: 'opt-note warn' }, 'Secondaire transparente : le tramage troue le trait'))
-      }
+      // Le tramage melange deux couleurs pour simuler une teinte absente de
+      // la palette. Avec une secondaire transparente il ne melange rien : il
+      // troue le trait, ce qui se lit comme un pinceau defectueux.
+      // Une seule note, qui oppose les deux reglages : c'est la comparaison
+      // qui manque, pas la description de chacun pris a part.
+      add(el('div', {
+        class: 'opt-note' + (getA(ed.secondary) === 0 ? ' warn' : ''),
+        title: 'La forme decide quels pixels sont poses a chaque point du trait. '
+          + 'Le tramage decide de quelle couleur : il alterne la principale et la '
+          + 'secondaire pour simuler une teinte absente de la palette.',
+      }, getA(ed.secondary) === 0
+        ? 'forme = ou · trame = avec quoi, mais il faut une secondaire'
+        : 'forme = ou · trame = avec quoi'))
     }
   }
 
@@ -230,5 +226,18 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
     html: icon('grid', 14),
   }, el('span', null, 'Tuile'))))
 
-  if (tool.hint) add(el('div', { class: 'opt-hint' }, tool.hint))
+  flagOverflow(container)
+}
+
+/**
+ * Marque la barre quand son contenu depasse. Elle defile sans ascenseur : sans
+ * ce signal, les reglages sortis du cadre restent introuvables.
+ */
+function flagOverflow(root: HTMLElement): void {
+  const wrap = root.parentElement
+  if (!wrap || !wrap.classList.contains('optionsbar-wrap')) return
+  // Apres le rendu : les largeurs ne sont connues qu'une fois la barre posee.
+  requestAnimationFrame(() => {
+    wrap.classList.toggle('overflowing', root.scrollWidth > root.clientWidth + 1)
+  })
 }

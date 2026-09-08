@@ -280,7 +280,10 @@ button { cursor: pointer; }
    Barre d'options
    ------------------------------------------------------------------ */
 
+.optionsbar-wrap { position: relative; display: flex; min-width: 0; overflow: hidden; }
 .optionsbar {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -292,6 +295,21 @@ button { cursor: pointer; }
   scrollbar-width: none;
 }
 .optionsbar::-webkit-scrollbar { height: 0; }
+/*
+   La barre defile sans ascenseur : sans indice, ce qui depasse est
+   introuvable. Un degrade sur le bord droit signale qu'il reste des reglages.
+*/
+.optionsbar-wrap.overflowing::after {
+  content: '';
+  position: absolute; right: 0; top: 0; bottom: 0; width: 42px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--bg-1) 78%);
+}
+.optionsbar-wrap.overflowing::before {
+  content: '›';
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  z-index: 1; color: var(--text-faint); font-size: 16px; pointer-events: none;
+}
 
 .opt {
   display: flex;
@@ -303,14 +321,23 @@ button { cursor: pointer; }
 .opt > label { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
 .opt-sep { width: 1px; height: 20px; background: var(--line); flex: none; }
 .opt-hint { color: var(--text-faint); font-size: 12px; margin-left: auto; padding-left: 16px; white-space: nowrap; }
+/* Mode d'emploi de l'outil, dans la barre d'etat : il cede la place des que
+   la fenetre se resserre, plutot que de pousser le reste hors de vue. */
+.status-hint {
+  color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; flex: 0 1 auto;
+}
 .opt-note { color: var(--text-faint); font-size: 11px; white-space: nowrap; flex: none; }
 .opt-note.warn { color: var(--warn); }
 /* Empreinte du pinceau et motif de tramage : damier derriere, pour que la
    transparence se voie. */
+.brush-preview.stroke { width: 46px; height: 22px; }
 .brush-preview {
   image-rendering: pixelated;
   border: 1px solid var(--line);
   border-radius: 3px;
+  flex: none;
   background:
     linear-gradient(45deg, #ffffff10 25%, transparent 25%, transparent 75%, #ffffff10 75%),
     var(--bg-0);

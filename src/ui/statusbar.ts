@@ -49,6 +49,11 @@ export class StatusBar {
       el('span', null, `${ed.view.zoom < 1 ? ed.view.zoom.toFixed(2) : ed.view.zoom}x`),
       el('span', null, `${toolById(ed.settings.tool).name}`),
     ]
+    // Le mode d'emploi de l'outil tenait 360 pixels dans la barre d'options,
+    // qu'il poussait au debordement — et cette barre defile sans ascenseur
+    // visible, donc ce qui en sortait devenait introuvable. Sa place est ici.
+    const hint = toolById(ed.settings.tool).hint
+    if (hint) parts.push(el('span', { class: 'status-hint' }, hint))
     if (under !== null) parts.push(el('span', null, toHex(under, true)))
     if (selBox) parts.push(el('span', null, `sel ${selBox.w}×${selBox.h} (${sel.selectedCount} px)`))
 

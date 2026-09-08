@@ -226,8 +226,8 @@ const guided = await page.evaluate(async () => {
   const attendre = (predicat) => new Promise((resolve) => {
     const debut = Date.now()
     const timer = setInterval(() => {
-      if (predicat() || Date.now() - debut > 2500) { clearInterval(timer); resolve() }
-    }, 120)
+      if (predicat() || Date.now() - debut > 1200) { clearInterval(timer); resolve() }
+    }, 100)
   })
 
   // Un pas apres l'autre : les etapes de lecture se passent au bouton, les
@@ -261,11 +261,27 @@ const guided = await page.evaluate(async () => {
   suivant()
   out.avance.push(await jusqua(8))
 
-  // Les deux dernieres etapes font faire l'aller-retour dessin / squelette.
+  // Aller-retour dessin / squelette.
   app.setMode('draw')
   out.avance.push(await jusqua(9))
   app.setMode('rig')
   out.avance.push(await jusqua(10))
+
+  // Frames intermediaires, puis le cycle tout fait.
+  ed.sprite.addFrame(ed.frameCount)
+  ed.events.emit('doc', undefined)
+  out.avance.push(await jusqua(11))
+
+  const { ANIM_CLIPS } = await import('/src/smart/anim-clips.ts')
+  app.rigPanel.generateClip(ANIM_CLIPS.find((c) => c.id === 'walk'))
+  out.avance.push(await jusqua(12))
+
+  // Les dernieres etapes se lisent et se passent au bouton.
+  for (let i = 0; i < 4; i++) {
+    suivant()
+    await attendre(() => false)
+  }
+  out.avance.push(etape())
 
   app.tutorial.stop()
   out.carteFermee = !document.querySelector('.tutor-card:not([hidden])')
@@ -863,20 +879,53 @@ check('les cinq formes de pinceau different vraiment',
   `ligne ${pinceau.ligne5}, rond ${pinceau.rond5}, carre ${pinceau.carre5}, losange ${pinceau.losange5}`)
 
 const apercus = await page.evaluate(async () => {
+  const { fromHex } = await import('/src/core/color.ts')
   const app = window.pixelforge, ed = app.ed
   app.setMode('draw')
   app.setTool('pencil')
-  ed.updateSettings({ brushSize: 5, brushShape: 'diamond', ditherPattern: 'bayer4', ditherRatio: 0.5 })
-  await new Promise((r) => setTimeout(r, 200))
+  ed.setPrimary(fromHex('#e8ebf2'))
+  ed.setSecondary(fromHex('#3d60cf'))
+
+  // L'apercu doit dessiner le trait tel qu'il sortira : c'est la seule facon
+  // de voir que la forme et le tramage n'agissent pas sur la meme chose.
+  const rendu = async (reglages) => {
+    ed.updateSettings(reglages)
+    await new Promise((r) => setTimeout(r, 180))
+    const cv = document.querySelector('#optionsbar canvas.stroke')
+    return cv ? cv.toDataURL() : null
+  }
+  const rond = await rendu({ brushSize: 6, brushShape: 'circle', ditherPattern: 'none' })
+  const carre = await rendu({ brushSize: 6, brushShape: 'square', ditherPattern: 'none' })
+  const ligne = await rendu({ brushSize: 6, brushShape: 'h-line', ditherPattern: 'none' })
+  const trame = await rendu({ brushSize: 6, brushShape: 'circle', ditherPattern: 'bayer4', ditherRatio: 0.5 })
   const barre = document.getElementById('optionsbar')
+  const noteAvecSecondaire = (barre.textContent ?? '').includes('forme = ou')
+
+  ed.setSecondary(fromHex('#00000000'))
+  await new Promise((r) => setTimeout(r, 180))
+  const noteSansSecondaire = (document.getElementById('optionsbar').textContent ?? '')
+    .includes('il faut une secondaire')
+
   return {
-    apercus: barre.querySelectorAll('canvas.brush-preview').length,
-    note: (barre.textContent ?? '').includes('Secondaire transparente'),
+    present: !!rond,
+    formesDistinctes: new Set([rond, carre, ligne].filter(Boolean)).size,
+    // Le tramage doit changer l'image sans changer la forme du trait.
+    trameChange: trame !== rond,
+    noteAvecSecondaire,
+    noteSansSecondaire,
+    // Le mode d'emploi de l'outil a quitte la barre pour la barre d'etat.
+    hintHorsBarre: !barre.querySelector('.opt-hint'),
+    hintDansStatut: !!document.querySelector('.statusbar .status-hint'),
   }
 })
-check('la barre d\'options montre l\'empreinte du pinceau et le tramage',
-  apercus.apercus === 2, `${apercus.apercus} apercus`)
-check('un tramage sans couleur secondaire est signale', apercus.note)
+check('la barre d\'options dessine le trait tel qu\'il sortira', apercus.present)
+check('changer de forme change le trait', apercus.formesDistinctes === 3,
+  `${apercus.formesDistinctes} traits distincts sur 3 formes`)
+check('le tramage change le trait sans changer sa forme', apercus.trameChange)
+check('la barre oppose la forme et le tramage en clair',
+  apercus.noteAvecSecondaire && apercus.noteSansSecondaire)
+check('le mode d\'emploi de l\'outil est passe dans la barre d\'etat',
+  apercus.hintHorsBarre && apercus.hintDansStatut)
 
 /* --- retoucher la palette recolore le sprite --- */
 const palette = await page.evaluate(async () => {
@@ -1405,6 +1454,35 @@ check('un raccourci affiche declenche bien sa commande',
   raccourcis.menteuses.length ? raccourcis.menteuses.join(', ') : `${raccourcis.lies} liaisons`)
 check('aucune liaison ne pointe vers une commande disparue',
   raccourcis.orphelines.length === 0, raccourcis.orphelines.join(', '))
+
+/* --- les lecons doivent couvrir ce que l'editeur sait faire --- */
+const couverture = await page.evaluate(async () => {
+  const app = window.pixelforge
+  const lecons = app.lessons()
+  const texte = lecons.flatMap((l) => l.steps.map((s) => s.text)).join(' ').toLowerCase()
+  // Une fonction qu'aucune lecon ne nomme n'a aucune chance d'etre trouvee.
+  const sujets = {
+    rampe: 'rampe de couleurs',
+    ombrage: 'ombrage automatique',
+    courbe: 'courbe de vitesse',
+    cycles: 'animations toutes faites',
+    souplesse: 'souplesse',
+    calques: 'calques relies',
+    tags: 'glissez-le pour le deplacer',
+    pinceau: 'forme du pinceau',
+    tramage: 'tramage',
+  }
+  const absents = Object.entries(sujets).filter(([, v]) => !texte.includes(v)).map(([k]) => k)
+  return {
+    lecons: lecons.length,
+    etapes: lecons.reduce((n, l) => n + l.steps.length, 0),
+    absents,
+  }
+})
+check('les lecons nomment les fonctions avancees',
+  couverture.absents.length === 0,
+  couverture.absents.length ? `non couvert : ${couverture.absents.join(', ')}`
+    : `${couverture.etapes} etapes sur ${couverture.lecons} lecons`)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
