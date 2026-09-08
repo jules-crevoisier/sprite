@@ -78,7 +78,7 @@ const planches = await page.evaluate(async () => {
       // Ligne de sol : sans repere fixe, on ne voit pas si le personnage
       // glisse d'une image a l'autre.
       ctx.strokeStyle = '#4a5068'
-      ctx.beginPath(); ctx.moveTo(x, y + 30 * Z + 0.5); ctx.lineTo(x + W, y + 30 * Z + 0.5); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(x, y + 32 * Z - 1.5); ctx.lineTo(x + W, y + 32 * Z - 1.5); ctx.stroke()
       ctx.drawImage(vers(bm), x, y, W, W)
       ctx.fillStyle = '#8b90a8'
       ctx.font = '13px monospace'

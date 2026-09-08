@@ -55,9 +55,17 @@ const TETE = [
   '...oooooooo...',
 ]
 
-/** Meme tete, yeux fermes : le clignement se joue sur une seule image. */
+/**
+ * Yeux fermes, et yeux a demi clos.
+ *
+ * Un clignement d'une seule image, a 160 ms, ne se lit pas comme un
+ * clignement mais comme un defaut d'affichage : il lui faut une image de
+ * fermeture.
+ */
 const TETE_CLIN = TETE.map((l, i) =>
   i === 7 ? 'oFFooFFFFooFFo' : i === 8 ? 'oFFFFFFFFFFFFo' : l)
+const TETE_MI_CLOS = TETE.map((l, i) =>
+  i === 8 ? 'oFFooFFFFooFFo' : l)
 
 /** Tete ecrasee d'un pixel, pour l'appui et l'atterrissage. 14 x 15. */
 const TETE_ECRASEE = [
@@ -127,6 +135,7 @@ const PATTE = [
   'oFFo',
   'oFFo',
   'oFFo',
+  'oFFo',
   'ollo',
   'oooo',
 ]
@@ -158,6 +167,16 @@ const QUEUES: Record<string, string[]> = {
     'oFFFo...',
     'oooo....',
   ],
+  basmilieu: [
+    '........',
+    '........',
+    '......oo',
+    '.....oFo',
+    '....oFFo',
+    '..oFFFo.',
+    'oFFFo...',
+    'oooo....',
+  ],
   basse: [
     '........',
     '........',
@@ -180,7 +199,7 @@ const QUEUES: Record<string, string[]> = {
   ],
 }
 
-export const PIECES = { TETE, TETE_CLIN, TETE_ECRASEE, CORPS, CORPS_ECRASE, CORPS_ETIRE, PATTE, QUEUES }
+export const PIECES = { TETE, TETE_CLIN, TETE_MI_CLOS, TETE_ECRASEE, CORPS, CORPS_ECRASE, CORPS_ETIRE, PATTE, QUEUES }
 
 /* ------------------------------------------------------------------ */
 /* Assemblage                                                          */
