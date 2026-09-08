@@ -1785,20 +1785,21 @@ const mascotte = await page.evaluate(async () => {
       if (lignes < 2) bilan.pattesAvalees.push(`${clip.id}#${i + 1} (${lignes})`)
       // Une patte restee au sol pendant que le corps monte pend dans le vide.
       if (patteDecrochee(clip.poses[i])) bilan.pattesPendantes.push(`${clip.id}#${i + 1}`)
-      // Une image de contact sans semelle au sol fait clignoter le bas de la
-      // silhouette : sur un cycle a cent dix millisecondes, quatre fois par
-      // seconde. On tolere le vol la ou il est le sujet.
-      const enVol = (clip.id === 'saut' && i >= 1 && i <= 3)
-        || (clip.id === 'course' && i % 3 !== 0)
-        || (clip.id === 'attaque' && (i === 2 || i === 3))
-      if (!enVol && !piedAuSol(clip.poses[i])) bilan.piedsEnLair.push(`${clip.id}#${i + 1}`)
       bilan.lignesMin = Math.min(bilan.lignesMin, lignes)
-      let n = 0, x0 = 99, x1 = -1, y0 = 99
+      let n = 0, x0 = 99, x1 = -1, y0 = 99, y1 = -1
       for (let y = 0; y < TAILLE; y++) for (let x = 0; x < TAILLE; x++) {
         if (!(bm.u32[y * TAILLE + x] >>> 24)) continue
-        n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y
+        n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
       }
       masses.push(n)
+      // Une image de contact sans semelle au sol fait clignoter le bas de la
+      // silhouette : sur un cycle a cent dix millisecondes, quatre fois par
+      // seconde. Le vol est tolere quand il se voit — au moins deux pixels de
+      // jour sous le point bas. La regle se mesure sur l'image : une liste
+      // d'index se serait tue au premier renumerotage.
+      const auSol = piedAuSol(clip.poses[i])
+      const decolle = y1 <= 29
+      if (!auSol && !decolle) bilan.piedsEnLair.push(`${clip.id}#${i + 1} (bas ${y1})`)
       // Les pieds touchent la derniere ligne : c'est le pivot au sol.
       // Sortir par le haut ou les cotes, en revanche, coupe le dessin.
       if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1}`)

@@ -20,7 +20,7 @@ const CORPS_NORMAL = PIECES.CORPS
  * Position de repos : corps en (10, 18), pieds a la ligne 31.
  *
  * Le budget de lever se lit d'une soustraction. Le bas du corps tombe
- * toujours a `by + 8`, la patte fait six lignes et son pied touche la
+ * toujours a `by + 8`, la patte fait huit lignes et son pied touche la
  * derniere du cadre. Il reste donc, sous l'ourlet :
  *
  *   lignes de patte visibles = 24 - by - lever
@@ -92,9 +92,9 @@ export function debordsDePatte(p: Pose): number {
  * Lignes de patte encore visibles sous le torse, pour la moins bien lotie
  * des deux.
  *
- * L'ecart de masse totale est aveugle a ce defaut : une patte pese douze
- * pixels sur trois cents, elle peut disparaitre entierement sans que le
- * chiffre bouge de plus de quatre pour cent. C'est pourtant le defaut qui
+ * L'ecart de masse totale est aveugle a ce defaut : une patte visible pese
+ * une vingtaine de pixels sur trois cents, elle peut disparaitre
+ * entierement sans que le chiffre franchisse le seuil. C'est pourtant le defaut qui
  * saute aux yeux — un personnage a une jambe.
  */
 export function lignesDePatteVisibles(p: Pose): number {
@@ -227,10 +227,12 @@ function pose(r: Reglage = {}): Pose {
 const REPOS: Reglage[] = [
   { corps: [0, 0], tete: [0, 0], queue: 'milieu' },
   { corps: [0, 1], tete: [-1, 0], queue: 'milieu' },
-  { corps: [0, 1], teteArt: 'miclos', tete: [-1, 1], queue: 'basmilieu' },
-  { corps: [0, 1], teteArt: 'clin', tete: [0, 1], queue: 'basse' },
-  { corps: [0, 1], teteArt: 'miclos', tete: [1, 1], queue: 'basmilieu' },
+  { corps: [0, 1], tete: [-1, 1], queue: 'basmilieu' },
+  { corps: [0, 1], tete: [0, 1], queue: 'basse' },
+  { corps: [0, 1], tete: [1, 1], queue: 'basmilieu' },
   { corps: [0, 0], tete: [1, 0], queue: 'milieu' },
+  { corps: [0, 0], teteArt: 'miclos', tete: [0, 0], queue: 'milieu' },
+  { corps: [0, 1], teteArt: 'clin', tete: [-1, 0], queue: 'milieu' },
 ]
 
 /**
@@ -250,12 +252,12 @@ const REPOS: Reglage[] = [
  */
 const MARCHE: Reglage[] = [
   { corps: [-1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
-  { corps: [-1, 1], tete: [0, 1], gauche: [0, 0], droite: [0, -2], queue: 'basmilieu' },
-  { corps: [0, -1], tete: [-1, 1], gauche: [0, 0], droite: [0, -4], queue: 'basse' },
+  { corps: [-1, 1], tete: [0, 1], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
+  { corps: [0, -1], tete: [-1, 1], gauche: [0, 0], droite: [1, -4], queue: 'basse' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
   { corps: [1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
-  { corps: [1, 1], tete: [0, 1], gauche: [0, -2], droite: [0, 0], queue: 'basmilieu' },
-  { corps: [0, -1], tete: [1, 1], gauche: [0, -4], droite: [0, 0], queue: 'basse' },
+  { corps: [1, 1], tete: [0, 1], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [0, -1], tete: [1, 1], gauche: [-1, -4], droite: [0, 0], queue: 'basse' },
   { corps: [0, 0], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
 ]
 
@@ -266,17 +268,24 @@ const MARCHE: Reglage[] = [
  */
 const COURSE: Reglage[] = [
   { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [0, 1], gauche: [0, -3], droite: [0, -2], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -4], droite: [0, -1], queue: 'basse' },
+  { corps: [-1, -2], tete: [0, 1], gauche: [0, -4], droite: [0, -2], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -4], droite: [0, -2], queue: 'basse' },
   { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -3], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -1], droite: [0, -4], queue: 'basse' },
+  { corps: [1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -4], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -2], droite: [0, -4], queue: 'basse' },
 ]
 
 /**
- * Saut. L'accroupissement precede la detente, et les ecarts entre images
- * valent trois, un, un, trois : le personnage dure au sommet et va vite aux
- * deux bouts. Des ecarts constants donnent un triangle, pas un saut.
+ * Saut. Ce qui compte est la suite des hauteurs REELLEMENT dessinees, pas
+ * celle des reglages : `pose` remonte d'un pixel un corps etire et en
+ * redescend un ecrase, si bien qu'une belle courbe de reglages peut sortir
+ * plate. Celle-ci donne 20, 16, 15, 14, 15, 17, 21, 17, 18 — quatre pixels
+ * a la detente, un seul de part et d'autre du sommet, quatre a la chute.
+ * Le personnage dure en haut et file aux deux bouts.
+ *
+ * La deuxieme image garde les deux semelles au sol : le corps s'etire avant
+ * que les pieds quittent le sol, c'est ce qui fait la poussee. Sans elle le
+ * personnage se contente de monter.
  *
  * La queue traine vers le bas pendant la montee et vers le haut pendant la
  * chute. L'inverse serait physiquement impossible, et c'est pourtant ce
@@ -284,9 +293,11 @@ const COURSE: Reglage[] = [
  */
 const SAUT: Reglage[] = [
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'haute' },
-  { corps: [0, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
-  { corps: [0, -4], tete: [0, 1], gauche: [0, -5], droite: [0, -5], queue: 'basmilieu' },
-  { corps: [0, -3], corpsArt: 'etire', tete: [0, 0], gauche: [0, -3], droite: [0, -3], queue: 'milieu' },
+  { corps: [0, -1], corpsArt: 'etire', tete: [0, 1], queue: 'basse' },
+  { corps: [0, -2], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
+  { corps: [0, -4], tete: [0, 0], gauche: [0, -6], droite: [0, -6], queue: 'basmilieu' },
+  { corps: [0, -2], corpsArt: 'etire', tete: [0, 0], gauche: [0, -3], droite: [0, -3], queue: 'milieu' },
+  { corps: [0, 0], corpsArt: 'etire', gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [0, -1], tete: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basse' },
   { corps: [0, 0], queue: 'milieu' },
@@ -304,12 +315,13 @@ const SAUT: Reglage[] = [
  * millisecondes. Ce n'est pas un intervalle, c'est un raccord.
  */
 const ATTAQUE: Reglage[] = [
-  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
+  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
   { corps: [0, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
-  { corps: [0, -1], gauche: [-1, -1], droite: [1, -1], queue: 'milieu' },
-  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'haute' },
-  { corps: [0, 1], tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
+  { corps: [0, -1], gauche: [-1, -3], droite: [1, -3], queue: 'milieu' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [-2, 0], droite: [2, 0], queue: 'haute' },
+  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [-2, 0], droite: [2, 0], queue: 'fouet' },
+  { corps: [0, 0], gauche: [-1, -2], droite: [1, -2], queue: 'basmilieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
@@ -325,15 +337,15 @@ const DEGATS: Reglage[] = [
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', queue: 'milieu' },
   { corps: [-3, 2], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'fouet' },
   { corps: [-1, 1], teteArt: 'clin', tete: [-1, 1], gauche: [0, -2], droite: [-2, 0], queue: 'basse' },
-  { corps: [0, 1], teteArt: 'miclos', gauche: [0, 0], droite: [-2, -2], queue: 'basmilieu' },
+  { corps: [1, 1], teteArt: 'miclos', gauche: [0, 0], droite: [-2, -2], queue: 'basmilieu' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
 ]
 
 export const CLIPS_PIXL: ClipMascotte[] = [
-  { id: 'repos', nom: 'Repos', ms: 160, loop: true, poses: REPOS.map(pose) },
+  { id: 'repos', nom: 'Repos', ms: 150, loop: true, poses: REPOS.map(pose) },
   { id: 'marche', nom: 'Marche', ms: 110, loop: true, poses: MARCHE.map(pose) },
   { id: 'course', nom: 'Course', ms: 80, loop: true, poses: COURSE.map(pose) },
-  { id: 'saut', nom: 'Saut', ms: 100, loop: false, poses: SAUT.map(pose) },
+  { id: 'saut', nom: 'Saut', ms: 80, loop: false, poses: SAUT.map(pose) },
   { id: 'attaque', nom: 'Attaque', ms: 80, loop: false, poses: ATTAQUE.map(pose) },
   { id: 'degats', nom: 'Degats', ms: 90, loop: false, poses: DEGATS.map(pose) },
 ]
