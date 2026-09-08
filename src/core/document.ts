@@ -81,6 +81,16 @@ export class Sprite {
   pivot = { x: 0.5, y: 0.5 }
   /** Squelette optionnel, pour poser le dessin plutot que le redessiner. */
   rig: Rig = emptyRig()
+  /**
+   * Fichier Google Drive d'ou vient ce projet, quand il en vient un.
+   *
+   * Sans ce lien, chaque « Enregistrer dans Drive » deposerait une copie de
+   * plus a cote des precedentes. Il voyage dans le fichier enregistre pour
+   * survivre a une sauvegarde automatique et a un rechargement de l'onglet ;
+   * l'identifiant ne donne aucun droit a qui n'a pas acces au fichier, et un
+   * projet ouvert par quelqu'un d'autre recree simplement le sien.
+   */
+  driveFileId: string | null = null
 
   constructor(width = 32, height = 32, palette?: Palette) {
     this.width = width

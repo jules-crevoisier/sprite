@@ -10,6 +10,7 @@ const MENUS: { label: string; items: string[] }[] = [
     label: 'Fichier',
     items: [
       'file.new', 'file.open', 'file.save', '---',
+      'cloud.open', 'cloud.save', 'cloud.save-copy', 'cloud.account', 'cloud.settings', '---',
       'file.import-image', 'file.import-layer', '---',
       'file.export', 'file.export-png', 'file.export-gif', 'file.export-frames', '---',
       'file.copy-png', 'file.restore',
@@ -103,6 +104,7 @@ export function renderTopbar(container: HTMLElement, app: App): void {
         if (!cmd) return { separator: true }
         return {
           label: cmd.label,
+          hint: cmd.hint?.(),
           icon: cmd.icon,
           keys: keyLabel(cmd.id),
           disabled: !(cmd.enabled?.() ?? true),

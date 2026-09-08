@@ -49,6 +49,8 @@ interface ProjectJson {
   format: string
   version: number
   name: string
+  /** Fichier Google Drive d'origine, absent pour un projet purement local. */
+  driveFileId?: string | null
   width: number
   height: number
   grid: { x: number; y: number; w: number; h: number }
@@ -67,6 +69,7 @@ export function serializeSprite(sprite: Sprite): string {
     format: FORMAT,
     version: VERSION,
     name: sprite.name,
+    driveFileId: sprite.driveFileId,
     width: sprite.width,
     height: sprite.height,
     grid: { ...sprite.grid },
@@ -130,6 +133,7 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
   const palette = new Palette(data.palette?.name ?? 'Palette', (data.palette?.colors ?? []).map(fromHex))
   const sprite = new Sprite(data.width, data.height, palette)
   sprite.name = data.name
+  sprite.driveFileId = data.driveFileId ?? null
   sprite.grid = { ...sprite.grid, ...data.grid }
   sprite.pivot = { ...sprite.pivot, ...data.pivot }
   sprite.frameDurations = [...data.frameDurations]
