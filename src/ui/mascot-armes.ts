@@ -73,14 +73,19 @@ const EPEE = [
 ]
 
 /**
- * Marteau. La tete pese le tiers du dessin et se trouve au bout du bras de
- * levier : c'est ce qui fait que le meme deplacement se lit plus lourd
- * qu'avec l'epee, sans qu'aucun reglage ne change.
+ * Marteau. La tete pese les deux tiers du dessin et se trouve au bout du
+ * bras de levier : c'est ce qui fait que le meme deplacement se lit plus
+ * lourd qu'avec l'epee, sans qu'aucun reglage ne change.
+ *
+ * Elle fait cinq pixels de large, cerclee de son contour. A trois de
+ * large, elle se lisait comme un bout de manche epaissi et le poids
+ * disparaissait — or c'est la seule chose que cette arme doit dire.
  */
 const MARTEAU = [
-  '.AAA.',
-  '.AoA.',
-  '.AAA.',
+  'ooooo',
+  'oAAAo',
+  'oAAAo',
+  'ooooo',
   '..c..',
   '..c..',
   '..c..',
@@ -124,7 +129,7 @@ export const ARMES: Arme[] = [
     nom: 'Marteau',
     pitch: 'La masse est au bout du bras de levier : le meme deplacement se lit plus lourd.',
     art: MARTEAU,
-    prise: [2, 9],
+    prise: [2, 10],
   },
   {
     id: 'baton',
