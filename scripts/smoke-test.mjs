@@ -19,7 +19,7 @@ import { join } from 'node:path'
 const VITE = 'node_modules/.bin/vite'
 
 /**
- * Un port different a chaque execution.
+ * Un port different a chaque execution, sauf demande explicite.
  *
  * Avec un port fixe et sans `--strictPort`, deux bancs d'essai lances en
  * meme temps — sur deux copies du depot, par exemple — se marchent dessus
@@ -31,7 +31,7 @@ const VITE = 'node_modules/.bin/vite'
 const argPort = process.argv.indexOf('--port')
 const PORT = argPort >= 0 && process.argv[argPort + 1]
   ? Number(process.argv[argPort + 1])
-  : 41000 + Math.floor(Math.random() * 2000)
+  : Number(process.env.SMOKE_PORT ?? 41000 + Math.floor(Math.random() * 2000))
 const URL = `http://127.0.0.1:${PORT}/`
 
 /**
@@ -64,7 +64,10 @@ const check = (name, ok, detail = '') => {
 
 // Le serveur de developpement sert les modules source : le test peut donc
 // importer directement les modules d'export pour les verifier un par un.
-const server = spawn(VITE, [ '--port', String(PORT), '--host', '127.0.0.1', '--strictPort'], {
+// `--strictPort` : sans lui, un port deja pris fait glisser Vite sur le
+// suivant, et le test irait interroger l'application de quelqu'un d'autre en
+// annoncant que tout va bien.
+const server = spawn(VITE, ['--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
   stdio: 'ignore',
   detached: false,
 })
@@ -99,8 +102,16 @@ check('l\'application demarre', await page.evaluate(() => !!window.pixelforge))
 // retrouver un editeur vierge.
 const welcome = await page.locator('.modal-head h2').first().textContent().catch(() => null)
 check('la visite guidee est proposee au premier lancement', welcome?.includes('Bienvenue') ?? false, welcome ?? 'absente')
+// La mascotte se presente elle-meme sur le tout premier ecran : sans elle,
+// la boite d'accueil est un paragraphe qui ne montre pas le logiciel.
+check('la mascotte accueille au premier lancement',
+  await page.locator('.modal canvas.pixl').count() === 1)
 await page.keyboard.press('Escape')
-await sleep(250)
+await sleep(400)
+
+/* --- la carte d'accueil occupe la place vide, et la rend au premier trait --- */
+check('la carte d\'accueil apparait sur un document vierge',
+  await page.locator('.pixl-accueil canvas.pixl').count() === 1)
 
 /* --- dessin au crayon --- */
 const box = await page.locator('#canvas').boundingBox()
@@ -117,6 +128,22 @@ const painted = await page.evaluate(() => {
   return n
 })
 check('le crayon ecrit des pixels', painted > 0, `${painted} px`)
+
+// La regle qui protege le travail : passe le premier trait, plus aucune
+// mascotte ne bouge dans la zone de dessin.
+await sleep(400)
+const zoneLibre = await page.evaluate(() => {
+  const aire = document.getElementById('canvas-area').getBoundingClientRect()
+  const dedans = [...document.querySelectorAll('canvas.pixl')].filter((c) => {
+    const r = c.getBoundingClientRect()
+    return r.width > 0 && r.right > aire.left && r.left < aire.right
+      && r.bottom > aire.top && r.top < aire.bottom
+  })
+  return { accueil: !!document.querySelector('.pixl-accueil'), dedans: dedans.length }
+})
+check('la carte d\'accueil s\'efface au premier trait', !zoneLibre.accueil)
+check('aucune mascotte ne reste dans la zone de dessin', zoneLibre.dedans === 0,
+  `${zoneLibre.dedans} mascotte(s)`)
 
 /* --- historique --- */
 const undoOk = await page.evaluate(() => {
@@ -2048,6 +2075,210 @@ check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0),
   `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions`)
 check('l\'arme reste visible derriere le personnage', armee.armeInvisible.length === 0,
   armee.armeInvisible.join(', ') || `${armee.visibleMin} px visibles au minimum`)
+
+/* --- Pixl dans l'application --- */
+// Une mascotte peut disparaitre d'un coin sans que rien ne casse : plus
+// personne ne la voit, et le test reste vert. On verifie donc sa presence
+// aux endroits prevus, et surtout qu'elle bouge vraiment.
+
+const identite = await page.evaluate(async () => {
+  const { imagesDuClip } = await import('/src/ui/mascot-view.ts')
+  const lien = document.querySelector('link[rel="icon"]')
+  // L'icone doit etre la pose de repos, pas un dessin recopie a cote qui
+  // vieillirait tout seul des que les poses sont retouchees.
+  const attendu = document.createElement('canvas')
+  attendu.width = 64
+  attendu.height = 64
+  const ctx = attendu.getContext('2d')
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(imagesDuClip('repos')[0], 0, 0, 64, 64)
+  // Echelles : un facteur fractionnaire flouterait le bord des pixels.
+  const fractionnaires = [...document.querySelectorAll('canvas.pixl')]
+    .map((c) => c.getBoundingClientRect().width / c.width)
+    .filter((f) => Math.abs(f - Math.round(f)) > 0.01)
+  return {
+    favicon: lien?.href.startsWith('data:image/png') ?? false,
+    memeIcone: lien?.href === attendu.toDataURL('image/png'),
+    titre: document.title,
+    marque: document.querySelectorAll('.brand-mark canvas.pixl').length,
+    natif: [...document.querySelectorAll('canvas.pixl')].every((c) => c.width === 32 && c.height === 32),
+    fractionnaires: fractionnaires.length,
+  }
+})
+check('l\'onglet porte la mascotte', identite.favicon && identite.memeIcone)
+check('l\'onglet porte le nom du document', identite.titre.startsWith(await page.evaluate(() => window.pixelforge.ed.sprite.name)),
+  identite.titre)
+check('la marque est la mascotte', identite.marque === 1)
+check('les mascottes gardent leur taille native', identite.natif)
+check('les mascottes sont mises a l\'echelle par des entiers',
+  identite.fractionnaires === 0, `${identite.fractionnaires} echelle(s) fractionnaire(s)`)
+
+// La marque est en permanence sous les yeux : elle doit rester immobile
+// tant qu'on ne s'en occupe pas, et repondre au survol.
+const marque = page.locator('.brand-mark canvas.pixl')
+const imageMarque = () => marque.getAttribute('data-image')
+const repos1 = await imageMarque()
+await sleep(700)
+const repos2 = await imageMarque()
+await page.locator('.brand-mark').hover()
+await sleep(700)
+const survol = await imageMarque()
+await page.mouse.move(700, 500)
+await sleep(400)
+check('la marque ne s\'anime pas toute seule', repos1 === '0' && repos2 === '0',
+  `${repos1} puis ${repos2}`)
+check('la marque s\'anime au survol', survol !== repos2, `image ${survol} au survol`)
+
+/* --- l'etat vide d'une recherche sans resultat --- */
+await page.keyboard.press('Control+k')
+await sleep(300)
+await page.keyboard.type('zzzzqqq')
+await sleep(300)
+check('une recherche sans resultat montre la mascotte',
+  await page.locator('.cmdk-list .pixl-vide canvas.pixl').count() === 1)
+await page.keyboard.press('Escape')
+await sleep(300)
+
+/* --- l'easter egg : cinq clics rapproches sur la marque, pas quatre --- */
+const boiteMarque = await page.locator('.brand-mark').boundingBox()
+const cliquerMarque = async (n) => {
+  for (let i = 0; i < n; i++) {
+    await page.mouse.click(boiteMarque.x + boiteMarque.width / 2, boiteMarque.y + boiteMarque.height / 2)
+    await sleep(80)
+  }
+}
+await cliquerMarque(4)
+await sleep(500)
+const apresQuatre = await page.evaluate(() => ({
+  traversee: !!document.querySelector('.pixl-traversee'),
+  planche: !!document.querySelector('.pixl-planche'),
+}))
+check('quatre clics ne declenchent pas l\'easter egg',
+  !apresQuatre.traversee && !apresQuatre.planche)
+
+// La fenetre de trois secondes doit vraiment expirer : cinq clics espaces
+// ne sont pas le geste.
+await sleep(3300)
+await cliquerMarque(4)
+await sleep(400)
+check('des clics espaces ne declenchent pas l\'easter egg',
+  !(await page.evaluate(() => !!document.querySelector('.pixl-traversee') || !!document.querySelector('.pixl-planche'))))
+
+await cliquerMarque(1)
+await sleep(300)
+const traversee = await page.evaluate(() => {
+  const piste = document.querySelector('.pixl-traversee')
+  if (!piste) return null
+  const r = piste.getBoundingClientRect()
+  const dessous = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+  return {
+    x: r.left,
+    image: piste.querySelector('canvas.pixl')?.dataset.image ?? null,
+    // Declenchee par megarde, elle ne doit interrompre aucun geste.
+    transparente: dessous !== piste && !piste.contains(dessous),
+  }
+})
+check('le cinquieme clic lance la traversee', traversee !== null)
+
+// Position et image relevees plusieurs fois : deux mesures pourraient
+// tomber par hasard sur la meme image du cycle.
+const releves = []
+for (let i = 0; i < 8; i++) {
+  releves.push(await page.evaluate(() => {
+    const piste = document.querySelector('.pixl-traversee')
+    return piste
+      ? { x: piste.getBoundingClientRect().left, image: piste.querySelector('canvas.pixl')?.dataset.image ?? null }
+      : null
+  }))
+  await sleep(120)
+}
+const vus = releves.filter(Boolean)
+const avance = vus.length > 1 && vus[vus.length - 1].x > vus[0].x
+const imagesVues = new Set(vus.map((r) => r.image))
+check('la mascotte traverse l\'ecran', avance,
+  vus.length ? `de ${Math.round(vus[0].x)} a ${Math.round(vus[vus.length - 1].x)} px` : 'traversee perdue')
+check('la traversee ne prend pas la souris', traversee?.transparente ?? false)
+check('la traversee change d\'image en chemin', imagesVues.size > 1,
+  `${imagesVues.size} images vues`)
+
+// La recompense : les six cycles, chacun a sa cadence.
+await page.waitForSelector('.pixl-planche', { timeout: 6000 })
+const planche = await page.evaluate(() => [...document.querySelectorAll('.pixl-planche canvas.pixl')]
+  .map((c) => ({ clip: c.dataset.pixl, image: c.dataset.image })))
+// Ecart plus long que la pause qui separe deux passages d'un cycle sans
+// boucle : sinon deux releves pourraient tomber tous deux sur l'arret.
+await sleep(600)
+const planche2 = await page.evaluate(() => [...document.querySelectorAll('.pixl-planche canvas.pixl')]
+  .map((c) => c.dataset.image))
+const figes = planche.filter((c, i) => c.image === planche2[i]).map((c) => c.clip)
+check('la planche montre les six cycles', planche.length === 6,
+  planche.map((c) => c.clip).join(', '))
+check('chaque cycle de la planche s\'anime', figes.length === 0,
+  figes.length ? `fige : ${figes.join(', ')}` : 'les six avancent')
+await page.keyboard.press('Escape')
+await sleep(300)
+
+/* --- mouvement reduit : une pose fixe, et rien d'autre --- */
+// Onglet a part : la preference se lit au chargement de la page.
+const pageCalme = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+await pageCalme.emulateMedia({ reducedMotion: 'reduce' })
+await pageCalme.goto(URL, { waitUntil: 'networkidle' })
+await sleep(600)
+await pageCalme.keyboard.press('Escape')
+await sleep(400)
+const calme1 = await pageCalme.evaluate(() =>
+  [...document.querySelectorAll('canvas.pixl')].map((c) => c.dataset.image))
+await pageCalme.locator('.brand-mark').hover()
+await sleep(1200)
+const calme2 = await pageCalme.evaluate(() =>
+  [...document.querySelectorAll('canvas.pixl')].map((c) => c.dataset.image))
+check('mouvement reduit : les mascottes sont presentes', calme1.length > 0, `${calme1.length} mascotte(s)`)
+check('mouvement reduit : aucune mascotte ne s\'anime',
+  calme1.every((i) => i === '0') && calme2.every((i) => i === '0'),
+  `${calme1.join(',')} puis ${calme2.join(',')}`)
+
+// Meme l'easter egg se plie a la regle : la course est remplacee par la
+// recompense, pas jouee moins vite.
+const boiteCalme = await pageCalme.locator('.brand-mark').boundingBox()
+for (let i = 0; i < 5; i++) {
+  await pageCalme.mouse.click(boiteCalme.x + boiteCalme.width / 2, boiteCalme.y + boiteCalme.height / 2)
+  await sleep(80)
+}
+await sleep(600)
+const eggCalme = await pageCalme.evaluate(() => ({
+  traversee: !!document.querySelector('.pixl-traversee'),
+  planche: !!document.querySelector('.pixl-planche'),
+}))
+check('mouvement reduit : l\'easter egg saute la course', !eggCalme.traversee && eggCalme.planche)
+await pageCalme.close()
+
+/* --- la mascotte accompagne la lecon --- */
+await page.evaluate(() => window.pixelforge.runCommand('help.tutorials'))
+await sleep(400)
+check('la mascotte guide le choix d\'une lecon',
+  await page.locator('.pixl-guide canvas.pixl').count() === 1)
+await page.locator('.modal .layer-row').first().click()
+await sleep(400)
+// La lecon charge une demo par-dessus le travail en cours : elle demande
+// confirmation avant de le remplacer.
+if (await page.locator('.modal-foot .btn.primary').count()) {
+  await page.locator('.modal-foot .btn.primary').first().click()
+  await sleep(600)
+}
+const compagne = page.locator('.tutor-card canvas.pixl')
+check('la mascotte accompagne la lecon', await compagne.count() === 1)
+// La premiere etape attend un changement de zoom. La reaction ne dure que
+// le temps d'un saut : on la guette au lieu de la mesurer une seule fois.
+await page.evaluate(() => window.pixelforge.runCommand('view.zoom-in'))
+const reactions = new Set()
+for (let i = 0; i < 25; i++) {
+  reactions.add(await compagne.getAttribute('data-pixl'))
+  await sleep(60)
+}
+check('la mascotte reagit a la reussite d\'une etape', reactions.has('saut'),
+  [...reactions].join(' → '))
+await page.evaluate(() => window.pixelforge.tutorial.stop())
+await sleep(200)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 

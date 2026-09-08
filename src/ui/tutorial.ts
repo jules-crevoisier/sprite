@@ -2,6 +2,8 @@ import type { App } from './app'
 import { el, clear } from './dom'
 import { icon } from './icons'
 import { confirmDialog, openModal, showToast } from './overlay'
+import { VuePixl } from './mascot-view'
+import { marqueReagit } from './mascot-ui'
 
 export interface TutorialStep {
   text: string
@@ -37,6 +39,13 @@ export interface Lesson {
  */
 const SKIP_AFTER_MS = 25000
 
+/**
+ * Delai avant que Pixl ne se mette a faire les cent pas sur une etape en
+ * attente. Assez court pour qu'on comprenne qu'on cherche, assez long pour
+ * ne pas s'agiter pendant qu'on lit la consigne.
+ */
+const PATIENCE_MS = 9000
+
 const DONE_KEY = 'pixelforge.tutorials.done'
 const SEEN_KEY = 'pixelforge.tutorials.seen'
 
@@ -60,12 +69,20 @@ export class Tutorial {
   private lesson: Lesson | null = null
   private index = 0
   private card = el('div', { class: 'tutor-card', hidden: true })
+  /**
+   * Pixl accompagne la lecon. Elle est construite une fois et repose d'une
+   * etape a l'autre : la carte est refaite a chaque etape, une mascotte
+   * recreee repartirait de sa premiere image a chaque phrase lue.
+   */
+  private pixl = new VuePixl({ clip: 'repos', titre: 'Pixl vous accompagne' })
   private spotlight = el('div', { class: 'tutor-spotlight', hidden: true })
   private poll = 0
   private raf = 0
   /** Minuteur du filet de securite, et son etat. */
   private skipTimer = 0
   private skipOffered = false
+  /** Minuteur des cent pas de la mascotte. */
+  private patienceTimer = 0
   private target: Element | null = null
 
   constructor(app: App) {
@@ -98,7 +115,11 @@ export class Tutorial {
 
   stop(completed = false): void {
     window.clearTimeout(this.skipTimer)
+    window.clearTimeout(this.patienceTimer)
     this.skipOffered = false
+    // La lecon finie, la carte disparait : la reaction passe donc a la
+    // marque, seule presence de Pixl qui reste a l'ecran.
+    if (completed) marqueReagit('attaque')
     if (completed && this.lesson) markDone(this.lesson.id)
     this.lesson = null
     this.target = null
@@ -122,7 +143,9 @@ export class Tutorial {
     const courante = this.lesson.steps[this.index]
     if (force && courante?.done && !courante.done() && !this.skipOffered) return
     window.clearTimeout(this.skipTimer)
+    window.clearTimeout(this.patienceTimer)
     this.skipOffered = false
+    this.pixl.jouer('repos')
     this.index++
     if (this.index >= this.lesson.steps.length) {
       const title = this.lesson.title
@@ -145,12 +168,18 @@ export class Tutorial {
         this.skipOffered = true
         if (this.lesson) this.render()
       }, SKIP_AFTER_MS)
+      // Elle fait les cent pas plutot que de rester assise : c'est le signe
+      // qu'on attend quelque chose de nous, sans une phrase de plus.
+      this.patienceTimer = window.setTimeout(() => {
+        if (this.lesson && !step.done!()) this.pixl.jouer('marche')
+      }, PATIENCE_MS)
     }
   }
 
   private previous(): void {
     if (this.index <= 0) return
     window.clearTimeout(this.skipTimer)
+    window.clearTimeout(this.patienceTimer)
     this.skipOffered = false
     this.index -= 2
     this.next(true)
@@ -165,6 +194,10 @@ export class Tutorial {
       // La cible peut apparaitre apres coup, par exemple a l'ouverture d'un panneau.
       if (!this.target && step.target) this.target = step.target()
       if (step.done?.()) {
+        // Le geste est fait : elle saute. La carte devient verte au meme
+        // instant, la mascotte dit la meme chose plus vite que la couleur.
+        this.pixl.jouer('saut', 'repos')
+        window.clearTimeout(this.patienceTimer)
         this.card.classList.add('validated')
         setTimeout(() => { this.card.classList.remove('validated'); this.next() }, 420)
         clearInterval(this.poll)
@@ -246,7 +279,7 @@ export class Tutorial {
 
     this.card.append(
       el('div', { class: 'tutor-head' },
-        el('span', { html: icon(lesson.icon, 15), style: { color: 'var(--accent)', display: 'flex' } }),
+        el('span', { class: 'tutor-pixl' }, this.pixl.node),
         el('strong', null, lesson.title),
         el('span', { class: 'spacer' }),
         el('span', { class: 'tutor-count' }, `${this.index + 1}/${lesson.steps.length}`),
@@ -331,9 +364,13 @@ export class Tutorial {
       title: 'Tutoriels',
       icon: 'info',
       body: el('div', null,
-        el('p', { class: 'form-note' },
-          'Chaque lecon charge un document de demonstration et se deroule dans l\'editeur. ',
-          'Vous pouvez faire le geste vous-meme ou laisser la lecon le faire pour voir le resultat.'),
+        el('div', { class: 'pixl-guide' },
+          el('div', { class: 'pixl-guide-scene' }, new VuePixl({ echelle: 2, clip: 'repos' }).node),
+          el('p', { class: 'form-note', style: { margin: '0' } },
+            'Chaque lecon charge un document de demonstration et se deroule dans l\'editeur. ',
+            'Vous pouvez faire le geste vous-meme ou laisser la lecon le faire pour voir le resultat. ',
+            'Pixl vous accompagne : elle saute quand une etape est reussie.'),
+        ),
         el('div', { style: { height: '12px' } }),
         list,
       ),
@@ -341,18 +378,41 @@ export class Tutorial {
     })
   }
 
-  /** Propose la premiere lecon au tout premier lancement. */
+  /**
+   * Propose la premiere lecon au tout premier lancement.
+   *
+   * C'est le tout premier ecran du logiciel : Pixl s'y presente elle-meme
+   * plutot que de laisser un paragraphe seul dire ce qu'est l'application.
+   */
   async offerFirstRun(lessons: Lesson[]): Promise<void> {
     try {
       if (localStorage.getItem(SEEN_KEY)) return
       localStorage.setItem(SEEN_KEY, '1')
     } catch { return }
-    if (await confirmDialog(
-      'Bienvenue dans PixelForge',
-      'Une visite guidee de quelques minutes montre le dessin, l\'animation, le squelette et l\'export vers Unity ou Godot. La lancer ?',
-      'Commencer la visite',
-    )) {
-      void this.start(lessons[0])
-    }
+    const accepte = await new Promise<boolean>((resolve) => {
+      let repondu = false
+      const vue = new VuePixl({ echelle: 3, clip: 'repos' })
+      openModal({
+        title: 'Bienvenue dans PixelForge',
+        icon: 'info',
+        body: el('div', { class: 'pixl-bienvenue' },
+          el('div', { class: 'pixl-bienvenue-scene' }, vue.node),
+          el('div', null,
+            el('p', { class: 'form-note', style: { margin: '0 0 8px', fontSize: '13px' } },
+              'Voici Pixl. Elle fait trente-deux pixels de cote, elle a six cycles d\'animation, ',
+              'et elle a ete dessinee ici — c\'est tout ce que fait ce logiciel.'),
+            el('p', { class: 'form-note', style: { margin: '0' } },
+              'Une visite guidee de quelques minutes montre le dessin, l\'animation, le squelette ',
+              'et l\'export vers Unity ou Godot. La lancer ?'),
+          ),
+        ),
+        actions: [
+          { label: 'Plus tard', onClick: () => { repondu = true; resolve(false) } },
+          { label: 'Commencer la visite', primary: true, onClick: () => { repondu = true; resolve(true) } },
+        ],
+        onClose: () => { if (!repondu) resolve(false) },
+      })
+    })
+    if (accepte) void this.start(lessons[0])
   }
 }

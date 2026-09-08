@@ -27,6 +27,8 @@ import { Tutorial, type Lesson } from './tutorial'
 import { buildLessons } from './lessons'
 import { el, qs, clear } from './dom'
 import { openModal, showToast, confirmDialog } from './overlay'
+import { poserFavicon, VuePixl, type ClipId } from './mascot-view'
+import { carteAccueilPixl } from './mascot-ui'
 
 const AUTOSAVE_INTERVAL = 45_000
 
@@ -79,6 +81,11 @@ export class App {
     this.commands = buildCommands(this)
     this.commandMap = new Map(this.commands.map((c) => [c.id, c]))
 
+    // L'onglet aussi porte la mascotte : c'est le seul endroit de
+    // l'identite qui reste visible quand la fenetre est en arriere-plan.
+    poserFavicon()
+    this.renderTitle()
+
     this.mount()
     this.wire()
     this.viewport.fit()
@@ -121,6 +128,14 @@ export class App {
   }
 
   private renderTop(): void { renderTopbar(qs('#topbar'), this) }
+
+  /**
+   * Nom du document dans l'onglet. Plusieurs sprites ouverts dans plusieurs
+   * onglets etaient impossibles a distinguer : tous portaient le meme titre.
+   */
+  private renderTitle(): void {
+    document.title = `${this.ed.sprite.name} — PixelForge`
+  }
   private renderTools(): void { renderToolbar(qs('#toolbar'), this.ed, (id) => this.setTool(id as ToolId)) }
   private renderOptions(): void { renderOptionsBar(qs('#optionsbar'), this.ed, () => this.renderOptions()) }
 
@@ -163,7 +178,7 @@ export class App {
     ed.events.on('toast', ({ text, kind }) => showToast(text, kind))
     ed.events.on('settings', () => { this.renderOptions(); this.renderHud(); this.viewport.updateCursorStyle() })
     ed.events.on('mode', () => { this.renderTools(); this.renderOptions(); this.renderTop() })
-    ed.events.on('doc', () => { this.renderTop(); this.renderHud(); this.maybeAutosave() })
+    ed.events.on('doc', () => { this.renderTop(); this.renderHud(); this.renderTitle(); this.maybeAutosave() })
     ed.events.on('reload', () => { invalidateBake(); this.renderTop(); this.renderHud(); this.colorPanel.renderPalette() })
     ed.history.onChange(() => this.renderTop())
 
@@ -281,7 +296,14 @@ export class App {
    */
   private async startupPrompts(): Promise<void> {
     const restored = await this.offerAutosaveRestore()
-    if (!restored) await this.tutorial.offerFirstRun(this.lessons())
+    if (restored) return
+    await this.tutorial.offerFirstRun(this.lessons())
+    // Le document est vierge et la visite a ete declinee : la toile est un
+    // petit carre au milieu d'un grand fond vide. Pixl s'y installe, et
+    // s'efface au premier trait.
+    if (!this.tutorial.running && !this.ed.history.canUndo) {
+      qs('#canvas-area').appendChild(carteAccueilPixl(this))
+    }
   }
 
   /** Propose de reprendre le travail precedent au demarrage. */
@@ -304,10 +326,27 @@ export class App {
   }
 
   showAbout(): void {
+    // Elle se presente en s'animant : dire « editeur d'animation » et le
+    // montrer dans la meme boite vaut mieux que de l'ecrire deux fois.
+    const vue = new VuePixl({ echelle: 3, clip: 'repos', titre: 'Cliquez : Pixl passe au cycle suivant' })
+    const cycles: ClipId[] = ['repos', 'marche', 'course', 'saut', 'attaque', 'degats']
+    let rang = 0
+    const scene = el('div', { class: 'pixl-carte-scene', onclick: () => {
+      rang = (rang + 1) % cycles.length
+      vue.jouer(cycles[rang], cycles[rang] === 'repos' ? null : 'repos')
+      legende.textContent = `Pixl · cycle ${cycles[rang]}`
+    } }, vue.node)
+    const legende = el('span', { class: 'pixl-carte-legende' }, 'Pixl · cycle repos')
+
     const body = el('div', null,
-      el('p', { class: 'form-note', style: { fontSize: '13px', lineHeight: '1.65' } },
-        'PixelForge est un editeur de sprites et d\'animation pixel art qui tourne entierement dans le navigateur. ',
-        'Rien n\'est envoye sur un serveur : le document vit dans l\'onglet et la sauvegarde automatique reste locale.'),
+      el('div', { class: 'pixl-carte' }, scene,
+        el('div', null,
+          el('p', { class: 'form-note', style: { margin: '0 0 6px', fontSize: '13px', lineHeight: '1.65' } },
+            'PixelForge est un editeur de sprites et d\'animation pixel art qui tourne entierement dans le navigateur. ',
+            'Rien n\'est envoye sur un serveur : le document vit dans l\'onglet et la sauvegarde automatique reste locale.'),
+          legende,
+        ),
+      ),
       el('div', { class: 'form-section' }, 'Pense pour le game dev'),
       el('ul', { style: { margin: '0', paddingLeft: '18px', color: 'var(--text-dim)', lineHeight: '1.8', fontSize: '12.5px' } },
         el('li', null, 'Tags d\'animation exportes en clips Unity et en SpriteFrames Godot.'),

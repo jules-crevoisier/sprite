@@ -2,6 +2,7 @@ import type { App } from './app'
 import { el, clear, iconButton, segmented } from './dom'
 import { icon } from './icons'
 import { openMenu, type MenuItem } from './overlay'
+import { marquePixl } from './mascot-ui'
 import { keyLabel } from './shortcuts'
 
 /** Organisation des menus deroulants ; '---' insere un separateur. */
@@ -84,13 +85,10 @@ export function renderTopbar(container: HTMLElement, app: App): void {
   clear(container)
   const ed = app.ed
 
+  // La marque, c'est la mascotte : quatre carres de couleur ne disaient
+  // rien du logiciel, et l'identite existait deja plus bas dans les demos.
   container.appendChild(el('div', { class: 'brand' },
-    el('div', { class: 'brand-mark' },
-      el('i', { style: { background: '#6c8cff' } }),
-      el('i', { style: { background: '#ffb454' } }),
-      el('i', { style: { background: '#54d6a0' } }),
-      el('i', { style: { background: '#ff6b8a' } }),
-    ),
+    marquePixl(app),
     el('span', { class: 'brand-name' }, 'Pixel', el('b', null, 'Forge')),
   ))
 
