@@ -554,6 +554,15 @@ input[type="range"]::-moz-range-thumb {
   border-bottom: 1px solid var(--line);
 }
 .bone-branch.is-root::before, .bone-branch.is-root::after { display: none; }
+/* Apercu d'une courbe de vitesse, a cote de son nom. */
+.easing-preview {
+  display: flex; flex: none;
+  color: var(--accent);
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
 /* Reglages de l'os choisi, sous sa ligne : role et profondeur. */
 .bone-extra {
   display: flex; align-items: center; gap: 10px;

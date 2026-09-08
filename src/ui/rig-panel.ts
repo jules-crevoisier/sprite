@@ -5,12 +5,35 @@ import {
 } from '../smart/rig'
 import { RIG_TEMPLATES, applyTemplate } from '../smart/rig-presets'
 import { ANIM_CLIPS, clipFits, clipPoses, clipTouches, type AnimClip } from '../smart/anim-clips'
+import { EASINGS, ease, easingPath, type EasingId } from '../smart/easing'
+import { applyFollowThrough, hasSoftBones } from '../smart/follow-through'
 import { rigState, refreshPose, syncRestFromCanvas, writePoseToFrame } from '../tools'
-import { el, clear, iconButton, numberInput, slider } from './dom'
+import { el, clear, checkbox, iconButton, numberInput, slider } from './dom'
 import { genId } from '../core/document'
 import { icon } from './icons'
 import { fromHex } from '../core/color'
 import { confirmDialog, openMenu, showToast } from './overlay'
+
+/**
+ * Trace une courbe de vitesse. Le nom d'une courbe ne dit rien : il faut voir
+ * « depassement » sortir du cadre pour comprendre ce qu'elle fait.
+ */
+function easingPreview(id: EasingId): HTMLElement {
+  const W = 42, H = 24, pad = 3
+  const points = easingPath(id, 24)
+  // La courbe peut sortir de l'intervalle : on cadre sur ce qu'elle occupe.
+  let bas = 0, haut = 1
+  for (const p of points) { bas = Math.min(bas, p.y); haut = Math.max(haut, p.y) }
+  const trace = points.map((p, i) => {
+    const x = pad + p.x * (W - pad * 2)
+    const y = H - pad - ((p.y - bas) / (haut - bas)) * (H - pad * 2)
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
+  }).join(' ')
+  const svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" class="easing-curve">`
+    + `<path d="${trace}" fill="none" stroke="currentColor" stroke-width="1.4"`
+    + ' stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  return el('span', { class: 'easing-preview', html: svg, title: 'Repartition des images entre les deux poses' })
+}
 
 /**
  * Panneau du mode Squelette : hierarchie des os, liaison des pixels, rendu
@@ -25,6 +48,10 @@ export class RigPanel {
   private poseA: Pose | null = null
   /** Empreinte de ce qui est affiche : on ne rebatit que si elle change. */
   private drawn = ''
+  /** Courbe de vitesse des frames intermediaires. */
+  private easing: EasingId = 'ease-in-out'
+  /** Ajout automatique du retard des os souples. */
+  private followThrough = true
 
   constructor(editor: Editor) {
     this.ed = editor
@@ -51,13 +78,15 @@ export class RigPanel {
   private signature(): string {
     const rig = this.rig
     return [
-      rig.bones.map((b) => `${b.id}/${b.name}/${b.parent ?? '-'}/${b.z}/${b.role}/${b.depth}`).join(','),
+      rig.bones.map((b) => `${b.id}/${b.name}/${b.parent ?? '-'}/${b.z}/${b.role}/${b.depth}/${b.softness}`).join(','),
       rig.parts.map((p) => p.layer).join('+') || 'libre',
       this.ed.activeLayer,
       // Le rattachement ne s'affiche que sur l'os choisi : la selection
       // change donc bien le HTML de la liste.
       rigState.selected,
       rigState.seam,
+      this.easing,
+      this.followThrough ? 'suivi' : '-',
       this.poseA ? 'A' : '-',
     ].join('|')
   }
@@ -149,11 +178,26 @@ export class RigPanel {
         onclick: () => this.tween(Math.max(1, Number(count.value))),
       }, 'Frames intermediaires'),
     ))
+
+    // Courbe de vitesse : c'est la repartition des images entre les deux
+    // poses, pas leur nombre, qui donne le poids du mouvement.
+    const courbe = el('select', {
+      style: { flex: '1', minWidth: '0', height: '24px', fontSize: '11px' },
+      onchange: () => { this.easing = courbe.value as EasingId; this.render() },
+    }, ...EASINGS.map((e) => el('option', {
+      value: e.id, selected: e.id === this.easing, title: e.hint,
+    }, e.label)))
+    this.body.appendChild(el('div', {
+      class: 'form-row', style: { marginTop: '6px', alignItems: 'center' },
+    }, courbe, easingPreview(this.easing)))
+    this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '4px' } },
+      EASINGS.find((e) => e.id === this.easing)?.hint ?? ''))
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
       'Memorisez une pose, deplacez le squelette, puis generez les frames : ',
       'l\'interpolation produit le mouvement complet.'))
 
     this.animationSection()
+    this.followSection()
     this.turnSection()
   }
 
@@ -195,13 +239,43 @@ export class RigPanel {
       'chaque frame reste modifiable.'))
   }
 
+  /* ---------------------------------------------------------------- */
+  /* Suivi et inertie                                                  */
+  /* ---------------------------------------------------------------- */
+
+  /** Reglage des os qui trainent derriere le corps. */
+  private followSection(): void {
+    const rig = this.rig
+    this.body.appendChild(el('div', { class: 'form-section' }, 'Suivi et inertie'))
+    const souples = rig.bones.filter((b) => b.softness > 0)
+    this.body.appendChild(el('div', { class: 'opt' },
+      checkbox('Faire trainer les os souples', this.followThrough, (v) => {
+        this.followThrough = v
+        this.render()
+      }),
+    ))
+    this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '4px' } },
+      souples.length
+        ? `${souples.map((b) => b.name).join(', ')} : ces os gardent leur orientation `
+          + 'quand le corps tourne, depassent a l\'arret, puis se stabilisent. '
+          + 'Reglez la souplesse sur l\'os choisi.'
+        : 'Aucun os souple. Choisissez un os et montez sa souplesse : une cape, '
+          + 'une queue ou une meche ne suivent pas le corps a l\'image pres.'))
+  }
+
+  /** Ajoute le retard des os souples, si le reglage le demande. */
+  private withFollow(poses: Pose[], loop: boolean): Pose[] {
+    if (!this.followThrough || !hasSoftBones(this.rig)) return poses
+    return applyFollowThrough(this.rig, poses, loop)
+  }
+
   /** Deroule un cycle en frames, a la suite de la frame courante. */
   private generateClip(clip: AnimClip): void {
     syncRestFromCanvas(this.ed)
     const ed = this.ed
     const rig = this.rig
     const base = capturePose(rig)
-    const poses = clipPoses(rig, clip, clip.frames, base)
+    const poses = this.withFollow(clipPoses(rig, clip, clip.frames, base), clip.loop)
     const from = ed.activeFrame
 
     ed.run(`Animation « ${clip.label} »`, () => {
@@ -459,6 +533,13 @@ export class RigPanel {
           this.ed.run('Profondeur d\'un os', () => { bone.depth = v })
           refreshPose(this.ed)
         }, { min: -64, max: 64, width: '46px' })),
+      el('label', {
+        title: 'Souplesse : au-dessus de zero, l\'os traine derriere le corps, '
+          + 'depasse a l\'arret puis se stabilise. Pour une cape, une queue, une meche.',
+      }, 'souple', numberInput(Math.round(bone.softness * 100), (v) => {
+        this.ed.run('Souplesse d\'un os', () => { bone.softness = Math.max(0, Math.min(100, v)) / 100 })
+        this.render()
+      }, { min: 0, max: 100, width: '46px' })),
     ))
     wrap.dataset.bone = String(bone.id)
     return wrap
@@ -633,13 +714,20 @@ export class RigPanel {
     const ed = this.ed
     const from = ed.activeFrame
 
+    // La courbe de vitesse redistribue les images entre les deux poses : le
+    // depart et l'arrivee ne bougent pas, seule la maniere d'aller de l'une a
+    // l'autre change.
+    const suite = this.withFollow(
+      Array.from({ length: steps }, (_, i) => lerpPose(this.poseA!, poseB, ease(this.easing, (i + 1) / steps))),
+      false,
+    )
     ed.run('Frames intermediaires', () => {
-      for (let i = 1; i <= steps; i++) {
-        applyPose(rig, lerpPose(this.poseA!, poseB, i / steps))
-        const at = from + i
+      suite.forEach((pose, i) => {
+        applyPose(rig, pose)
+        const at = from + i + 1
         ed.sprite.duplicateFrame(from, at)
         writePoseToFrame(ed, at)
-      }
+      })
       applyPose(rig, poseB)
     })
     ed.setActiveFrame(from + steps)

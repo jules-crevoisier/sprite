@@ -289,7 +289,8 @@ function drawSkeleton(ed: Editor, o: OverlayContext, extra?: { x1: number; y1: n
     ctx.lineWidth = (selected ? 1.8 : 1.1) * unit
     ctx.stroke()
 
-    // Racine : anneau creux. Bout : disque plein, la poignee qui fait pivoter.
+    // Racine : anneau creux, barre d'un trait quand l'os pend a un parent —
+    // l'articulation est alors solidaire et ne peut pas etre detachee.
     ctx.beginPath()
     ctx.arc(pt.x1, pt.y1, 2 * unit + 0.6, 0, Math.PI * 2)
     ctx.fillStyle = '#0d0f14ee'
@@ -297,6 +298,14 @@ function drawSkeleton(ed: Editor, o: OverlayContext, extra?: { x1: number; y1: n
     ctx.strokeStyle = color
     ctx.lineWidth = 1.4 * unit
     ctx.stroke()
+    if (bone.parent !== null) {
+      const r = 2 * unit + 0.6
+      ctx.beginPath()
+      ctx.moveTo(pt.x1 - r * 0.6, pt.y1)
+      ctx.lineTo(pt.x1 + r * 0.6, pt.y1)
+      ctx.lineWidth = 1 * unit
+      ctx.stroke()
+    }
 
     ctx.beginPath()
     ctx.arc(pt.x2, pt.y2, 1.9 * unit + 0.5, 0, Math.PI * 2)
@@ -445,7 +454,9 @@ export const rigPoseTool: Tool = {
   shortcut: 'J',
   icon: ICONS.rig,
   group: 'rig',
-  hint: 'Tirer le bout d\'un os le fait pivoter, sa racine le deplace. Les os enfants suivent.',
+  hint: 'Tirer le bout d\'un os le fait pivoter, les enfants suivent. '
+    + 'Une articulation reste attachee : la tirer fait pivoter l\'os porteur. '
+    + 'Seule la racine du squelette se deplace librement.',
   options: [],
   cursor: 'grab',
 
@@ -459,14 +470,26 @@ export const rigPoseTool: Tool = {
       if (bone) { rigState.selected = bone.id; ed.events.emit('settings', undefined) }
       return
     }
-    rigState.selected = joint.bone.id
-    const inv = invert(parentWorld(ed, joint.bone))
-    poseDrag = joint.end === 'tip'
-      ? { kind: 'rotate', bone: joint.bone, parentInv: inv }
+    // La racine d'un os enfant est l'articulation qu'il partage avec son
+    // parent : la tirer ne doit pas l'en detacher — on ne devrait pas pouvoir
+    // arracher une jambe. On fait donc pivoter le parent, ce qui deplace
+    // l'articulation tout en gardant le membre attache au corps. Seule une
+    // racine du squelette se deplace librement.
+    let cible = joint.bone
+    let mode: 'rotate' | 'translate' = joint.end === 'tip' ? 'rotate' : 'translate'
+    if (joint.end === 'root' && joint.bone.parent !== null) {
+      const parent = ed.sprite.rig.bones.find((b) => b.id === joint.bone.parent)
+      if (parent) { cible = parent; mode = 'rotate' }
+    }
+
+    rigState.selected = cible.id
+    const inv = invert(parentWorld(ed, cible))
+    poseDrag = mode === 'rotate'
+      ? { kind: 'rotate', bone: cible, parentInv: inv }
       : {
-          kind: 'translate', bone: joint.bone, parentInv: inv,
+          kind: 'translate', bone: cible, parentInv: inv,
           startX: applyX(inv, p.x, p.y), startY: applyY(inv, p.x, p.y),
-          baseTx: joint.bone.tx, baseTy: joint.bone.ty,
+          baseTx: cible.tx, baseTy: cible.ty,
         }
     structureBefore = snapshotStructure(ed.sprite)
     ed.beginStroke('Poser')

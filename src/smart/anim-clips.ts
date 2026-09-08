@@ -45,37 +45,50 @@ const bump = (t: number, at: number, width: number): number => {
   const d = Math.abs(t - at) / width
   return d >= 1 ? 0 : Math.cos(d * Math.PI / 2) ** 2
 }
-/**
- * Meme rampe, mais sur un cycle qui boucle : la distance est prise sur le
- * cercle, de sorte qu'une bosse posee pres de 0 deborde correctement sur la
- * fin du cycle au lieu d'etre coupee.
- */
-const bumpLoop = (t: number, at: number, width: number): number => {
-  let d = Math.abs(((t - at) % 1 + 1.5) % 1 - 0.5) / width
-  if (d >= 1) return 0
-  d = Math.max(0, d)
-  return Math.cos(d * Math.PI / 2) ** 2
-}
 
 /**
- * Interpolation douce entre des poses cles reparties sur le cycle.
+ * Courbe fermee passant par des poses cles reparties sur le cycle.
  *
- * Une marche n'est pas un sinus : la jambe d'appui reste tendue et balaie
- * regulierement, tandis que la jambe libre plie franchement le genou pour
- * passer le pied. Decrire les quatre poses cles — contact, bas, passage,
- * haut — donne le bon rythme la ou une seule sinusoide donne un balancement
- * de pendule.
+ * L'interpolation est une spline de Catmull-Rom bouclee. Le detail compte :
+ * un lissage cosinus segment par segment annule la vitesse a chaque pose
+ * cle, si bien que le mouvement s'arrete puis repart huit fois par cycle.
+ * Mesure faite, les pas d'un cycle de marche allaient du simple au triple —
+ * ce qui se lit comme un a-coup a chaque tour, meme si le raccord, lui, est
+ * parfait. Catmull-Rom garde une vitesse continue en traversant les cles, y
+ * compris entre la derniere et la premiere.
  */
 const keys = (values: number[]) => (t: number): number => {
   const n = values.length
+  if (n === 1) return values[0]
   const p = ((t % 1) + 1) % 1 * n
   const i = Math.floor(p)
   const f = p - i
-  const a = values[i % n]
-  const b = values[(i + 1) % n]
-  // Lissage cosinus : les poses cles sont tenues, les passages adoucis.
-  return a + (b - a) * (1 - Math.cos(f * Math.PI)) / 2
+  const v0 = values[(i - 1 + n) % n]
+  const v1 = values[i % n]
+  const v2 = values[(i + 1) % n]
+  const v3 = values[(i + 2) % n]
+  return 0.5 * (
+    2 * v1
+    + (v2 - v0) * f
+    + (2 * v0 - 5 * v1 + 4 * v2 - v3) * f * f
+    + (3 * v1 - v0 - 3 * v2 + v3) * f * f * f
+  )
 }
+
+/**
+ * Balancement d'une cuisse sur un cycle de marche, le contact en t = 0.
+ *
+ * L'appui balaie regulierement de l'avant vers l'arriere sur la premiere
+ * moitie ; la seconde ramene la jambe devant, plus vite, comme un pas reel.
+ */
+const legSwing = keys([0.45, 0.24, 0.02, -0.22, -0.45, -0.16, 0.14, 0.36])
+
+/**
+ * Flexion du genou correspondante. Presque tendu tant que le pied porte,
+ * franchement plie au moment ou la jambe repasse sous le corps : c'est ce
+ * pli qui evite au pied de racler le sol, et qui fait lire la marche.
+ */
+const kneeBend = keys([-0.06, -0.06, -0.12, -0.22, -0.38, -0.78, -0.44, -0.14])
 
 export const ANIM_CLIPS: AnimClip[] = [
   {
@@ -96,57 +109,58 @@ export const ANIM_CLIPS: AnimClip[] = [
   {
     id: 'walk',
     label: 'Marche',
-    hint: 'Contact, bas, passage, haut — genoux et coudes articules',
+    hint: 'Appui regulier, jambe libre qui plie le genou pour passer le pied',
     needs: ['legL', 'legR'],
     frames: 8, ms: 110, loop: true,
     channels: {
-      // Le corps est au plus bas au contact et au plus haut au passage :
-      // c'est ce va-et-vient, pas le balancement des jambes, qui donne le poids.
+      // Le corps est au plus bas au contact et au plus haut au passage.
       torso: {
-        ty: keys([0.004, 0.012, -0.010, 0.002]),
-        tx: (t) => sin(t, 0.25) * 0.035,
+        ty: keys([0.006, 0.010, 0.002, -0.008, -0.010, -0.004, 0.004, 0.008]),
+        tx: (t) => sin(t, 0.25) * 0.03,
         angle: (t) => sin(t, 0.25) * 0.03,
       },
       head: { angle: (t) => -sin(t, 0.25) * 0.04 },
 
-      // Cuisse gauche : en avant au contact, en arriere une demi-periode plus
-      // tard. Le tibia reste tendu a l'appui et plie fort pour passer le pied.
-      legL: { angle: keys([0.42, 0.14, -0.16, -0.40]) },
-      shinL: { angle: (t) => -0.10 - bumpLoop(t, 0.66, 0.34) * 0.72 },
-      legR: { angle: (t) => keys([0.42, 0.14, -0.16, -0.40])(t + 0.5) },
-      shinR: { angle: (t) => -0.10 - bumpLoop(t + 0.5, 0.66, 0.34) * 0.72 },
+      // La cuisse decrit une oscillation complete sur le cycle : en avant au
+      // contact, en arriere a la poussee, de retour en avant a l'appui
+      // suivant. Une suite qui ne ferait que decroitre reviendrait d'un bond
+      // au depart et le cycle boiterait a chaque tour.
+      legL: { angle: legSwing },
+      shinL: { angle: kneeBend },
+      legR: { angle: (t) => legSwing(t + 0.5) },
+      shinR: { angle: (t) => kneeBend(t + 0.5) },
 
       // Bras a contretemps des jambes, coude toujours un peu flechi.
-      armL: { angle: (t) => keys([-0.34, -0.12, 0.14, 0.32])(t) },
-      forearmL: { angle: (t) => -0.20 - bumpLoop(t, 0.2, 0.4) * 0.28 },
-      armR: { angle: (t) => keys([-0.34, -0.12, 0.14, 0.32])(t + 0.5) },
-      forearmR: { angle: (t) => -0.20 - bumpLoop(t + 0.5, 0.2, 0.4) * 0.28 },
+      armL: { angle: (t) => legSwing(t + 0.5) * 0.7 },
+      forearmL: { angle: (t) => -0.22 - Math.max(0, legSwing(t + 0.5)) * 0.4 },
+      armR: { angle: (t) => legSwing(t) * 0.7 },
+      forearmR: { angle: (t) => -0.22 - Math.max(0, legSwing(t)) * 0.4 },
     },
   },
   {
     id: 'run',
     label: 'Course',
-    hint: 'Buste penche, grandes foulees, genoux tres flechis',
+    hint: 'Buste penche, foulee ample, talon ramene haut sous la cuisse',
     needs: ['legL', 'legR'],
     frames: 8, ms: 70, loop: true,
     channels: {
       torso: {
-        ty: keys([0.006, 0.022, -0.030, -0.004]),
-        tx: (t) => sin(t, 0.25) * 0.06,
+        ty: keys([0.010, 0.018, 0.000, -0.020, -0.026, -0.010, 0.006, 0.016]),
+        tx: (t) => sin(t, 0.25) * 0.05,
         angle: (t) => 0.2 + sin(t, 0.25) * 0.05,
       },
       head: { angle: (t) => -0.18 - sin(t, 0.25) * 0.06 },
 
-      // La course ramene le talon haut sous la cuisse : le tibia plie bien
-      // plus qu'a la marche, et la jambe arriere reste flechie a la poussee.
-      legL: { angle: keys([0.85, 0.2, -0.3, -0.7]) },
-      shinL: { angle: (t) => -0.25 - bumpLoop(t, 0.62, 0.42) * 1.5 },
-      legR: { angle: (t) => keys([0.85, 0.2, -0.3, -0.7])(t + 0.5) },
-      shinR: { angle: (t) => -0.25 - bumpLoop(t + 0.5, 0.62, 0.42) * 1.5 },
+      // Meme oscillation qu'a la marche, amplifiee : la foulee est plus
+      // longue et le talon remonte bien plus haut sous la cuisse.
+      legL: { angle: (t) => legSwing(t) * 1.7 },
+      shinL: { angle: (t) => kneeBend(t) * 2 - 0.2 },
+      legR: { angle: (t) => legSwing(t + 0.5) * 1.7 },
+      shinR: { angle: (t) => kneeBend(t + 0.5) * 2 - 0.2 },
 
-      armL: { angle: (t) => keys([-0.75, -0.2, 0.35, 0.7])(t) },
+      armL: { angle: (t) => legSwing(t + 0.5) * 1.4 },
       forearmL: { angle: () => -1.1 },
-      armR: { angle: (t) => keys([-0.75, -0.2, 0.35, 0.7])(t + 0.5) },
+      armR: { angle: (t) => legSwing(t) * 1.4 },
       forearmR: { angle: () => -1.1 },
     },
   },
@@ -239,7 +253,7 @@ export const ANIM_CLIPS: AnimClip[] = [
     frames: 6, ms: 130, loop: true,
     channels: {
       tail: { angle: (t) => sin(t) * 0.35 },
-      head: { angle: (t) => sin(t, 0.3) * 0.12 },
+      head: { angle: (t) => sin(t, 0.25) * 0.12 },
       armL: { angle: (t) => sin(t, 0.15) * 0.14 },
       armR: { angle: (t) => sin(t, 0.65) * 0.14 },
       wingL: { angle: (t) => sin(t, 0.15) * 0.2 },

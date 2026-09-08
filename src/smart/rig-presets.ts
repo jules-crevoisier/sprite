@@ -28,6 +28,8 @@ interface TemplateBone {
    * partie large voisine lors de la liaison.
    */
   radius?: number
+  /** Souplesse : au-dessus de zero, l'os traine derriere le corps. */
+  softness?: number
 }
 
 export interface RigTemplate {
@@ -90,7 +92,7 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     bones: [
       { name: 'corps', x: 0.72, y: 0.46, ex: 0.28, ey: 0.42, parent: null, role: 'torso', radius: 0.34 },
       { name: 'tete', x: 0.28, y: 0.42, ex: 0.08, ey: 0.28, parent: 0, role: 'head', radius: 0.34 },
-      { name: 'queue', x: 0.72, y: 0.46, ex: 0.95, ey: 0.3, parent: 0, role: 'tail' },
+      { name: 'queue', x: 0.72, y: 0.46, ex: 0.95, ey: 0.3, parent: 0, role: 'tail', softness: 0.7 },
       { name: 'patte AV G', x: 0.32, y: 0.5, ex: 0.28, ey: 0.97, parent: 0, role: 'armL', depth: 0.08 },
       { name: 'patte AV D', x: 0.4, y: 0.5, ex: 0.4, ey: 0.97, parent: 0, role: 'armR', depth: -0.08 },
       { name: 'patte AR G', x: 0.64, y: 0.5, ex: 0.6, ey: 0.97, parent: 0, role: 'legL', depth: 0.08 },
@@ -104,9 +106,9 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     bones: [
       { name: 'corps', x: 0.58, y: 0.6, ex: 0.4, ey: 0.4, parent: null, role: 'torso', radius: 0.34 },
       { name: 'tete', x: 0.4, y: 0.4, ex: 0.26, ey: 0.22, parent: 0, role: 'head', radius: 0.34 },
-      { name: 'aile G', x: 0.48, y: 0.44, ex: 0.1, ey: 0.28, parent: 0, role: 'wingL', depth: 0.14 },
-      { name: 'aile D', x: 0.54, y: 0.44, ex: 0.9, ey: 0.28, parent: 0, role: 'wingR', depth: -0.14 },
-      { name: 'queue', x: 0.58, y: 0.6, ex: 0.88, ey: 0.72, parent: 0, role: 'tail' },
+      { name: 'aile G', x: 0.48, y: 0.44, ex: 0.1, ey: 0.28, parent: 0, role: 'wingL', depth: 0.14, softness: 0.3 },
+      { name: 'aile D', x: 0.54, y: 0.44, ex: 0.9, ey: 0.28, parent: 0, role: 'wingR', depth: -0.14, softness: 0.3 },
+      { name: 'queue', x: 0.58, y: 0.6, ex: 0.88, ey: 0.72, parent: 0, role: 'tail', softness: 0.7 },
       { name: 'pattes', x: 0.52, y: 0.62, ex: 0.5, ey: 0.94, parent: 0, role: 'legL', radius: 0.16 },
     ],
   },
@@ -117,8 +119,8 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     bones: [
       { name: 'tronc', x: 0.5, y: 0.99, ex: 0.5, ey: 0.55, parent: null, role: 'torso', radius: 0.34 },
       { name: 'cime', x: 0.5, y: 0.55, ex: 0.5, ey: 0.08, parent: 0, role: 'head', radius: 0.34 },
-      { name: 'branche G', x: 0.5, y: 0.58, ex: 0.14, ey: 0.32, parent: 0, role: 'armL', depth: 0.1 },
-      { name: 'branche D', x: 0.5, y: 0.58, ex: 0.86, ey: 0.32, parent: 0, role: 'armR', depth: -0.1 },
+      { name: 'branche G', x: 0.5, y: 0.58, ex: 0.14, ey: 0.32, parent: 0, role: 'armL', depth: 0.1, softness: 0.8 },
+      { name: 'branche D', x: 0.5, y: 0.58, ex: 0.86, ey: 0.32, parent: 0, role: 'armR', depth: -0.1, softness: 0.8 },
     ],
   },
   {
@@ -167,6 +169,7 @@ export function applyTemplate(
     made.role = bone.role
     made.depth = (bone.depth ?? 0) * box.w
     if (bone.radius !== undefined) made.radius = Math.max(1, bone.radius * box.w)
+    made.softness = bone.softness ?? 0
     created.push(made.id)
   }
   resetPose(rig)

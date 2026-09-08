@@ -1056,6 +1056,164 @@ const portee = await page.evaluate(async () => {
 check('un os de bras ne remonte pas voler la tempe', portee.brasSousLEpaule)
 check('la tete et le torse ne se disputent pas le cou', portee.teteAuDessusDuTorse)
 
+/* --- les cycles doivent tourner sans a-coup --- */
+const boucles = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { ANIM_CLIPS, clipPoses, clipFits } = await import('/src/smart/anim-clips.ts')
+  const { emptyRig } = await import('/src/smart/rig.ts')
+  const ed = window.pixelforge.ed
+  const out = {}
+  for (const clip of ANIM_CLIPS) {
+    if (!clip.loop) continue
+    const rig = emptyRig()
+    applyTemplate(rig, RIG_TEMPLATES[0], demoCharacter().layers[0].cels[0].bitmap, ed.sprite)
+    if (!clipFits(clip, rig)) continue
+    const poses = clipPoses(rig, clip, clip.frames)
+    const angles = poses.map((p) => rig.bones.map((b) => p[b.id].angle))
+    const ecart = (a, b) => a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0)
+    const pas = []
+    for (let i = 0; i < angles.length - 1; i++) pas.push(ecart(angles[i], angles[i + 1]))
+    const raccord = ecart(angles[angles.length - 1], angles[0])
+    const tous = [...pas, raccord]
+    out[clip.id] = {
+      // Le raccord doit etre un pas comme les autres : sinon le cycle
+      // saute a chaque tour.
+      saut: +(raccord / Math.max(...pas)).toFixed(2),
+      // Et les pas ne doivent pas aller du simple au triple, sinon le
+      // mouvement s'arrete puis repart plusieurs fois par cycle.
+      regularite: +(Math.min(...tous) / Math.max(...tous)).toFixed(2),
+    }
+  }
+  return out
+})
+const tours = Object.entries(boucles)
+check('le raccord d\'un cycle est un pas comme les autres',
+  tours.every(([, v]) => v.saut <= 1.35),
+  tours.map(([k, v]) => `${k}:${v.saut}`).join(' '))
+check('un cycle ne s\'arrete pas puis repart en cours de route',
+  tours.every(([, v]) => v.regularite >= 0.3),
+  tours.map(([k, v]) => `${k}:${v.regularite}`).join(' '))
+
+/* --- courbes de vitesse --- */
+const courbes = await page.evaluate(async () => {
+  const { EASINGS, ease, easingPath } = await import('/src/smart/easing.ts')
+  return {
+    nombre: EASINGS.length,
+    // Toutes doivent partir de la pose de depart et arriver a la pose voulue.
+    bornes: EASINGS.every((e) => Math.abs(ease(e.id, 0)) < 1e-6 && Math.abs(ease(e.id, 1) - 1) < 1e-6),
+    // La lineaire est droite, les autres non : sinon le reglage ne sert a rien.
+    lineaireDroite: Math.abs(ease('linear', 0.25) - 0.25) < 1e-6,
+    distinctes: new Set(EASINGS.map((e) => ease(e.id, 0.3).toFixed(3))).size,
+    // « Depassement » doit reellement sortir du cadre.
+    depasse: Math.max(...easingPath('overshoot', 40).map((p) => p.y)) > 1.02,
+    anticipe: Math.min(...easingPath('anticipate', 40).map((p) => p.y)) < -0.02,
+    trace: easingPath('ease-in-out', 16).length === 17,
+  }
+})
+check('les courbes de vitesse respectent depart et arrivee',
+  courbes.bornes && courbes.lineaireDroite, `${courbes.nombre} courbes`)
+check('les courbes ne se ressemblent pas', courbes.distinctes >= 7, `${courbes.distinctes} profils distincts`)
+check('anticipation et depassement sortent du cadre', courbes.anticipe && courbes.depasse)
+check('la courbe peut etre tracee', courbes.trace)
+
+/* --- suivi et inertie --- */
+const suivi = await page.evaluate(async () => {
+  const { emptyRig, createBone, capturePose } = await import('/src/smart/rig.ts')
+  const { applyFollowThrough, hasSoftBones } = await import('/src/smart/follow-through.ts')
+
+  const rig = emptyRig()
+  const corps = createBone(rig, 16, 30, 16, 14, null, 'corps')
+  const queue = createBone(rig, 16, 28, 28, 24, corps.id, 'queue')
+  queue.softness = 0.8
+
+  // Le corps pivote d'un coup a mi-parcours, puis s'immobilise.
+  const poses = []
+  for (let f = 0; f < 12; f++) {
+    const p = capturePose(rig)
+    p[corps.id].angle = f < 4 ? 0 : f < 6 ? (f - 3) * 0.25 : 0.75
+    p[queue.id].angle = 0
+    poses.push(p)
+  }
+  const avec = applyFollowThrough(rig, poses, false).map((p) => p[queue.id].angle)
+
+  queue.softness = 0
+  const sans = applyFollowThrough(rig, poses, false).map((p) => p[queue.id].angle)
+  queue.softness = 0.8
+
+  // Sur un cycle, le ressort doit partir d'un etat etabli.
+  const cycle = []
+  for (let f = 0; f < 8; f++) {
+    const p = capturePose(rig)
+    p[corps.id].angle = Math.sin((f / 8) * Math.PI * 2) * 0.5
+    p[queue.id].angle = 0
+    cycle.push(p)
+  }
+  const boucle = applyFollowThrough(rig, cycle, true).map((p) => p[queue.id].angle)
+  const pas = []
+  for (let i = 0; i < boucle.length - 1; i++) pas.push(Math.abs(boucle[i + 1] - boucle[i]))
+  const raccord = Math.abs(boucle[0] - boucle[boucle.length - 1])
+
+  return {
+    detecte: hasSoftBones(rig),
+    // La queue doit partir a l'envers du corps : c'est ca, trainer derriere.
+    traine: Math.min(...avec) < -0.05,
+    // Puis revenir se poser une fois le corps arrete.
+    seStabilise: Math.abs(avec[avec.length - 1]) < 0.08,
+    // Et depasser un peu au passage, sinon le ressort est trop mou.
+    depasse: Math.max(...avec.slice(6)) > 0.005,
+    // Un os rigide ne doit rien recevoir.
+    rigideImmobile: sans.every((a) => a === 0),
+    boucleTient: raccord <= Math.max(...pas) * 1.5,
+  }
+})
+check('un os souple est reconnu', suivi.detecte)
+check('un os souple traine derriere le corps', suivi.traine)
+check('il depasse puis se stabilise', suivi.depasse && suivi.seStabilise)
+check('un os rigide ne recoit aucun retard', suivi.rigideImmobile)
+check('le suivi se raccorde sur un cycle', suivi.boucleTient)
+
+/* --- les articulations restent solidaires --- */
+const attaches = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { TOOLS, bonePoints } = await import('/src/tools/index.ts')
+  const app = window.pixelforge, ed = app.ed
+  ed.loadSprite(demoCharacter())
+  app.setMode('rig')
+  ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
+  app.rigPanel.bind()
+  app.setTool('rig-pose')
+  const rig = ed.sprite.rig
+
+  const cuisse = rig.bones.find((b) => b.role === 'legL')
+  const torse = rig.bones.find((b) => b.role === 'torso')
+  const outil = TOOLS['rig-pose']
+
+  // On tire la racine de la cuisse, franchement de cote : la jambe ne doit
+  // pas se detacher du bassin.
+  const racine = bonePoints(ed, cuisse)
+  const point = (x, y) => ({ x, y, px: Math.round(x), py: Math.round(y), alt: false, button: 0 })
+  outil.down(ed, point(racine.x1, racine.y1))
+  outil.move(ed, point(racine.x1 - 14, racine.y1 + 6))
+  outil.up(ed, point(racine.x1 - 14, racine.y1 + 6))
+
+  // L'articulation de la cuisse doit toujours coincider avec le bout du torse.
+  const apres = bonePoints(ed, cuisse)
+  const hanche = bonePoints(ed, torse)
+  const ecart = Math.hypot(apres.x1 - hanche.x1, apres.y1 - hanche.y1)
+  return {
+    // Le deplacement libre ne doit pas avoir servi.
+    cuisseNonDeplacee: cuisse.tx === 0 && cuisse.ty === 0,
+    // C'est le torse qui a pivote pour suivre le geste.
+    torsePivote: Math.abs(torse.angle) > 0.02,
+    ecartHanche: +ecart.toFixed(2),
+  }
+})
+check('tirer une articulation ne detache pas le membre',
+  attaches.cuisseNonDeplacee, 'la cuisse n\'a pas ete translatee')
+check('c\'est l\'os porteur qui pivote', attaches.torsePivote)
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

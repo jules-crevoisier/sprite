@@ -90,6 +90,12 @@ export interface Bone {
    * pourtant commandee par un os central plus eloigne.
    */
   radius: number
+  /**
+   * Souplesse, de 0 a 1. A zero l'os suit le corps a l'image pres. Au-dessus,
+   * il traine derriere, depasse a l'arret, puis se stabilise : c'est ce qu'on
+   * veut d'une cape, d'une queue ou d'une meche.
+   */
+  softness: number
   /* --- pose courante, relative au repos --- */
   angle: number
   tx: number
@@ -221,6 +227,7 @@ export function createBone(
     z: rig.bones.length,
     // A defaut d'indication, une portee proportionnee a la longueur de l'os.
     radius: Math.max(2, Math.hypot(ex - x, ey - y) * 0.35),
+    softness: 0,
     angle: 0, tx: 0, ty: 0, scale: 1,
   }
   rig.bones.push(bone)

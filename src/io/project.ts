@@ -146,6 +146,8 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
       // Les projets d'avant les roles et la profondeur n'en portent pas.
       role: b.role ?? 'none',
       depth: b.depth ?? 0,
+      radius: b.radius ?? Math.max(2, Math.hypot(b.ex - b.x, b.ey - b.y) * 0.35),
+      softness: b.softness ?? 0,
     }))
     seedBoneIds(Math.max(...sprite.rig.bones.map((b) => b.id)))
 
