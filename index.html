@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="description" content="PixelForge — editeur de sprites et d'animation pixel art pour le game dev, dans le navigateur." />
+  <meta name="theme-color" content="#0e1015" />
+  <title>PixelForge — editeur de sprites pixel art</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230e1015'/><rect x='3' y='3' width='4' height='4' fill='%236c8cff'/><rect x='9' y='3' width='4' height='4' fill='%23ffb454'/><rect x='3' y='9' width='4' height='4' fill='%2354d6a0'/><rect x='9' y='9' width='4' height='4' fill='%23ff6b8a'/></svg>" />
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="topbar" id="topbar"></header>
+    <div class="optionsbar" id="optionsbar"></div>
+    <main class="workspace">
+      <aside class="toolbar" id="toolbar"></aside>
+      <section class="canvas-area" id="canvas-area">
+        <canvas id="canvas" class="canvas"></canvas>
+        <div class="canvas-hud" id="canvas-hud"></div>
+      </section>
+      <aside class="sidebar" id="sidebar"></aside>
+    </main>
+    <section class="timeline" id="timeline"></section>
+    <footer class="statusbar" id="statusbar"></footer>
+  </div>
+  <div class="overlay-root" id="overlay-root"></div>
+  <div class="toast-root" id="toast-root"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

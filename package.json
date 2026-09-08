@@ -1,0 +1,19 @@
+{
+  "name": "pixelforge",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "PixelForge — editeur de sprites et d'animation pixel-art pour le game dev, dans le navigateur.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "node scripts/smoke-test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
