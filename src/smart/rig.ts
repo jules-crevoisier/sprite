@@ -204,6 +204,12 @@ export interface DeformOptions {
   seamRadius?: number
   /** Passes de comblement des trous restants. */
   fillPasses?: number
+  /**
+   * Nombre de voisins pleins exiges pour recoller un vide. Plus la valeur
+   * est haute, plus la silhouette reste fidele ; plus elle est basse, plus
+   * les fissures se referment.
+   */
+  seamNeighbours?: number
 }
 
 /**
@@ -223,6 +229,7 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
 
   const seamRadius = options.seamRadius ?? 1
   const fillPasses = options.fillPasses ?? 1
+  const seamNeighbours = options.seamNeighbours ?? 4
   const w = rest.width, h = rest.height
   const out = new Bitmap(w, h)
 
@@ -285,7 +292,7 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
       for (let x = 0; x < w; x++) {
         const i = y * w + x
         if (getA(filled[i]) !== 0) continue
-        if (neighbourCount(x, y) < 3) continue
+        if (neighbourCount(x, y) < seamNeighbours) continue
         let color: RGBA | null = null
         for (const { bone, index } of order) {
           const inv = inverses.get(bone.id)!

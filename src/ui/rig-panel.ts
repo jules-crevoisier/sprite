@@ -4,7 +4,7 @@ import {
   type Bone, type Pose,
 } from '../smart/rig'
 import { RIG_TEMPLATES, applyTemplate } from '../smart/rig-presets'
-import { rigState, refreshPose } from '../tools'
+import { rigState, refreshPose, seamSettings } from '../tools'
 import { el, clear, iconButton, numberInput, segmented, slider } from './dom'
 import { icon } from './icons'
 import { confirmDialog, openMenu, showToast } from './overlay'
@@ -86,15 +86,16 @@ export class RigPanel {
     if (!bound) return
 
     // --- reglages de deformation ---
+    const seamLabels = ['aucun', 'discret', 'normal', 'genereux']
     this.body.appendChild(el('div', { class: 'form-section' }, 'Rendu de la pose'))
     this.body.appendChild(el('div', { class: 'opt' },
       el('label', { style: { width: '74px' } }, 'Jointures'),
-      slider(0, 3, rigState.seamRadius, 1, (v) => { rigState.seamRadius = v; refreshPose(this.ed) }, (v) => `${v} px`),
+      slider(0, 3, rigState.seam, 1,
+        (v) => { rigState.seam = v; refreshPose(this.ed) },
+        (v) => seamLabels[v] ?? ''),
     ))
-    this.body.appendChild(el('div', { class: 'opt' },
-      el('label', { style: { width: '74px' } }, 'Comblement'),
-      slider(0, 4, rigState.fillPasses, 1, (v) => { rigState.fillPasses = v; refreshPose(this.ed) }),
-    ))
+    this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '4px' } },
+      'Referme les fentes qui apparaissent a l\'articulation. Trop haut, la silhouette s\'epaissit.'))
 
     // --- frames ---
     this.body.appendChild(el('div', { class: 'form-section' }, 'Frames'))
@@ -258,7 +259,7 @@ export class RigPanel {
 
   /** Fige la pose courante dans une nouvelle frame. */
   private frameFromPose(): void {
-    const posed = deform(this.rig, { seamRadius: rigState.seamRadius, fillPasses: rigState.fillPasses })
+    const posed = deform(this.rig, seamSettings(rigState.seam))
     if (!posed) { showToast('Liez d\'abord les pixels', 'error'); return }
     const ed = this.ed
     const at = ed.activeFrame + 1
@@ -283,7 +284,7 @@ export class RigPanel {
       for (let i = 1; i <= steps; i++) {
         const t = i / steps
         applyPose(rig, lerpPose(this.poseA!, poseB, t))
-        const posed = deform(rig, { seamRadius: rigState.seamRadius, fillPasses: rigState.fillPasses })
+        const posed = deform(rig, seamSettings(rigState.seam))
         if (!posed) continue
         const at = from + i
         ed.sprite.duplicateFrame(from, at)

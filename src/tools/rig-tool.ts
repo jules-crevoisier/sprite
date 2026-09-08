@@ -13,9 +13,22 @@ export const rigState = {
   mode: 'edit' as RigMode,
   /** Os selectionne, par identifiant. */
   selected: null as number | null,
-  /** Recolle les jointures ; plus la valeur est haute, plus la matiere s'etire. */
-  seamRadius: 1,
-  fillPasses: 2,
+  /**
+   * Recollement des jointures, de 0 (aucun) a 3 (genereux). Un seul reglage
+   * pilote la recherche et son exigence : plus il monte, plus les fissures
+   * se referment, mais plus la silhouette s'epaissit.
+   */
+  seam: 2,
+}
+
+/** Traduit le reglage unique en parametres de deformation. */
+export const seamSettings = (level: number): { seamRadius: number; seamNeighbours: number; fillPasses: number } => {
+  switch (Math.max(0, Math.min(3, Math.round(level)))) {
+    case 0: return { seamRadius: 0, seamNeighbours: 8, fillPasses: 0 }
+    case 1: return { seamRadius: 1, seamNeighbours: 5, fillPasses: 1 }
+    case 3: return { seamRadius: 2, seamNeighbours: 3, fillPasses: 2 }
+    default: return { seamRadius: 1, seamNeighbours: 4, fillPasses: 1 }
+  }
 }
 
 type Drag =
@@ -82,7 +95,7 @@ export function refreshPose(ed: Editor): void {
   if (!rig.rest || !rig.weights) return
   const cel = ed.peekCel()
   if (!cel) return
-  const posed = deform(rig, { seamRadius: rigState.seamRadius, fillPasses: rigState.fillPasses })
+  const posed = deform(rig, seamSettings(rigState.seam))
   if (!posed) return
   cel.bitmap.copyFrom(posed)
   ed.events.emit('doc', undefined)

@@ -226,6 +226,66 @@ const guided = await page.evaluate(async () => {
   return out
 })
 
+/* --- le personnage de demonstration doit se rigger proprement --- */
+const perso = await page.evaluate(async () => {
+  const { getA } = await import('/src/core/color.ts')
+  const rigApi = await import('/src/smart/rig.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+
+  const sprite = demoCharacter()
+  const rest = sprite.layers[0].cels[0].bitmap
+  const rig = sprite.rig
+  applyTemplate(rig, RIG_TEMPLATES.find((t) => t.id === 'humanoid-front'), rest, sprite)
+  rigApi.autoBind(rig, rest)
+
+  const index = (name) => rig.bones.findIndex((b) => b.name === name)
+  const at = (x, y) => rig.weights[y * rest.width + x]
+  // Chaque membre doit revenir a son propre os, pas a celui du voisin.
+  const out = {
+    brasG: at(13, 27) === index('bras G'),
+    brasD: at(34, 27) === index('bras D'),
+    torse: at(23, 27) === index('torse'),
+    tete: at(23, 12) === index('tete'),
+    jambeG: at(21, 41) === index('jambe G'),
+    jambeD: at(26, 41) === index('jambe D'),
+  }
+
+  // Aucun pixel opaque ne doit rester sans os.
+  out.tousLies = true
+  for (let i = 0; i < rest.u32.length; i++) {
+    if (getA(rest.u32[i]) !== 0 && rig.weights[i] === 255) { out.tousLies = false; break }
+  }
+
+  // Une pose franche ne doit pas ouvrir de fente dans la matiere.
+  const by = (n) => rig.bones[index(n)]
+  by('bras G').angle = -1.5
+  by('bras D').angle = 1.5
+  by('jambe G').angle = 0.4
+  const posed = rigApi.deform(rig, { seamRadius: 1, seamNeighbours: 4, fillPasses: 1 })
+  let fentes = 0
+  for (let y = 1; y < posed.height - 1; y++) {
+    for (let x = 1; x < posed.width - 1; x++) {
+      if (getA(posed.u32[y * posed.width + x]) !== 0) continue
+      let k = 0
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if ((dx || dy) && getA(posed.u32[(y + dy) * posed.width + (x + dx)]) !== 0) k++
+        }
+      }
+      if (k >= 6) fentes++
+    }
+  }
+  out.fentes = fentes
+  return out
+})
+
+check('le personnage lie chaque membre a son os',
+  perso.brasG && perso.brasD && perso.torse && perso.tete && perso.jambeG && perso.jambeD,
+  JSON.stringify(perso))
+check('aucun pixel du personnage ne reste sans os', perso.tousLies)
+check('une pose franche n\'ouvre pas de fente', perso.fentes === 0, `${perso.fentes} fentes`)
+
 check('les modeles de squelette tiennent dans le dessin', guided.modeles)
 check('les modeles enchainent bien les os', guided.enfants)
 check('les lecons sont disponibles', guided.lecons === 5, `${guided.lecons} lecons`)

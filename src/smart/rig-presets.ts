@@ -30,13 +30,16 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     id: 'humanoid-front',
     label: 'Humanoide de face',
     hint: 'Torse, tete, deux bras, deux jambes',
+    // Proportions d'un personnage debout, bras le long du corps : la tete
+    // occupe le tiers haut, le torse s'arrete a la taille, et les os des
+    // bras passent dans l'axe des bras plutot qu'en diagonale.
     bones: [
-      { name: 'torse', x: 0.5, y: 0.62, ex: 0.5, ey: 0.26, parent: null },
-      { name: 'tete', x: 0.5, y: 0.26, ex: 0.5, ey: 0.04, parent: 0 },
-      { name: 'bras G', x: 0.3, y: 0.31, ex: 0.1, ey: 0.62, parent: 0 },
-      { name: 'bras D', x: 0.7, y: 0.31, ex: 0.9, ey: 0.62, parent: 0 },
-      { name: 'jambe G', x: 0.4, y: 0.62, ex: 0.38, ey: 0.98, parent: 0 },
-      { name: 'jambe D', x: 0.6, y: 0.62, ex: 0.62, ey: 0.98, parent: 0 },
+      { name: 'torse', x: 0.5, y: 0.7, ex: 0.5, ey: 0.4, parent: null },
+      { name: 'tete', x: 0.5, y: 0.4, ex: 0.5, ey: 0.03, parent: 0 },
+      { name: 'bras G', x: 0.1, y: 0.43, ex: 0.1, ey: 0.78, parent: 0 },
+      { name: 'bras D', x: 0.9, y: 0.43, ex: 0.9, ey: 0.78, parent: 0 },
+      { name: 'jambe G', x: 0.4, y: 0.7, ex: 0.4, ey: 0.98, parent: 0 },
+      { name: 'jambe D', x: 0.6, y: 0.7, ex: 0.6, ey: 0.98, parent: 0 },
     ],
   },
   {
@@ -44,12 +47,12 @@ export const RIG_TEMPLATES: RigTemplate[] = [
     label: 'Humanoide de profil',
     hint: 'Membres avant et arriere separes, pour une marche',
     bones: [
-      { name: 'torse', x: 0.5, y: 0.62, ex: 0.48, ey: 0.26, parent: null },
-      { name: 'tete', x: 0.48, y: 0.26, ex: 0.44, ey: 0.05, parent: 0 },
-      { name: 'bras arriere', x: 0.5, y: 0.31, ex: 0.66, ey: 0.6, parent: 0 },
-      { name: 'bras avant', x: 0.46, y: 0.31, ex: 0.28, ey: 0.6, parent: 0 },
-      { name: 'jambe arriere', x: 0.52, y: 0.62, ex: 0.64, ey: 0.98, parent: 0 },
-      { name: 'jambe avant', x: 0.48, y: 0.62, ex: 0.34, ey: 0.98, parent: 0 },
+      { name: 'torse', x: 0.5, y: 0.7, ex: 0.48, ey: 0.4, parent: null },
+      { name: 'tete', x: 0.48, y: 0.4, ex: 0.44, ey: 0.04, parent: 0 },
+      { name: 'bras arriere', x: 0.56, y: 0.44, ex: 0.68, ey: 0.76, parent: 0 },
+      { name: 'bras avant', x: 0.42, y: 0.44, ex: 0.3, ey: 0.76, parent: 0 },
+      { name: 'jambe arriere', x: 0.54, y: 0.7, ex: 0.64, ey: 0.98, parent: 0 },
+      { name: 'jambe avant', x: 0.46, y: 0.7, ex: 0.36, ey: 0.98, parent: 0 },
     ],
   },
   {

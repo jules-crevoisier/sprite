@@ -135,12 +135,21 @@ réglages aveugles. Les couleurs du sprite sont d'abord regroupées en
 lumière. C'est l'unité de travail naturelle du pixel art : un vêtement, une
 peau, un feuillage sont chacun une famille.
 
-![Un personnage au repos puis posé par le squelette](docs/rig.png)
+![Le personnage au repos, la carte des os, puis quatre poses](docs/rig.png)
+
+*De gauche à droite : le dessin de repos, la carte des os — une couleur par
+os, qui montre à qui appartient chaque pixel — puis quatre poses.*
 
 **Squelette et pose** (`K`). Six modèles prêts à l'emploi — humanoïde de face
 et de profil, quadrupède, oiseau, arbre, membre simple — se calent sur la
 boîte des pixels opaques, donc ils tombent juste quelle que soit la taille du
-sprite. On peut aussi tracer les os soi-même. On lie ensuite les
+sprite. On peut aussi tracer les os soi-même.
+
+Un personnage se rigge d'autant mieux que ses membres se distinguent du
+corps : le personnage de démonstration écarte les bras du torse de trois
+pixels, ce qui laisse une colonne libre entre les deux contours. La liaison
+sépare alors le bras du corps au lieu de couper au milieu d'une masse
+continue. On lie ensuite les
 pixels : chacun est attribué à l'os le plus proche. Tirer une
 extrémité fait pivoter le membre et l'image est régénérée : le parcours va
 du pixel d'arrivée vers sa source, donc aucun trou n'apparaît là où la

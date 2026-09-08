@@ -13,7 +13,7 @@ import { rigTool } from './rig-tool'
 
 export * from './types'
 export { beginMove, applyMove, endMove } from './select-tools'
-export { rigState, refreshPose } from './rig-tool'
+export { rigState, refreshPose, seamSettings } from './rig-tool'
 
 /** Ordre d'affichage dans la barre d'outils, groupe par famille. */
 export const TOOL_LIST: Tool[] = [
