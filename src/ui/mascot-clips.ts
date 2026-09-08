@@ -459,14 +459,17 @@ const ATTAQUE: Reglage[] = [
  * Le coup arrache le personnage du sol pendant une image. C'est ce qui
  * remplace le patinage : deux semelles plaquees au sol pendant que le corps
  * recule de trois pixels, ca ne s'appelle pas encaisser, ca s'appelle
- * glisser. Le recul se fait donc en deux temps, les pieds en l'air.
+ * glisser. Le recul se fait donc en deux temps, les pieds en l'air : les
+ * centres de torse font 9, 8, 7, 9, 12, 10. La version precedente
+ * annoncait deux temps et n'en faisait qu'un — le corps etait a la meme
+ * colonne sur les images deux et trois.
  *
  * Le depassement du retour vaut deux pixels, les deux tiers du recul. A un
  * seul pixel il se perdait dans le bruit du reste du dessin.
  */
 const DEGATS: Reglage[] = [
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecraseeClin', queue: 'milieu' },
-  { corps: [-2, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', tete: [-1, 0], gauche: [-1, -2], droite: [-1, -2], queue: 'haute' },
+  { corps: [-1, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', tete: [-1, 0], gauche: [-1, -2], droite: [-1, -2], queue: 'haute' },
   { corps: [-3, 2], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'fouet' },
   { corps: [-1, 1], teteArt: 'clin', tete: [-1, 1], gauche: [-2, -2], droite: [-2, 0], queue: 'basse' },
   { corps: [2, 1], teteArt: 'miclos', tete: [-2, 0], gauche: [1, -2], droite: [1, -2], queue: 'basmilieu' },
