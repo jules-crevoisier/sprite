@@ -19,6 +19,7 @@ import {
   Shuffle, SlidersHorizontal, Image as ImageIcon, Package, Scissors,
   ClipboardPaste, Leaf, Dices, RefreshCw, Maximize2, Group, ZoomOut, Scan,
   Cloud, CloudUpload, CloudDownload, CloudOff, UserRound, KeyRound, LogOut,
+  Swords,
 } from 'lucide'
 
 /** Structure d'une icone Lucide : [balise, attributs, enfants?]. */
@@ -89,6 +90,7 @@ const SOURCE: Record<string, IconNode> = {
   save: Save as IconNode,
   sheet: LayoutGrid as IconNode,
   film: Film as IconNode,
+  armes: Swords as IconNode,
   unity: Box as IconNode,
   godot: Gamepad2 as IconNode,
   image: ImageIcon as IconNode,

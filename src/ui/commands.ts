@@ -54,6 +54,16 @@ export function buildCommands(app: App): Command[] {
   })
 
   add({
+    id: 'file.mascotte-armee', label: 'Ouvrir la mascotte armee', group: 'Fichier', icon: 'armes',
+    run: async () => {
+      const { spritePixlArme } = await import('./mascot-armes')
+      const { CLIPS_PIXL } = await import('./mascot-clips')
+      ed.loadSprite(spritePixlArme(CLIPS_PIXL))
+      ed.toast('Trois armes sur deux calques — masquez « Arme » pour retrouver Pixl nu', 'success')
+    },
+  })
+
+  add({
     id: 'file.open', label: 'Ouvrir un projet…', group: 'Fichier', keys: 'Ctrl+O', icon: 'upload',
     run: async () => {
       const files = await pickFiles(`.${PROJECT_EXT},.json`)

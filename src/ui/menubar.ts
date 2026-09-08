@@ -10,7 +10,7 @@ const MENUS: { label: string; items: string[] }[] = [
   {
     label: 'Fichier',
     items: [
-      'file.new', 'file.mascotte', 'file.open', 'file.save', '---',
+      'file.new', 'file.mascotte', 'file.mascotte-armee', 'file.open', 'file.save', '---',
       'cloud.open', 'cloud.save', 'cloud.save-copy', 'cloud.account', 'cloud.settings', '---',
       'file.import-image', 'file.import-layer', '---',
       'file.export', 'file.export-png', 'file.export-gif', 'file.export-frames', '---',

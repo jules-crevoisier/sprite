@@ -1,5 +1,7 @@
 import { Bitmap } from '../core/bitmap'
 import { fromHex } from '../core/color'
+import { Layer, Sprite, genId } from '../core/document'
+import { Palette } from '../core/palette'
 import { Pose, TAILLE, imageDePose } from './mascot-anim'
 
 /**
@@ -283,4 +285,55 @@ export function clipsArmes(
   }
 
   return sortie
+}
+
+/**
+ * Un sprite anime de la mascotte armee : une image par pose, un tag par
+ * cycle, les trois armes a la suite.
+ *
+ * Deux calques plutot qu'un : l'arme dessous, le personnage dessus. C'est
+ * ainsi qu'on travaille reellement — on change d'arme sans retoucher une
+ * seule image du personnage — et ca se voit des l'ouverture.
+ */
+export function spritePixlArme(base: { id: string; nom: string; ms: number; loop: boolean; poses: Pose[] }[]): Sprite {
+  const clips = ARMES.flatMap((a) => clipsArmes(a, base).map((c) => ({ arme: a, clip: c })))
+  const sprite = new Sprite(TAILLE, TAILLE, Palette.preset('DawnBringer 32'))
+  sprite.name = 'pixl-arme'
+  sprite.pivot = { x: 0.5, y: 1 }
+  sprite.frameDurations = []
+  const fond = new Layer('Arme', 0)
+  const dessus = new Layer('Pixl', 0)
+  fond.cels = []
+  dessus.cels = []
+  sprite.tags = []
+  let index = 0
+  for (const { arme, clip } of clips) {
+    const debut = index
+    for (const img of clip.images) {
+      // Le calque d'arme ne contient que l'arme : on retire du composite
+      // les pixels du personnage, sans quoi les deux calques se
+      // dupliqueraient et changer d'arme ne servirait a rien.
+      const complet = imageDePoseArmee(img.pose, arme, img.position)
+      const perso = imageDePose(img.pose)
+      const seule = new Bitmap(TAILLE, TAILLE)
+      for (let i = 0; i < complet.u32.length; i++) {
+        if ((complet.u32[i] >>> 24) && !(perso.u32[i] >>> 24)) seule.u32[i] = complet.u32[i]
+      }
+      fond.cels.push({ bitmap: seule, opacity: 255 })
+      dessus.cels.push({ bitmap: perso, opacity: 255 })
+      sprite.frameDurations.push(clip.ms)
+      index++
+    }
+    sprite.tags.push({
+      id: genId(),
+      name: clip.nom,
+      from: debut,
+      to: index - 1,
+      direction: 'forward',
+      repeat: clip.loop ? 0 : 1,
+      color: fromHex('#8f9bb8'),
+    })
+  }
+  sprite.layers = [fond, dessus]
+  return sprite
 }
