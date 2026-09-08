@@ -14,6 +14,10 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
+// Vite lance directement, sans passer par npx : le wrapper npx encaisse
+// le kill et laisse le serveur derriere lui, un par execution.
+const VITE = 'node_modules/.bin/vite'
+
 /**
  * Un port different a chaque execution.
  *
@@ -60,7 +64,7 @@ const check = (name, ok, detail = '') => {
 
 // Le serveur de developpement sert les modules source : le test peut donc
 // importer directement les modules d'export pour les verifier un par un.
-const server = spawn('npx', ['vite', '--port', String(PORT), '--host', '127.0.0.1', '--strictPort'], {
+const server = spawn(VITE, [ '--port', String(PORT), '--host', '127.0.0.1', '--strictPort'], {
   stdio: 'ignore',
   detached: false,
 })

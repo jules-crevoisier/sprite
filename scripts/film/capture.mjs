@@ -14,6 +14,10 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+// Vite lance directement, sans passer par npx : le wrapper npx encaisse
+// le kill et laisse le serveur derriere lui, un par execution.
+const VITE = 'node_modules/.bin/vite'
+
 const args = process.argv.slice(2)
 const argOf = (n, d) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1] : d }
 const OUT = argOf('--out', 'video/assets')
@@ -40,7 +44,7 @@ mkdirSync(OUT, { recursive: true })
 mkdirSync(join(OUT, 'ui'), { recursive: true })
 mkdirSync(join(OUT, 'sprite'), { recursive: true })
 
-const server = spawn('npx', ['vite', '--port', String(PORT), '--host', '127.0.0.1', '--strictPort'], { stdio: 'ignore' })
+const server = spawn(VITE, [ '--port', String(PORT), '--host', '127.0.0.1', '--strictPort'], { stdio: 'ignore' })
 process.on('exit', () => server.kill())
 let vivant = false
 for (let i = 0; i < 80; i++) {
