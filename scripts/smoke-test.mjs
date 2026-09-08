@@ -14,7 +14,20 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-const PORT = 4319
+/**
+ * Un port different a chaque execution.
+ *
+ * Avec un port fixe et sans `--strictPort`, deux bancs d'essai lances en
+ * meme temps — sur deux copies du depot, par exemple — se marchent dessus
+ * en silence : le second serveur choisit un autre port, mais le test
+ * continue d'interroger le premier. On teste alors l'autre copie sans que
+ * rien ne le dise. Un port tire au sort et `--strictPort` transforment ce
+ * piege en erreur franche.
+ */
+const argPort = process.argv.indexOf('--port')
+const PORT = argPort >= 0 && process.argv[argPort + 1]
+  ? Number(process.argv[argPort + 1])
+  : 41000 + Math.floor(Math.random() * 2000)
 const URL = `http://127.0.0.1:${PORT}/`
 
 /**
@@ -47,19 +60,24 @@ const check = (name, ok, detail = '') => {
 
 // Le serveur de developpement sert les modules source : le test peut donc
 // importer directement les modules d'export pour les verifier un par un.
-const server = spawn('npx', ['vite', '--port', String(PORT), '--host', '127.0.0.1'], {
+const server = spawn('npx', ['vite', '--port', String(PORT), '--host', '127.0.0.1', '--strictPort'], {
   stdio: 'ignore',
   detached: false,
 })
 process.on('exit', () => server.kill())
 
 // Attend que le serveur reponde.
-for (let i = 0; i < 40; i++) {
+let vivant = false
+for (let i = 0; i < 60; i++) {
   try {
     const res = await fetch(URL)
-    if (res.ok) break
+    if (res.ok) { vivant = true; break }
   } catch { /* pas encore pret */ }
   await sleep(250)
+}
+if (!vivant) {
+  console.error(`le serveur de developpement ne repond pas sur le port ${PORT}`)
+  process.exit(1)
 }
 
 const browser = await chromium.launch(launchOptions)
@@ -1847,8 +1865,8 @@ check('la masse reste stable dans un cycle', mascotte.masseMax < 0.12,
   mascotte.masses.join(' · '))
 check('les images de contact gardent un pied au sol', mascotte.piedsEnLair.length === 0,
   mascotte.piedsEnLair.join(', '))
-// Le seul derapage voulu est celui du choc : le personnage encaisse et ses
-// deux pieds ripent. Partout ailleurs, une semelle qui bouge est du patinage.
+// Plus aucune exception : le choc arrache le personnage du sol au lieu de
+// le faire riper, donc une semelle qui bouge est toujours du patinage.
 check('aucune semelle ne patine',
   mascotte.glissements.length === 0,
   mascotte.glissements.join(', ') || 'aucun glissement')
@@ -1862,6 +1880,97 @@ check('aucune patte ne pend sous un corps monte', mascotte.pattesPendantes.lengt
   mascotte.pattesPendantes.join(', '))
 check('aucune patte n\'est avalee par le torse', mascotte.pattesAvalees.length === 0,
   mascotte.pattesAvalees.length ? mascotte.pattesAvalees.join(', ') : `${mascotte.lignesMin} lignes au minimum`)
+
+/* ---------------------------------------------------------------- */
+/* La mascotte armee                                                  */
+/* ---------------------------------------------------------------- */
+const armee = await page.evaluate(async () => {
+  const { ARMES, POSITIONS_ARME, clipsArmes, imageDePoseArmee, masseDArme } =
+    await import('/src/ui/mascot-armes.ts')
+  const { CLIPS_PIXL } = await import('/src/ui/mascot-clips.ts')
+  const { TAILLE, imageDePose } = await import('/src/ui/mascot-anim.ts')
+
+  const morceaux = (bm) => {
+    const vu = new Uint8Array(bm.length)
+    let n = 0
+    for (let d = 0; d < bm.length; d++) {
+      if (vu[d] || !(bm.u32[d] >>> 24)) continue
+      n++
+      const pile = [d]
+      vu[d] = 1
+      while (pile.length) {
+        const i = pile.pop()
+        const x = i % TAILLE, y = (i / TAILLE) | 0
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= TAILLE || ny >= TAILLE) continue
+          const j = ny * TAILLE + nx
+          if (vu[j] || !(bm.u32[j] >>> 24)) continue
+          vu[j] = 1
+          pile.push(j)
+        }
+      }
+    }
+    return n
+  }
+
+  const bilan = {
+    armes: ARMES.length, cycles: 0, images: 0,
+    detachees: [], horsCadre: [], jumelles: [], armeInvisible: [], visibleMin: 999,
+    positions: Object.keys(POSITIONS_ARME).length,
+    massesArmes: ARMES.map((a) => masseDArme(a.art)),
+  }
+
+  for (const arme of ARMES) {
+    for (const clip of clipsArmes(arme, CLIPS_PIXL)) {
+      bilan.cycles++
+      const bmps = clip.images.map((img) => imageDePoseArmee(img.pose, arme, img.position))
+      bmps.forEach((bm, i) => {
+        bilan.images++
+        // Une arme posee a cote du personnage fait deux morceaux. C'est le
+        // risque propre a l'arme : elle n'a pas d'os qui la relie au corps.
+        if (morceaux(bm) !== 1) bilan.detachees.push(`${clip.id}#${i + 1}`)
+        let x0 = 99, x1 = -1, y0 = 99, y1 = -1
+        for (let y = 0; y < TAILLE; y++) for (let x = 0; x < TAILLE; x++) {
+          if (!(bm.u32[y * TAILLE + x] >>> 24)) continue
+          if (x < x0) x0 = x; if (x > x1) x1 = x
+          if (y < y0) y0 = y; if (y > y1) y1 = y
+        }
+        if (y0 <= 0 || x0 < 0 || x1 >= TAILLE) bilan.horsCadre.push(`${clip.id}#${i + 1}`)
+        // L'arme passe derriere le personnage. Si le corps la recouvre
+        // entierement, elle a disparu sans que rien ne le signale : on
+        // compte donc les pixels que l'image armee ajoute a l'image nue.
+        const nu = imageDePose(clip.images[i].pose)
+        let visibles = 0
+        for (let k = 0; k < bm.u32.length; k++) {
+          if ((bm.u32[k] >>> 24) && !(nu.u32[k] >>> 24)) visibles++
+        }
+        if (visibles < 6) bilan.armeInvisible.push(`${clip.id}#${i + 1} (${visibles} px)`)
+        bilan.visibleMin = Math.min(bilan.visibleMin, visibles)
+      })
+      for (let a = 0; a < bmps.length; a++) for (let b = a + 1; b < bmps.length; b++) {
+        let d = 0
+        for (let k = 0; k < bmps[a].u32.length; k++) if (bmps[a].u32[k] !== bmps[b].u32[k]) d++
+        if (d === 0) bilan.jumelles.push(`${clip.id} ${a + 1}=${b + 1}`)
+      }
+    }
+  }
+  return bilan
+})
+check('chaque arme a ses cycles', armee.armes === 3 && armee.cycles === 9,
+  `${armee.armes} armes, ${armee.cycles} cycles, ${armee.images} images`)
+check('l\'arme reste accrochee au personnage', armee.detachees.length === 0,
+  armee.detachees.join(', ') || 'aucun morceau detache')
+check('rien ne sort du cadre, arme comprise', armee.horsCadre.length === 0,
+  armee.horsCadre.join(', '))
+check('aucune image armee n\'en repete une autre', armee.jumelles.length === 0,
+  armee.jumelles.join(', '))
+// Les positions sont des deplacements du meme dessin : la masse de l'arme
+// est constante par construction, et c'est ce que ce releve confirme.
+check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0),
+  `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions`)
+check('l\'arme reste visible derriere le personnage', armee.armeInvisible.length === 0,
+  armee.armeInvisible.join(', ') || `${armee.visibleMin} px visibles au minimum`)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
