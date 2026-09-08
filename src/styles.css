@@ -513,6 +513,8 @@ input[type="range"]::-moz-range-thumb {
 .pal-swatch:hover { transform: scale(1.14); z-index: 2; box-shadow: 0 2px 8px #0007; }
 .pal-swatch.primary { box-shadow: 0 0 0 2px var(--accent); z-index: 1; }
 .pal-swatch.secondary { box-shadow: 0 0 0 2px var(--warn); z-index: 1; }
+/* Entree en cours de retouche : le selecteur la reecrit et le sprite suit. */
+.pal-swatch.editing { box-shadow: 0 0 0 2px var(--ok), 0 0 10px #54d6a066; z-index: 2; }
 .pal-swatch.transparent {
   background-image:
     linear-gradient(45deg, #777 25%, transparent 25%), linear-gradient(-45deg, #777 25%, transparent 25%),

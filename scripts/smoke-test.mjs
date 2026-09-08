@@ -859,6 +859,60 @@ check('la barre d\'options montre l\'empreinte du pinceau et le tramage',
   apercus.apercus === 2, `${apercus.apercus} apercus`)
 check('un tramage sans couleur secondaire est signale', apercus.note)
 
+/* --- retoucher la palette recolore le sprite --- */
+const palette = await page.evaluate(async () => {
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { Palette } = await import('/src/core/palette.ts')
+  const { fromHex } = await import('/src/core/color.ts')
+  const app = window.pixelforge, ed = app.ed
+  app.setMode('draw')
+  ed.loadSprite(demoCharacter())
+  const vus = new Set()
+  for (const c of ed.peekCel().bitmap.u32) if (c) vus.add(c)
+  ed.sprite.palette = new Palette('sprite', [...vus])
+  ed.events.emit('reload', undefined)
+  await new Promise((r) => setTimeout(r, 250))
+
+  const bleu = fromHex('#3b5dc9')
+  const rouge = fromHex('#c93b5d')
+  const compte = (c) => { let n = 0; for (const v of ed.peekCel().bitmap.u32) if (v === c) n++; return n }
+  const index = ed.sprite.palette.colors.indexOf(bleu)
+  if (index < 0) return { erreur: 'couleur de reference absente' }
+  const avant = compte(bleu)
+
+  document.querySelector('button[title^="Retoucher la palette"]').click()
+  await new Promise((r) => setTimeout(r, 150))
+  const actif = document.querySelector('button[title^="Retoucher la palette"]').classList.contains('active')
+  document.querySelector(`.pal-swatch[data-index="${index}"]`).click()
+  await new Promise((r) => setTimeout(r, 150))
+  const marquee = !!document.querySelector(`.pal-swatch[data-index="${index}"].editing`)
+
+  const hex = document.querySelector('.hex-row input')
+  hex.value = '#c93b5d'
+  hex.dispatchEvent(new Event('change', { bubbles: true }))
+  await new Promise((r) => setTimeout(r, 200))
+  const recolore = { bleu: compte(bleu), rouge: compte(rouge) }
+  const enPalette = ed.sprite.palette.colors[index] === rouge
+
+  // Le minuteur depose une seule entree pour tout le geste.
+  await new Promise((r) => setTimeout(r, 800))
+  const etiquette = ed.history.undoLabel
+  ed.undo()
+  await new Promise((r) => setTimeout(r, 150))
+  const annule = { bleu: compte(bleu), rouge: compte(rouge), palette: ed.sprite.palette.colors[index] === bleu }
+  document.querySelector('button[title^="Retoucher la palette"]').click()
+  return { avant, actif, marquee, recolore, enPalette, etiquette, annule }
+})
+check('le mode retouche de palette s\'active', palette.actif && palette.marquee, palette.erreur ?? '')
+check('changer une couleur de palette recolore le sprite',
+  palette.recolore.bleu === 0 && palette.recolore.rouge === palette.avant,
+  `${palette.avant} px repeints`)
+check('la palette elle-meme retient la nouvelle couleur', palette.enPalette)
+check('la retouche ne laisse qu\'une entree dans l\'historique',
+  palette.etiquette === 'Retoucher la palette', String(palette.etiquette))
+check('annuler rend au sprite et a la palette leur couleur',
+  palette.annule.bleu === palette.avant && palette.annule.rouge === 0 && palette.annule.palette)
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

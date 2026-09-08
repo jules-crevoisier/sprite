@@ -4,6 +4,7 @@ import {
   rgbaToHsv, hsvToRgba, TRANSPARENT,
 } from '../core/color'
 import { PALETTE_PRESETS, Palette, quantize } from '../core/palette'
+import type { Bitmap } from '../core/bitmap'
 import { el, clear, iconButton } from './dom'
 import { icon } from './icons'
 import { openMenu, promptDialog, showToast } from './overlay'
@@ -32,16 +33,36 @@ export class ColorPanel {
   private primarySwatch = el('div', { class: 'swatch-big active', title: 'Couleur principale (clic gauche)' }, el('i'))
   private secondarySwatch = el('div', { class: 'swatch-big', title: 'Couleur secondaire (clic droit)' }, el('i'))
   private paletteGrid = el('div', { class: 'palette-grid' })
+  /** Mode « retoucher la palette » : le sprite suit le selecteur. */
+  private paletteMode = false
+  private editToggle = el('button', {
+    class: 'btn ghost sm icon-only',
+    title: 'Retoucher la palette : le sprite se recolore en direct',
+    html: '',
+  })
   private paletteName = el('span', { class: 'lname', style: { flex: '1', fontSize: '11px' } })
   private channelRows: { input: HTMLInputElement; badge: HTMLElement }[] = []
   private suppress = false
+  /**
+   * Retouche de palette en cours. Tant qu'elle dure, le selecteur reecrit
+   * l'entree choisie et repeint le sprite en direct ; les pixels concernes
+   * sont repertories une fois pour toutes, ce qui rend le va-et-vient exact
+   * meme si la nouvelle teinte existait deja ailleurs.
+   */
+  private paletteEdit: {
+    index: number
+    origine: RGBA
+    courante: RGBA
+    cibles: { bitmap: Bitmap; idx: Uint32Array }[]
+    minuteur: number
+  } | null = null
 
   constructor(editor: Editor) {
     this.ed = editor
     this.build()
     this.syncFromEditor()
     editor.events.on('settings', () => this.syncFromEditor())
-    editor.events.on('reload', () => { this.renderPalette(); this.syncFromEditor() })
+    editor.events.on('reload', () => { this.endPaletteEdit(); this.renderPalette(); this.syncFromEditor() })
     editor.events.on('doc', () => this.renderPalette())
   }
 
@@ -54,7 +75,13 @@ export class ColorPanel {
         iconButton(icon('close', 14), 'Couleur transparente', () => this.setColor(TRANSPARENT), { className: 'sm icon-only' }),
       ),
     )
-    this.primarySwatch.addEventListener('click', () => { this.editing = 'primary'; this.syncFromEditor() })
+    this.editToggle.innerHTML = icon('palette', 14)
+    this.editToggle.addEventListener('click', () => this.togglePaletteMode())
+    this.primarySwatch.addEventListener('click', () => {
+      this.endPaletteEdit()
+      this.editing = 'primary'
+      this.syncFromEditor()
+    })
     this.secondarySwatch.addEventListener('click', () => { this.editing = 'secondary'; this.syncFromEditor() })
 
     const svArea = el('div', { class: 'sv-area' }, this.svCanvas, this.svDot)
@@ -116,6 +143,7 @@ export class ColorPanel {
     ;(this as { paletteActions: HTMLElement[] }).paletteActions = [
       this.paletteName,
       iconButton(icon('plus', 14), 'Ajouter la couleur courante', () => this.addCurrent(), { className: 'ghost sm icon-only' }),
+      this.editToggle,
       iconButton(icon('settings', 14), 'Options de palette', (e) => this.paletteMenu(e), { className: 'ghost sm icon-only' }),
     ]
   }
@@ -147,8 +175,101 @@ export class ColorPanel {
   }
 
   private setColor(c: RGBA): void {
+    // Une retouche de palette detourne le selecteur : c'est l'entree choisie
+    // qui change, et le sprite avec elle.
+    if (this.paletteEdit) { this.applyPaletteEdit(c); return }
     if (this.editing === 'primary') this.ed.setPrimary(c)
     else this.ed.setSecondary(c)
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Retouche de palette                                               */
+  /* ---------------------------------------------------------------- */
+
+  /** Active ou quitte le mode retouche. */
+  private togglePaletteMode(): void {
+    this.paletteMode = !this.paletteMode
+    if (!this.paletteMode) this.endPaletteEdit()
+    this.editToggle.classList.toggle('active', this.paletteMode)
+    showToast(this.paletteMode
+      ? 'Retouche de palette : choisissez une pastille, le sprite suit'
+      : 'Retouche de palette terminee', this.paletteMode ? 'info' : 'success')
+    this.renderPalette()
+  }
+
+  /**
+   * Prepare la retouche d'une entree : on releve une fois pour toutes les
+   * pixels qui la portent. Les repertorier evite de les rechercher a chaque
+   * mouvement du selecteur, et rend l'annulation exacte meme si la nouvelle
+   * teinte existait deja dans le dessin.
+   */
+  private beginPaletteEdit(index: number): void {
+    this.endPaletteEdit()
+    const origine = this.ed.sprite.palette.colors[index]
+    if (origine === undefined) return
+    const cibles: { bitmap: Bitmap; idx: Uint32Array }[] = []
+    for (const layer of this.ed.sprite.layers) {
+      for (const cel of layer.cels) {
+        if (!cel) continue
+        const found: number[] = []
+        const u = cel.bitmap.u32
+        for (let i = 0; i < u.length; i++) if (u[i] === origine) found.push(i)
+        if (found.length) cibles.push({ bitmap: cel.bitmap, idx: new Uint32Array(found) })
+      }
+    }
+    this.paletteEdit = { index, origine, courante: origine, cibles, minuteur: 0 }
+    const total = cibles.reduce((n, c) => n + c.idx.length, 0)
+    this.editing = 'primary'
+    this.ed.setPrimary(origine)
+    showToast(total
+      ? `${total} pixels suivront cette couleur`
+      : 'Cette couleur n\'est pas utilisee dans le dessin', total ? 'info' : 'info')
+    this.renderPalette()
+  }
+
+  /** Repeint le sprite avec la nouvelle teinte, sans passer par l'historique. */
+  private applyPaletteEdit(next: RGBA): void {
+    const edit = this.paletteEdit
+    if (!edit || next === edit.courante) return
+    edit.courante = next
+    this.ed.sprite.palette.colors[edit.index] = next
+    for (const cible of edit.cibles) {
+      for (const i of cible.idx) cible.bitmap.u32[i] = next
+    }
+    this.suppress = true
+    this.ed.setPrimary(next)
+    this.suppress = false
+    this.ed.events.emit('doc', undefined)
+
+    // Le geste entier ne laisse qu'une entree dans l'historique : on attend
+    // que le selecteur se calme avant de la deposer.
+    window.clearTimeout(edit.minuteur)
+    edit.minuteur = window.setTimeout(() => this.endPaletteEdit(), 600)
+  }
+
+  /** Depose la retouche dans l'historique et referme le geste. */
+  private endPaletteEdit(): void {
+    const edit = this.paletteEdit
+    this.paletteEdit = null
+    if (!edit) return
+    window.clearTimeout(edit.minuteur)
+    if (edit.courante === edit.origine) { this.renderPalette(); return }
+
+    const { index, origine, courante, cibles } = edit
+    const palette = this.ed.sprite.palette
+    const ecrire = (couleur: RGBA) => {
+      palette.colors[index] = couleur
+      for (const cible of cibles) for (const i of cible.idx) cible.bitmap.u32[i] = couleur
+      this.ed.events.emit('doc', undefined)
+    }
+    this.ed.pushCommand({
+      label: 'Retoucher la palette',
+      undo: () => ecrire(origine),
+      redo: () => ecrire(courante),
+    })
+    const total = cibles.reduce((n, c) => n + c.idx.length, 0)
+    if (total) showToast(`${total} pixels recolores`, 'success')
+    this.renderPalette()
   }
 
   private commitHsv(): void {
@@ -229,10 +350,15 @@ export class ColorPanel {
         class: 'pal-swatch',
         title: `${toHex(color)}  ·  index ${index}`,
         style: { background: toCss(color) },
-        onclick: () => this.ed.setPrimary(color),
+        onclick: () => {
+          if (this.paletteMode) { this.beginPaletteEdit(index); return }
+          this.ed.setPrimary(color)
+        },
         oncontextmenu: (e: MouseEvent) => { e.preventDefault(); this.ed.setSecondary(color) },
       })
       sw.dataset.index = String(index)
+      // Le double-clic reste le raccourci : il pousse la couleur courante
+      // dans l'entree visee, sans passer par le mode retouche.
       sw.addEventListener('dblclick', () => this.replaceColorAt(index))
       this.paletteGrid.appendChild(sw)
     })
@@ -247,6 +373,7 @@ export class ColorPanel {
       const color = this.ed.sprite.palette.colors[Number(index)]
       sw.classList.toggle('primary', color === this.ed.primary)
       sw.classList.toggle('secondary', color === this.ed.secondary)
+      sw.classList.toggle('editing', this.paletteEdit?.index === Number(index))
     }
   }
 
