@@ -621,6 +621,15 @@ export class Viewport {
     cv.addEventListener('wheel', (e) => {
       e.preventDefault()
       const r = cv.getBoundingClientRect()
+      // Alt, et pas Ctrl : sur un pave tactile le pincement arrive
+      // justement sous la forme d'une molette avec Ctrl. Le prendre pour la
+      // taille du pinceau supprimerait le zoom a deux doigts.
+      if (e.altKey) {
+        const s = this.ed.settings
+        const taille = Math.max(1, Math.min(64, s.brushSize + (e.deltaY < 0 ? 1 : -1)))
+        if (taille !== s.brushSize) this.ed.updateSettings({ brushSize: taille })
+        return
+      }
       if (e.ctrlKey || e.metaKey || !e.shiftKey) {
         const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
         this.zoomAt(factor, e.clientX - r.left, e.clientY - r.top)

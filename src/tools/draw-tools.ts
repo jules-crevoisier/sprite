@@ -78,7 +78,7 @@ export const pencilTool: Tool = {
   shortcut: 'B',
   icon: ICONS.pencil,
   group: 'draw',
-  hint: 'Maj : ligne depuis le dernier point. Clic droit : couleur secondaire.',
+  hint: 'Maj : ligne depuis le dernier point. Clic droit : couleur secondaire. Alt+molette ou [ ] : taille.',
   options: ['brush', 'opacity', 'paintMode', 'pixelPerfect', 'dither'],
   down: (ed, p) => freehandBegin(ed, p, 'Crayon', false),
   move: (ed, p) => freehandMove(ed, p, false),
