@@ -1,12 +1,15 @@
-# Deploiement de PixelForge.
+# Deploiement Dokploy (application de type « Docker Compose »).
 #
-# Local ou VPS simple :
-#     docker compose up -d --build      puis http://localhost:8080
+# Aucun port n'est publie sur l'hote : Traefik joint le conteneur par le
+# reseau interne `dokploy-network`, gere le domaine et le certificat. C'est
+# aussi ce qui evite tout conflit avec un service deja en ecoute sur l'hote.
 #
-# Dokploy : creer une application de type « Docker Compose », pointer sur ce
-# fichier, puis ajouter un domaine vers le service `pixelforge` port 8080.
-# Dans ce cas, decommenter le bloc `networks` en bas et retirer `ports` :
-# Traefik joint le conteneur par le reseau interne et gere le TLS.
+# Dans Dokploy : onglet Domains -> Host = votre domaine, Service =
+# `pixelforge`, Container Port = 8080. Les labels Traefik sont ajoutes
+# automatiquement.
+#
+# Pour lancer sur une machine sans Dokploy, utiliser l'autre fichier :
+#     docker compose -f docker-compose.local.yml up -d --build
 
 services:
   pixelforge:
@@ -16,11 +19,12 @@ services:
     image: pixelforge:latest
     restart: unless-stopped
 
-    # Le conteneur ecoute sur 8080 (port non privilegie, utilisateur nginx).
-    ports:
-      - "${PIXELFORGE_PORT:-8080}:8080"
-    # expose:
-    #   - "8080"
+    # Visible uniquement depuis le reseau Docker, jamais depuis l'hote.
+    expose:
+      - "8080"
+
+    networks:
+      - dokploy-network
 
     # Le site est entierement statique : rien n'a besoin d'etre ecrit sur le
     # disque. Seuls les fichiers temporaires de nginx vivent en memoire.
@@ -46,8 +50,18 @@ services:
         max-size: "10m"
         max-file: "3"
 
-# Reseau gere par Dokploy : a activer pour un deploiement derriere son Traefik.
-# networks:
-#   default:
-#     name: dokploy-network
-#     external: true
+    # Si votre installation n'ajoute pas les labels toute seule, decommenter
+    # et remplacer le domaine. `traefik.docker.network` est indispensable :
+    # sans lui Traefik peut choisir la mauvaise interface.
+    # labels:
+    #   - traefik.enable=true
+    #   - traefik.docker.network=dokploy-network
+    #   - traefik.http.routers.pixelforge.rule=Host(`pixelforge.exemple.com`)
+    #   - traefik.http.routers.pixelforge.entrypoints=websecure
+    #   - traefik.http.routers.pixelforge.tls.certresolver=letsencrypt
+    #   - traefik.http.services.pixelforge.loadbalancer.server.port=8080
+
+# Reseau cree par Dokploy a l'installation, partage avec Traefik.
+networks:
+  dokploy-network:
+    external: true

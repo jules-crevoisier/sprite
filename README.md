@@ -30,28 +30,37 @@ utilisateur non privilégié sur le port **8080**.
 
 ### Dokploy
 
-C'est le chemin le plus court, aucun fichier à modifier :
+Le `Dockerfile` et le `docker-compose.yml` sont à la racine, les deux types
+d'application fonctionnent.
 
-1. **Create Application** → source **GitHub**, ce dépôt, la branche voulue.
-2. Build Type : **Dockerfile** (le `Dockerfile` est à la racine, il est
-   détecté tout seul).
-3. **Port : `8080`** — c'est le seul réglage à ne pas oublier, l'image
-   n'écoute pas sur 80.
-4. Onglet **Domains** : ajouter le domaine, activer HTTPS (Let's Encrypt).
-5. **Deploy**.
+**Application (le plus court)**
+
+1. **Create Application** → source **GitHub**, ce dépôt, branche `main`.
+2. Build Type : **Dockerfile** (détecté tout seul).
+3. **Port : `8080`** — l'image n'écoute pas sur 80, c'est ce qui lui permet
+   de tourner sans droits root.
+4. **Domains** → domaine + HTTPS → **Deploy**.
+
+**Docker Compose**
+
+Pointer sur `docker-compose.yml`, puis onglet **Domains** : Host = votre
+domaine, Service = `pixelforge`, Container Port = `8080`.
+
+Ce fichier ne publie **aucun port sur l'hôte** : Traefik joint le conteneur
+par le réseau interne `dokploy-network`. C'est ce que Dokploy attend, et cela
+évite le conflit `port is already allocated` si un autre service occupe déjà
+le port sur la machine.
 
 Aucune variable d'environnement n'est requise : l'application est entièrement
 statique et ne parle à aucun service.
 
-Pour passer par une application de type **Docker Compose** à la place,
-utiliser le `docker-compose.yml` fourni : retirer le bloc `ports`,
-décommenter le bloc `networks` (réseau `dokploy-network`), puis pointer le
-domaine vers le service `pixelforge` sur le port 8080.
-
 ### Docker, sans Dokploy
 
+Le second fichier publie le port sur l'hôte :
+
 ```bash
-docker compose up -d --build     # http://localhost:8080
+docker compose -f docker-compose.local.yml up -d --build   # http://localhost:8080
+PIXELFORGE_PORT=8090 docker compose -f docker-compose.local.yml up -d   # autre port
 ```
 
 ```bash
@@ -60,11 +69,9 @@ docker build -t pixelforge .
 docker run -d -p 8080:8080 --name pixelforge pixelforge
 ```
 
-Le port hôte se change avec `PIXELFORGE_PORT` (voir `.env.example`).
-
-Le `docker-compose.yml` applique un durcissement vérifié : système de
-fichiers en lecture seule, `cap_drop: ALL`, `no-new-privileges`, et les
-fichiers temporaires de nginx en mémoire.
+Les deux fichiers appliquent le même durcissement, vérifié au lancement :
+système de fichiers en lecture seule, `cap_drop: ALL`, `no-new-privileges`,
+et les fichiers temporaires de nginx en mémoire.
 
 ### Ce que fait l'image
 
