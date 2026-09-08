@@ -615,28 +615,44 @@ function viseur(img, largeurCadre, hauteurCadre, ratio) {
 scene(16.4, 29.6, (root) => {
   const tete = chapitre(root, '01', 'DESSIN', 'le geste, d’abord')
 
-  const CX = 676, CY = 188, CL = 1128, CH = CL / (16 / 9)
-  const c = el('cadre', root)
-  c.style.cssText = `left:${CX}px;top:${CY}px;width:${CL}px;height:${CH}px;`
-  const img = el('', c, 'img')
+  /* --- temps fort : l'editeur entier --- */
+  const CX = 676, CY = 200, CL = 1128, CH = CL / (16 / 9)
+  const plein = el('cadre', root)
+  plein.style.cssText = `left:${CX}px;top:${CY}px;width:${CL}px;height:${CH}px;`
+  const img = el('', plein, 'img')
   img.src = 'assets/ui/app-dessin.png'
   img.style.cssText = 'position:absolute;left:0;top:0;max-width:none;'
   const vise = viseur(img, CL, CH, 16 / 9)
 
+  /* --- second temps : les panneaux, en captures serrees --- */
+  const morceau = (nom, x, y, w, h, imgW, imgX = 0, imgY = 0) => {
+    const c = el('cadre', root)
+    c.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;`
+    const i = el('', c, 'img')
+    i.src = `assets/ui/${nom}.png`
+    i.style.cssText = `position:absolute;left:${imgX}px;top:${imgY}px;width:${imgW}px;max-width:none;`
+    return c
+  }
+  // La barre d'options fait quarante fois sa hauteur : la montrer entiere la
+  // rendrait illisible, on en cadre le debut a taille reelle.
+  const bandeau = morceau('options', 676, 196, 1128, 70, 2820)
+  const outils = morceau('outils', 676, 300, 78, 580, 78)
+  const calques = morceau('calques', 790, 300, 470, 272, 470)
+  const couleurs = morceau('couleurs', 1300, 300, 404, 470, 404)
+  const petits = [outils, calques, couleurs]
+
   const legende = el('legende', root)
-  legende.style.cssText = `position:absolute;left:${CX + 2}px;top:${CY + CH + 40}px;`
+  legende.style.cssText = `position:absolute;left:${CX + 2}px;top:${CY + CH + 42}px;`
   const legendes = [
     'MODE DESSIN · 48 × 48 px · zoom 12×',
-    'OUTILS ET BARRE D’OPTIONS · forme, tramage, symétrie',
-    'PANNEAUX · calques, aperçu, couleur, palette',
+    'BARRE D’OPTIONS, OUTILS, CALQUES, COULEUR',
   ]
 
   const GROUPES = [
-    [['Crayon, formes, remplissage', '#5b6cff'], ['Calques et modes de fusion', '#a855f7'],
-      ['Sélection, déplacement, lasso', '#ff4d8d']],
-    [['Formes de pinceau', '#5b6cff'], ['Tramage ordonné', '#ffb020'], ['Symétrie et pixel-perfect', '#2ee6a8']],
-    [['Palette editable en direct', '#ff4d8d'], ['Toute retouche est annulable', '#5b6cff'],
+    [['Crayon, formes, remplissage', '#5b6cff'], ['Sélection, déplacement, lasso', '#ff4d8d'],
       ['Rendu net à tout zoom', '#a855f7']],
+    [['Formes de pinceau', '#5b6cff'], ['Tramage ordonné', '#ffb020'],
+      ['Symétrie et pixel-perfect', '#2ee6a8'], ['Calques et modes de fusion', '#a855f7']],
   ]
   const groupes = GROUPES.map((g) => g.map(([texte, teinte], i) =>
     puce(root, texte, teinte, 138, 452 + i * 84)))
@@ -644,30 +660,33 @@ scene(16.4, 29.6, (root) => {
   return (l) => {
     tete(l)
 
-    // Trois temps : vue d'ensemble, outils, panneaux.
-    const A = E.expoInOut(seg(l, 6.2, 7.4))
-    const B = E.expoInOut(seg(l, 9.1, 10.3))
-    legende.textContent = legendes[B > 0.5 ? 2 : A > 0.5 ? 1 : 0]
-    legende.style.opacity = round(fenetre(l, 1.5, 12.2, 0.6, 0.4)
-      * (1 - Math.sin(clamp(seg(l, 6.2, 7.4)) * Math.PI) * 0.9)
-      * (1 - Math.sin(clamp(seg(l, 9.1, 10.3)) * Math.PI) * 0.9))
-    // Les points vises sont bornes : au-dela, le cadre montrerait du vide
-    // au lieu de l'interface.
-    const ech = mix(mix(mix(1.0, 2.6, A), 2.6, B), 1.0, E.inOut(seg(l, 11.7, 12.6)))
-    const cx = mix(mix(0.5, 0.20, A), 0.80, B)
-    const cy = mix(mix(0.5, 0.20, A), 0.47, B)
-    // Une derive lente pendant le plan large : l'image ne doit jamais etre figee.
-    const flotte = 1 + E.out(seg(l, 0.4, 8)) * 0.035
-    vise(ech * (A + B > 0.01 ? 1 : flotte), cx, cy)
-
+    // Une derive lente : un plan fixe sur une capture se voit tout de suite.
+    vise(1 + E.out(seg(l, 0.4, 7)) * 0.05, 0.5, 0.5)
     const entree = E.expo(seg(l, 0.45, 1.7))
-    c.style.opacity = round(entree)
-    c.style.transform = `translate3d(${round((1 - entree) * 90)}px, ${round((1 - entree) * 26)}px, 0)`
-      + ` scale(${round(mix(0.965, 1, entree))})`
+    const sortie1 = E.in(seg(l, 6.1, 6.9))
+    plein.style.opacity = round(entree * (1 - sortie1))
+    plein.style.transform = `translate3d(${round((1 - entree) * 90)}px, ${round((1 - entree) * 26)}px, 0)`
+      + ` scale(${round(mix(0.965, 1, entree) * mix(1, 0.96, sortie1))})`
+
+    const deux = fenetre(l, 7.0, 12.4, 0.6, 0.45)
+    const pb = E.souple(seg(l, 7.0, 7.9))
+    bandeau.style.opacity = round(deux)
+    bandeau.style.transform = `translate3d(0,${round((1 - pb) * -34)}px,0) scale(${round(mix(0.96, 1, pb))})`
+    petits.forEach((c, i) => {
+      const d = 7.3 + i * 0.16
+      const p = E.souple(seg(l, d, d + 0.9))
+      c.style.opacity = round(deux)
+      c.style.transform = `translate3d(0,${round((1 - p) * 52)}px,0) scale(${round(mix(0.93, 1, p))})`
+    })
+
+    const enDeux = l > 6.9
+    legende.textContent = legendes[enDeux ? 1 : 0]
+    legende.style.opacity = round(fenetre(l, 1.5, 12.4, 0.6, 0.4)
+      * (1 - Math.sin(clamp(seg(l, 6.1, 7.4)) * Math.PI) * 0.95))
 
     groupes.forEach((g, gi) => {
-      const debut = [1.1, 6.5, 9.4][gi]
-      const fin = [6.3, 9.2, 11.9][gi]
+      const debut = [1.1, 7.1][gi]
+      const fin = [6.4, 12.4][gi]
       g.forEach((p, i) => {
         const v = fenetre(l, debut + i * 0.13, fin, 0.55, 0.32)
         const e = E.souple(seg(l, debut + i * 0.13, debut + i * 0.13 + 0.7))

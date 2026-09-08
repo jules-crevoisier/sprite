@@ -188,6 +188,14 @@ const clip = async (nom, selecteur, avant) => {
   console.log(`ui ${nom}`)
 }
 
+// La couleur active se voit dans le panneau Couleur et commande la rampe :
+// avec le blanc par defaut, les deux plans seraient gris.
+await page.evaluate(async () => {
+  const { fromHex } = await import('/src/core/color.ts')
+  window.pixelforge.ed.setPrimary(fromHex('#3d60cf'))
+})
+await sleep(250)
+
 await page.evaluate(() => window.pixelforge.setMode('draw'))
 await sleep(400)
 await clip('app-dessin', null)
@@ -205,14 +213,6 @@ if (osPanel) await page.screenshot({ path: join(OUT, 'ui', 'panneau-os.png'), cl
 await page.evaluate(() => window.pixelforge.setMode('draw'))
 await sleep(400)
 await clip('timeline', '.timeline')
-
-// La rampe se construit autour de la couleur active : avec le blanc par
-// defaut, le dialogue montrerait une rampe grise sans interet.
-await page.evaluate(async () => {
-  const { fromHex } = await import('/src/core/color.ts')
-  window.pixelforge.ed.setPrimary(fromHex('#3d60cf'))
-})
-await sleep(250)
 
 for (const [cmd, nom] of [['sprite.ramp', 'rampe'], ['sprite.shade', 'ombrage'], ['file.export', 'export'], ['sprite.variants', 'variantes']]) {
   try {
