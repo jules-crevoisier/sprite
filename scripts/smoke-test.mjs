@@ -1736,6 +1736,86 @@ check('les apercus des dialogues se zooment', zoomables.every((a) => a.zoomable 
 check('les apercus se deplacent en les tirant', zoomables.every((a) => a.deplace))
 check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
 
+/* --- mascotte et ses cycles --- */
+const mascotte = await page.evaluate(async () => {
+  const { CLIPS_PIXL, debordsDePatte, spritePixl } = await import('/src/ui/mascot-clips.ts')
+  const { imageDePose, TAILLE } = await import('/src/ui/mascot-anim.ts')
+
+  /**
+   * Nombre de morceaux separes dans une image. Au-dela d'un, quelque chose
+   * s'est detache du personnage — une tete qui flotte, une queue decrochee.
+   * C'est le defaut qu'on remarque avant tous les autres.
+   */
+  const morceaux = (bm) => {
+    const vu = new Uint8Array(bm.length)
+    let n = 0
+    for (let d = 0; d < bm.length; d++) {
+      if (vu[d] || !(bm.u32[d] >>> 24)) continue
+      n++
+      const pile = [d]
+      vu[d] = 1
+      while (pile.length) {
+        const i = pile.pop()
+        const x = i % TAILLE, y = (i / TAILLE) | 0
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= TAILLE || ny >= TAILLE) continue
+          const j = ny * TAILLE + nx
+          if (vu[j] || !(bm.u32[j] >>> 24)) continue
+          vu[j] = 1
+          pile.push(j)
+        }
+      }
+    }
+    return n
+  }
+
+  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0 }
+  for (const clip of CLIPS_PIXL) {
+    bilan.cycles++
+    const bmps = clip.poses.map(imageDePose)
+    const masses = []
+    bmps.forEach((bm, i) => {
+      bilan.images++
+      if (morceaux(bm) !== 1) bilan.detachees.push(`${clip.id}#${i + 1}`)
+      bilan.debords += debordsDePatte(clip.poses[i])
+      let n = 0, x0 = 99, x1 = -1, y0 = 99
+      for (let y = 0; y < TAILLE; y++) for (let x = 0; x < TAILLE; x++) {
+        if (!(bm.u32[y * TAILLE + x] >>> 24)) continue
+        n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y
+      }
+      masses.push(n)
+      // Les pieds touchent la derniere ligne : c'est le pivot au sol.
+      // Sortir par le haut ou les cotes, en revanche, coupe le dessin.
+      if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1}`)
+    })
+    for (let a = 0; a < bmps.length; a++) for (let b = a + 1; b < bmps.length; b++) {
+      let d = 0
+      for (let k = 0; k < bmps[a].u32.length; k++) if (bmps[a].u32[k] !== bmps[b].u32[k]) d++
+      if (d === 0) bilan.jumelles.push(`${clip.id} ${a + 1}=${b + 1}`)
+    }
+    const ecart = (Math.max(...masses) - Math.min(...masses)) / Math.min(...masses)
+    bilan.masseMax = Math.max(bilan.masseMax, ecart)
+  }
+
+  const sprite = spritePixl()
+  bilan.tags = sprite.tags.length
+  bilan.frames = sprite.frameCount
+  bilan.tagsCouvrent = sprite.tags.every((t) => t.from <= t.to && t.to < sprite.frameCount)
+  return bilan
+})
+check('la mascotte a ses six cycles', mascotte.cycles === 6 && mascotte.tags === 6,
+  `${mascotte.cycles} cycles, ${mascotte.images} images, ${mascotte.tags} tags`)
+check('chaque tag couvre des frames existantes', mascotte.tagsCouvrent && mascotte.frames === mascotte.images)
+check('aucun morceau ne se detache du personnage', mascotte.detachees.length === 0,
+  mascotte.detachees.join(', '))
+check('aucune image n\'en repete une autre', mascotte.jumelles.length === 0,
+  mascotte.jumelles.join(', '))
+check('aucune patte ne deborde du torse', mascotte.debords === 0, `${mascotte.debords} pixels`)
+check('rien ne sort du cadre', mascotte.horsCadre.length === 0, mascotte.horsCadre.join(', '))
+check('la masse reste stable dans un cycle', mascotte.masseMax < 0.1,
+  `${(mascotte.masseMax * 100).toFixed(1)}% d'ecart au pire`)
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()
