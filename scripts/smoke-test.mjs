@@ -11,10 +11,33 @@
 import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 const PORT = 4319
 const URL = `http://127.0.0.1:${PORT}/`
-const launchOptions = process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}
+
+/**
+ * Trouve un Chromium utilisable.
+ *
+ * Playwright cherche par defaut un « headless shell » qui n'est pas toujours
+ * installe a cote du navigateur complet ; on regarde donc dans le dossier des
+ * navigateurs avant de le laisser decider.
+ */
+function trouverChromium() {
+  if (process.env.PW_CHROMIUM) return process.env.PW_CHROMIUM
+  const racine = process.env.PLAYWRIGHT_BROWSERS_PATH
+  if (!racine || !existsSync(racine)) return null
+  for (const dossier of readdirSync(racine)) {
+    if (!/^chromium-\d+$/.test(dossier)) continue
+    const chemin = join(racine, dossier, 'chrome-linux', 'chrome')
+    if (existsSync(chemin)) return chemin
+  }
+  return null
+}
+
+const navigateur = trouverChromium()
+const launchOptions = navigateur ? { executablePath: navigateur } : {}
 
 const checks = []
 const check = (name, ok, detail = '') => {
@@ -218,6 +241,7 @@ const guided = await page.evaluate(async () => {
   // sur des boutons qui font tout a sa place.
   const lesson = app.lessons().find((l) => l.id === 'rig')
   out.lecons = app.lessons().length
+  out.leconsVides = app.lessons().filter((l) => !l.steps.length).length
   out.gestesExiges = lesson.steps.filter((s) => s.done && !s.auto).length
   await app.tutorial.start(lesson)
   out.carte = !!document.querySelector('.tutor-card:not([hidden])')
@@ -421,7 +445,10 @@ check('la ponderation est annulable', modes.ponderationAnnulee)
 
 check('les modeles de squelette tiennent dans le dessin', guided.modeles)
 check('les modeles enchainent bien les os', guided.enfants)
-check('les lecons sont disponibles', guided.lecons === 5, `${guided.lecons} lecons`)
+// Un nombre fige ici casserait le test a chaque lecon ajoutee : ce qui
+// compte est qu'il y en ait, et qu'aucune ne soit vide.
+check('les lecons sont disponibles', guided.lecons >= 5 && guided.leconsVides === 0,
+  `${guided.lecons} lecons` + (guided.leconsVides ? `, ${guided.leconsVides} vide(s)` : ''))
 check('la carte du tutoriel s\'affiche', guided.carte)
 check('la lecon exige de vrais gestes', guided.gestesExiges >= 4, `${guided.gestesExiges} etapes sans bouton de secours`)
 const dernierePas = guided.avance[guided.avance.length - 1] ?? ''
@@ -1477,6 +1504,7 @@ const couverture = await page.evaluate(async () => {
     tags: 'glissez-le pour le deplacer',
     pinceau: 'forme du pinceau',
     tramage: 'tramage',
+    effets: 'effets de calque',
   }
   const absents = Object.entries(sujets).filter(([, v]) => !texte.includes(v)).map(([k]) => k)
   return {
@@ -1539,6 +1567,79 @@ check('le bouton n\'ouvre pas une etape en attente',
   `bouton « ${blocage.libelle} », ${blocage.avant} -> ${blocage.apres}`)
 check('le geste accompli fait avancer',
   blocage.apresGeste !== blocage.avant, `${blocage.avant} -> ${blocage.apresGeste}`)
+
+/* --- effets de calque --- */
+const effets = await page.evaluate(async () => {
+  const { EFFECT_KINDS, createEffect, renderEffects, renderEffectsCached } = await import('/src/core/effects.ts')
+  const { compositeFrame } = await import('/src/render/composite.ts')
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { serializeSprite, deserializeSprite } = await import('/src/io/project.ts')
+  const app = window.pixelforge
+  const ed = app.ed
+  ed.loadSprite(demoCharacter())
+  const layer = ed.layer
+  const base = ed.peekCel().bitmap
+  const empreinte = (bm) => Array.from(bm.u32).join(',')
+
+  // Un effet qui ne change rien serait un reglage mort dans l'interface.
+  const morts = []
+  for (const k of EFFECT_KINDS) {
+    const rendu = renderEffects(base, [createEffect(k.id)])
+    if (empreinte(rendu) === empreinte(base)) morts.push(k.id)
+  }
+
+  // Les effets sont recalcules a l'affichage : le dessin ne doit pas bouger.
+  const avant = empreinte(base)
+  ed.run('effets', () => { layer.effects = EFFECT_KINDS.map((k) => createEffect(k.id)) })
+  compositeFrame(ed.sprite, 0)
+  const intact = empreinte(ed.peekCel().bitmap) === avant
+
+  // Le cache doit rendre exactement ce que rend le calcul direct.
+  const direct = renderEffects(base, layer.effects)
+  const cache1 = renderEffectsCached(base, layer.effects, 7)
+  const cache2 = renderEffectsCached(base, layer.effects, 7)
+  const memeRendu = empreinte(direct) === empreinte(cache1) && cache1 === cache2
+
+  // Promesse du pixel art : une ombre tramee n'introduit qu'une couleur.
+  const couleurs = (bm) => new Set(Array.from(bm.u32).filter((c) => (c >>> 24) !== 0))
+  const ombre = createEffect('ombre-portee')
+  ombre.falloff = 'tramage'
+  const avecOmbre = renderEffects(base, [ombre])
+  const ajoutees = [...couleurs(avecOmbre)].filter((c) => !couleurs(base).has(c)).length
+
+  // Aller-retour projet.
+  const json = serializeSprite(ed.sprite)
+  const relu = await deserializeSprite(json)
+  const relus = relu.layers[0].effects
+  const conserves = relus.length === layer.effects.length
+    && relus.every((e, i) => e.kind === layer.effects[i].kind
+      && e.color === layer.effects[i].color
+      && e.size === layer.effects[i].size
+      && e.falloff === layer.effects[i].falloff)
+
+  // Graver ecrit dans les pixels et vide la liste.
+  ed.run('reset', () => { layer.effects = [createEffect('contour')] })
+  const avantGravure = empreinte(ed.peekCel().bitmap)
+  app.runCommand('layer.fx-bake')
+  const grave = empreinte(ed.peekCel().bitmap) !== avantGravure && layer.effects.length === 0
+  ed.history.undo(); ed.history.undo()
+
+  // Chaque type a une commande de menu qui le pose.
+  const ids = app.commands.map((c) => c.id)
+  const sansCommande = EFFECT_KINDS.filter((k) => !ids.includes(`layer.fx-${k.id}`)).map((k) => k.id)
+
+  return { morts, intact, memeRendu, ajoutees, conserves, grave, sansCommande, types: EFFECT_KINDS.length }
+})
+check('chaque effet modifie le rendu', effets.morts.length === 0,
+  `${effets.types} types` + (effets.morts.length ? ` — sans effet : ${effets.morts.join(', ')}` : ''))
+check('les effets ne touchent pas les pixels du calque', effets.intact)
+check('le cache rend la meme image que le calcul direct', effets.memeRendu)
+check('une ombre tramee n\'ajoute qu\'une couleur', effets.ajoutees <= 1,
+  `${effets.ajoutees} couleur(s) ajoutee(s)`)
+check('les effets survivent a l\'aller-retour projet', effets.conserves)
+check('graver ecrit les effets dans les pixels', effets.grave)
+check('chaque type d\'effet a sa commande', effets.sansCommande.length === 0,
+  effets.sansCommande.join(', '))
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 

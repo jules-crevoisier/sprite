@@ -9,7 +9,11 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:smoke": "node scripts/smoke-test.mjs"
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "film:capture": "node scripts/film/capture.mjs --out video/assets",
+    "film:render": "node scripts/film/render.mjs --assets video/assets --out video/pixelforge.mp4",
+    "film:verifier": "node scripts/film/render.mjs --assets video/assets --verifier",
+    "film": "npm run film:capture && npm run film:render"
   },
   "devDependencies": {
     "playwright": "^1.49.1",

@@ -1,5 +1,6 @@
 import { Bitmap } from '../core/bitmap'
 import { compositeBitmap } from '../core/blend'
+import { renderEffectsCached } from '../core/effects'
 import type { Sprite } from '../core/document'
 
 export interface CompositeOptions {
@@ -13,6 +14,14 @@ export interface CompositeOptions {
   into?: Bitmap | null
   /** Substitue le contenu d'une case (previsualisation d'outil). */
   override?: { layer: number; frame: number; bitmap: Bitmap } | null
+  /**
+   * Version du document. Sert de cle au cache des effets : tant que rien
+   * n'a change, une lecture ne recalcule pas les memes ombres a chaque
+   * image. Sans version, les effets sont recalcules a chaque appel.
+   */
+  version?: number
+  /** Ignore les effets de calque (apercu du dessin nu). */
+  ignoreEffects?: boolean
 }
 
 /** Aplatit une frame du sprite en un seul bitmap RGBA. */
@@ -35,7 +44,10 @@ export function compositeFrame(sprite: Sprite, frame: number, opts: CompositeOpt
     const celOpacity = cel ? cel.opacity : 255
     const opacity = (layer.opacity * celOpacity) / 255
     if (opacity <= 0) continue
-    compositeBitmap(out, bitmap, layer.blendMode, opacity)
+    const rendu = opts.ignoreEffects || !layer.effects.length
+      ? bitmap
+      : renderEffectsCached(bitmap, layer.effects, opts.version)
+    compositeBitmap(out, rendu, layer.blendMode, opacity)
   }
   return out
 }
@@ -50,7 +62,7 @@ export class FrameCache {
         hit.bitmap.width === sprite.width && hit.bitmap.height === sprite.height) {
       return hit.bitmap
     }
-    const bitmap = compositeFrame(sprite, frame, { ...opts, into: hit?.bitmap ?? null })
+    const bitmap = compositeFrame(sprite, frame, { ...opts, version, into: hit?.bitmap ?? null })
     this.cache.set(frame, { version, bitmap })
     return bitmap
   }

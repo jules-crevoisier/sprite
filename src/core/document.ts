@@ -1,5 +1,6 @@
 import { Bitmap, type Rect } from './bitmap'
 import { compositeBitmap, type BlendMode } from './blend'
+import { renderEffects, type LayerEffect } from './effects'
 import type { RGBA } from './color'
 import { Palette } from './palette'
 import { emptyRig, type Rig } from '../smart/rig'
@@ -50,6 +51,11 @@ export class Layer {
   reference = false
   opacity = 255
   blendMode: BlendMode = 'normal'
+  /**
+   * Effets non destructifs, appliques a la composition et jamais graves
+   * dans les pixels. Vide dans le cas courant.
+   */
+  effects: LayerEffect[] = []
   /** Une case par frame ; null = case vide. */
   cels: (Cel | null)[] = []
 
@@ -124,6 +130,7 @@ export class Sprite {
     copy.visible = src.visible
     copy.opacity = src.opacity
     copy.blendMode = src.blendMode
+    copy.effects = src.effects.map((e) => ({ ...e }))
     copy.cels = src.cels.map((c) => (c ? { bitmap: c.bitmap.clone(), opacity: c.opacity } : null))
     this.layers.splice(idx + 1, 0, copy)
     return copy
@@ -145,13 +152,17 @@ export class Sprite {
       const merged = new Bitmap(this.width, this.height)
       const bc = bottom.cels[f]
       if (bc) {
-        compositeBitmap(merged, bc.bitmap, bottom.blendMode, (bottom.opacity * bc.opacity) / 255)
+        compositeBitmap(merged, renderEffects(bc.bitmap, bottom.effects), bottom.blendMode,
+          (bottom.opacity * bc.opacity) / 255)
       }
-      compositeBitmap(merged, tc.bitmap, top.blendMode, (top.opacity * tc.opacity) / 255)
+      compositeBitmap(merged, renderEffects(tc.bitmap, top.effects), top.blendMode,
+        (top.opacity * tc.opacity) / 255)
       bottom.cels[f] = { bitmap: merged, opacity: 255 }
     }
+    // La fusion grave les effets : il n'y a plus deux calques a separer.
     bottom.blendMode = 'normal'
     bottom.opacity = 255
+    bottom.effects = []
     this.layers.splice(idx, 1)
     return true
   }

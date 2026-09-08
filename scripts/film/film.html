@@ -1,0 +1,1318 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PixelForge — film</title>
+<!--
+  Scene du film de presentation.
+
+  Tout est deterministe : rien ne bouge tout seul, aucune animation CSS,
+  aucun requestAnimationFrame. Le rendu appelle window.FILM.seek(t) pour
+  chaque image, ce qui garantit un resultat identique a chaque passage et
+  permet de rendre plus lentement que le temps reel sans saccade.
+-->
+<style>
+@font-face { font-family: Inter; src: url(fonts/inter.woff2) format('woff2'); font-weight: 100 900; }
+@font-face { font-family: Mono; src: url(fonts/mono.woff2) format('woff2'); font-weight: 400 700; }
+@font-face { font-family: Pixel; src: url(fonts/silk.woff2) format('woff2'); font-weight: 400; }
+
+:root {
+  --encre: #f2f4fb;
+  --sourdine: #7c8199;
+  --indigo: #5b6cff;
+  --violet: #a855f7;
+  --rose: #ff4d8d;
+  --ambre: #ffb020;
+  --menthe: #2ee6a8;
+  --fond: #07070b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+body { font-family: Inter, sans-serif; color: var(--encre); -webkit-font-smoothing: antialiased; }
+
+#stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--fond); }
+.scene { position: absolute; inset: 0; }
+.couche { position: absolute; inset: 0; pointer-events: none; }
+
+canvas.plein { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+
+/* --- typographie ------------------------------------------------- */
+.titre { font-weight: 900; letter-spacing: -0.045em; line-height: 0.92; }
+.mot {
+  display: inline-block; overflow: hidden; vertical-align: bottom;
+  padding-top: 0.2em; margin-top: -0.2em;
+}
+.mot > i { display: inline-block; font-style: normal; }
+.kicker {
+  font-family: Mono, monospace; font-weight: 700; font-size: 19px;
+  letter-spacing: 0.34em; text-transform: uppercase; color: var(--sourdine);
+  white-space: nowrap;
+}
+.legende {
+  font-family: Mono, monospace; font-size: 17px; color: #6d7290;
+  letter-spacing: 0.055em; white-space: nowrap;
+}
+.pixelfont { font-family: Pixel, monospace; }
+
+/* --- elements ----------------------------------------------------- */
+.regle { position: absolute; height: 2px; background: linear-gradient(90deg, var(--indigo), var(--violet), var(--rose)); transform-origin: left center; }
+.puce {
+  position: absolute; display: flex; align-items: center; gap: 12px;
+  padding: 13px 22px 13px 18px; border-radius: 999px;
+  background: rgba(20, 21, 32, 0.86); border: 1px solid rgba(255,255,255,0.11);
+  font-size: 21px; font-weight: 600; letter-spacing: -0.01em;
+  backdrop-filter: blur(14px); white-space: nowrap;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+}
+.puce b { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.cadre {
+  position: absolute; border-radius: 16px; overflow: hidden;
+  background: #0d0e15; border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 60px 140px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.03) inset;
+}
+.cadre img { display: block; width: 100%; height: auto; }
+.sprite { image-rendering: pixelated; position: absolute; }
+.vignette { position: absolute; inset: 0; background: radial-gradient(ellipse 78% 68% at 50% 46%, transparent 45%, rgba(0,0,0,0.72) 100%); }
+.grain { position: absolute; inset: 0; mix-blend-mode: overlay; opacity: 0.055; }
+.barres { position: absolute; left: 0; right: 0; background: #000; }
+</style>
+
+<div id="stage">
+  <canvas class="plein" id="fond" width="1920" height="1080"></canvas>
+  <div id="scenes"></div>
+  <div class="couche vignette"></div>
+  <canvas class="plein grain" id="grain" width="480" height="270"></canvas>
+</div>
+
+<script type="module">
+const W = 1920, H = 1080
+const scenesRoot = document.getElementById('scenes')
+
+/* ------------------------------------------------------------------ */
+/* Boite a outils                                                      */
+/* ------------------------------------------------------------------ */
+const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v)
+const seg = (t, a, b) => clamp((t - a) / (b - a))
+const mix = (a, b, t) => a + (b - a) * t
+const round = (v) => Math.round(v * 1000) / 1000
+
+const E = {
+  lin: (t) => t,
+  out: (t) => 1 - Math.pow(1 - t, 3),
+  out4: (t) => 1 - Math.pow(1 - t, 4),
+  out5: (t) => 1 - Math.pow(1 - t, 5),
+  in: (t) => t * t * t,
+  inOut: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+  expo: (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -11 * t)),
+  expoInOut: (t) => (t === 0 ? 0 : t === 1 ? 1 : t < 0.5
+    ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2),
+  back: (t) => { const s = 1.34; return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2) },
+  // Un depassement doux, sans le rebond mecanique d'un ressort classique.
+  souple: (t) => 1 - Math.pow(1 - t, 3) * Math.cos(t * 4.2),
+}
+
+/** Fenetre d'apparition/disparition : 0 avant, 1 pendant, 0 apres. */
+const fenetre = (t, entree, sortie, dEntree = 0.5, dSortie = 0.5) =>
+  E.out(seg(t, entree, entree + dEntree)) * (1 - E.in(seg(t, sortie - dSortie, sortie)))
+
+function el(classe, parent, tag = 'div') {
+  const n = document.createElement(tag)
+  if (classe) n.className = classe
+  ;(parent || scenesRoot).appendChild(n)
+  return n
+}
+
+/** Decoupe un texte en mots masques, chaque mot portant ses lettres. */
+function motsDe(texte, parent) {
+  const mots = []
+  texte.split(' ').forEach((m, i, all) => {
+    const w = el('mot', parent, 'span')
+    const inner = document.createElement('i')
+    inner.textContent = m
+    w.appendChild(inner)
+    mots.push(inner)
+    if (i < all.length - 1) parent.appendChild(document.createTextNode(' '))
+  })
+  return mots
+}
+
+/**
+ * Montee des mots derriere leur propre masque, avec un decalage par mot.
+ * C'est le mouvement de titrage le plus lisible : la lettre n'apparait
+ * jamais coupee, elle sort d'un bord net.
+ */
+function monter(mots, avancement, decalage = 0.12, course = 1.15) {
+  mots.forEach((m, i) => {
+    const p = E.out5(clamp((avancement - i * decalage) / (1 - decalage * (mots.length - 1) * 0.5)))
+    m.style.transform = `translate3d(0, ${round((1 - p) * 100 * course)}%, 0)`
+    m.style.opacity = clamp(p * 2.2)
+  })
+}
+
+const px = (v) => `${round(v)}px`
+
+/**
+ * Le degrade doit traverser le mot, pas chaque lettre. Comme le titre est
+ * decoupe en lettres pour l'animation, on donne a chacune le degrade du mot
+ * entier et on le decale de sa position : le raccord est invisible.
+ */
+function degrader(lettres, degrade) {
+  const gauche = Math.min(...lettres.map((l) => l.getBoundingClientRect().left))
+  const droite = Math.max(...lettres.map((l) => l.getBoundingClientRect().right))
+  const largeur = Math.max(1, droite - gauche)
+  for (const l of lettres) {
+    const dx = l.getBoundingClientRect().left - gauche
+    l.style.backgroundImage = degrade
+    l.style.backgroundSize = `${round(largeur)}px 100%`
+    l.style.backgroundPosition = `${round(-dx)}px 0`
+    l.style.webkitBackgroundClip = 'text'
+    l.style.backgroundClip = 'text'
+    l.style.color = 'transparent'
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Chargement des images produites par l'application                   */
+/* ------------------------------------------------------------------ */
+const charger = (src) => new Promise((ok, ko) => {
+  const img = new Image()
+  img.onload = () => ok(img)
+  img.onerror = () => ko(new Error(src))
+  img.src = src
+})
+
+const meta = await (await fetch('assets/sprite.json')).json()
+const CLIPS = {}
+for (const c of meta.clips) {
+  CLIPS[c.id] = { ...c, images: [] }
+  for (let i = 0; i < c.frames; i++) {
+    CLIPS[c.id].images.push(`assets/sprite/${c.id}-${String(i).padStart(2, '0')}.png`)
+  }
+}
+const UI = {}
+for (const nom of ['app-dessin', 'app-squelette', 'outils', 'options', 'calques', 'couleurs', 'timeline', 'rampe', 'ombrage', 'panneau-os']) {
+  try { UI[nom] = await charger(`assets/ui/${nom}.png`) } catch { /* capture absente */ }
+}
+for (const c of Object.values(CLIPS)) await Promise.all(c.images.map(charger))
+
+/**
+ * La toile fait 48 pixels de cote mais le personnage n'en occupe qu'une
+ * partie. Toutes les poses partagent ce cadrage, on peut donc agrandir sur
+ * le dessin sans qu'une pose se decale par rapport a une autre.
+ */
+const CADRAGE = meta.cadrage ?? { x: 0, y: 0, w: meta.largeur, h: meta.hauteur }
+
+/**
+ * Une boite dont left/top designent le centre du personnage, quelle que
+ * soit la marge vide autour du dessin.
+ */
+function boiteSprite(parent, haut) {
+  const e = haut / CADRAGE.h
+  const hote = el('', parent)
+  hote.style.cssText = `position:absolute;width:${round(meta.largeur * e)}px;`
+    + `height:${round(meta.hauteur * e)}px;`
+    + `margin-left:${round(-(CADRAGE.x + CADRAGE.w / 2) * e)}px;`
+    + `margin-top:${round(-(CADRAGE.y + CADRAGE.h / 2) * e)}px;`
+    + `transform-origin:${round((CADRAGE.x + CADRAGE.w / 2) / meta.largeur * 100)}% `
+    + `${round((CADRAGE.y + CADRAGE.h / 2) / meta.hauteur * 100)}%;`
+  return hote
+}
+
+/** Largeur occupee par le personnage pour une hauteur donnee. */
+const largeurSprite = (haut) => (CADRAGE.w / CADRAGE.h) * haut
+
+/** Une image fixe du personnage, cadree comme les cycles. */
+function fixe(parent, fichier, haut) {
+  const hote = boiteSprite(parent, haut)
+  const i = el('sprite', hote, 'img')
+  i.src = fichier
+  i.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+  return hote
+}
+
+/**
+ * Un lecteur de cycle : une pile d'images superposees dont une seule est
+ * visible. Le choix se fait sur le temps, pas sur un minuteur, pour que le
+ * rendu image par image tombe exactement sur les memes poses.
+ */
+function lecteur(parent, id, haut, opts = {}) {
+  const clip = CLIPS[id]
+  const boite = opts.remplir ? el('', parent) : boiteSprite(parent, haut)
+  if (opts.remplir) boite.style.cssText = 'position:absolute;inset:0;'
+  const imgs = clip.images.map((src) => {
+    const i = el('sprite', boite, 'img')
+    i.src = src
+    i.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    return i
+  })
+  const vitesse = opts.vitesse ?? 1
+  return {
+    boite,
+    /** t en secondes depuis le debut de la scene. */
+    a(t, decalage = 0) {
+      const duree = (clip.ms / 1000) / vitesse
+      const n = clip.frames
+      let k = Math.floor((t / duree) + decalage)
+      k = clip.loop ? ((k % n) + n) % n : clamp(k, 0, n - 1)
+      imgs.forEach((im, i) => { im.style.opacity = i === k ? 1 : 0 })
+      return k
+    },
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Fond : degrade vivant, grille de pixels, halos                      */
+/* ------------------------------------------------------------------ */
+const fondCv = document.getElementById('fond')
+const fondCtx = fondCv.getContext('2d')
+
+const HALOS = [
+  { x: 0.22, y: 0.30, r: 620, c: [91, 108, 255], v: 0.055, ph: 0.0 },
+  { x: 0.78, y: 0.68, r: 700, c: [168, 85, 247], v: 0.041, ph: 1.7 },
+  { x: 0.55, y: 0.15, r: 520, c: [255, 77, 141], v: 0.033, ph: 3.1 },
+]
+
+function dessinerFond(t, teinte) {
+  fondCtx.clearRect(0, 0, W, H)
+  fondCtx.fillStyle = '#07070b'
+  fondCtx.fillRect(0, 0, W, H)
+
+  for (const h of HALOS) {
+    const x = (h.x + Math.sin(t * 0.13 + h.ph) * 0.045) * W
+    const y = (h.y + Math.cos(t * 0.11 + h.ph) * 0.055) * H
+    const g = fondCtx.createRadialGradient(x, y, 0, x, y, h.r)
+    const a = h.v * teinte
+    g.addColorStop(0, `rgba(${h.c[0]},${h.c[1]},${h.c[2]},${a})`)
+    g.addColorStop(1, 'rgba(0,0,0,0)')
+    fondCtx.fillStyle = g
+    fondCtx.fillRect(0, 0, W, H)
+  }
+
+  // Grille de pixels en parallaxe : elle rappelle le sujet sans le repeter.
+  const pas = 60
+  const dx = (t * 9) % pas, dy = (t * 5) % pas
+  fondCtx.strokeStyle = `rgba(255,255,255,${0.021 * teinte})`
+  fondCtx.lineWidth = 1
+  fondCtx.beginPath()
+  for (let x = -pas + dx; x < W + pas; x += pas) { fondCtx.moveTo(x + 0.5, 0); fondCtx.lineTo(x + 0.5, H) }
+  for (let y = -pas + dy; y < H + pas; y += pas) { fondCtx.moveTo(0, y + 0.5); fondCtx.lineTo(W, y + 0.5) }
+  fondCtx.stroke()
+}
+
+/* Grain : bruit fige par image, regenere a un rythme de pellicule. */
+const grainCv = document.getElementById('grain')
+const grainCtx = grainCv.getContext('2d')
+const GW = 480, GH = 270
+const grainImg = grainCtx.createImageData(GW, GH)
+let grainGraine = -1
+function dessinerGrain(image) {
+  const g = Math.floor(image / 2)
+  if (g === grainGraine) return
+  grainGraine = g
+  let etat = g * 2654435761 + 1
+  const d = grainImg.data
+  for (let i = 0; i < d.length; i += 4) {
+    etat = (etat * 1664525 + 1013904223) >>> 0
+    const v = etat >>> 24
+    d[i] = d[i + 1] = d[i + 2] = v
+    d[i + 3] = 255
+  }
+  grainCtx.putImageData(grainImg, 0, 0)
+}
+
+/* ------------------------------------------------------------------ */
+/* Registre des scenes                                                 */
+/* ------------------------------------------------------------------ */
+const scenes = []
+function scene(debut, fin, construire) {
+  const root = el('scene')
+  const jouer = construire(root)
+  root.style.display = 'none'
+  scenes.push({ debut, fin, root, jouer })
+}
+
+/* ------------------------------------------------------------------ */
+/* Pieces reutilisables                                                */
+/* ------------------------------------------------------------------ */
+
+/** Un titre decoupe lettre par lettre, chaque lettre sous son masque. */
+function lettresDe(texte, parent) {
+  return [...texte].map((c) => {
+    const w = el('mot', parent, 'span')
+    const inner = document.createElement('i')
+    inner.textContent = c === ' ' ? ' ' : c
+    w.appendChild(inner)
+    return inner
+  })
+}
+
+/** Cadre d'appareil contenant une capture de l'application. */
+function cadre(parent, nom, x, y, largeur) {
+  const c = el('cadre', parent)
+  c.style.cssText = `left:${x}px;top:${y}px;width:${largeur}px;`
+  const img = el('', c, 'img')
+  img.src = `assets/ui/${nom}.png`
+  return c
+}
+
+/** Pastille legende, couleur + texte. */
+function puce(parent, texte, couleur, x, y) {
+  const p = el('puce', parent)
+  p.style.cssText = `left:${x}px;top:${y}px;`
+  const b = el('', p, 'b')
+  b.style.background = couleur
+  b.style.boxShadow = `0 0 14px ${couleur}`
+  el('', p, 'span').textContent = texte
+  return p
+}
+
+/**
+ * En-tete de chapitre : un grand numero evide et un intitule.
+ * Le numero reste a l'ecran pendant tout le chapitre, en filigrane : c'est
+ * lui qui donne au film sa structure lisible.
+ */
+function chapitre(root, numero, titre, sousTitre) {
+  const box = el('', root)
+  box.style.cssText = 'position:absolute;left:130px;top:118px;'
+
+  const num = el('titre', box)
+  num.textContent = numero
+  num.style.cssText = 'position:absolute;left:-14px;top:34px;font-size:296px;'
+    + '-webkit-text-stroke:2px rgba(255,255,255,0.15);color:transparent;letter-spacing:-0.06em;'
+
+  // Le sur-titre passe au-dessus du chiffre : sous lui, il devenait illisible.
+  const k = el('kicker', box)
+  k.style.cssText = 'position:absolute;left:8px;top:-4px;font-size:17px;'
+  const kMots = motsDe(sousTitre, k)
+
+  const t = el('titre', box)
+  t.style.cssText = 'position:absolute;left:2px;top:150px;font-size:96px;white-space:nowrap;'
+  const lettres = lettresDe(titre, t)
+
+  const regle = el('regle', box)
+  regle.style.cssText = 'left:8px;top:276px;width:520px;'
+
+  return (l) => {
+    const v = fenetre(l, 0, 1e9, 0.6, 0.4)
+    const p = E.expo(seg(l, 0.08, 1.5))
+    num.style.opacity = round(v * mix(0, 1, p))
+    num.style.transform = `translate3d(0, ${round((1 - p) * 40)}px, 0)`
+    monter(kMots, seg(l, 0.15, 0.95), 0.1)
+    k.style.opacity = v
+    monter(lettres, seg(l, 0.22, 1.35), 0.055)
+    t.style.opacity = v
+    regle.style.transform = `scaleX(${round(E.expo(seg(l, 0.5, 1.6)))})`
+    regle.style.opacity = v
+  }
+}
+
+/** Sortie commune : la scene recule et se dissout. */
+function sortir(root, l, debut, duree = 0.85) {
+  const p = E.in(seg(l, debut, debut + duree))
+  root.style.opacity = round(1 - p)
+  root.style.filter = p > 0.001 ? `blur(${round(p * 18)}px)` : 'none'
+  root.style.transform = `scale(${round(1 + p * 0.06)})`
+}
+
+/* ------------------------------------------------------------------ */
+/* 00 · Ouverture                                                      */
+/* ------------------------------------------------------------------ */
+scene(0, 8.7, (root) => {
+  const centre = el('', root)
+  centre.style.cssText = 'position:absolute;inset:0;'
+
+  // La marque : seize pixels qui se rassemblent.
+  const CASE = 46, ECART = 5, N = 4
+  const cote = N * CASE + (N - 1) * ECART
+  const marque = el('', centre)
+  marque.style.cssText = `position:absolute;left:${(W - cote) / 2}px;top:296px;width:${cote}px;height:${cote}px;`
+
+  const TEINTES = ['#5b6cff', '#7b5cff', '#a855f7', '#ff4d8d', '#ff6b3d', '#ffb020']
+  const cellules = []
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    // Un coin evide : le carre plein serait un bloc, la marque a besoin d'un vide.
+    if (x === 3 && y === 0) continue
+    const c = el('', marque)
+    const d = (x + y) / (2 * N - 2)
+    const teinte = TEINTES[Math.min(TEINTES.length - 1, Math.round(d * (TEINTES.length - 1)))]
+    c.style.cssText = `position:absolute;width:${CASE}px;height:${CASE}px;border-radius:6px;`
+      + `left:${x * (CASE + ECART)}px;top:${y * (CASE + ECART)}px;background:${teinte};`
+    cellules.push({ n: c, ordre: (x + y) * 0.5 + Math.random() * 0.001, teinte, x, y })
+  }
+  cellules.sort((a, b) => a.ordre - b.ordre)
+
+  const halo = el('', centre)
+  halo.style.cssText = `position:absolute;left:${W / 2 - 300}px;top:${296 + cote / 2 - 300}px;`
+    + 'width:600px;height:600px;border-radius:50%;'
+    + 'background:radial-gradient(circle, rgba(120,110,255,0.30), transparent 62%);filter:blur(28px);'
+
+  const mot = el('titre', centre)
+  mot.style.cssText = `position:absolute;left:0;top:576px;width:${W}px;text-align:center;font-size:158px;`
+  const partie1 = el('', mot, 'span')
+  const l1 = lettresDe('PIXEL', partie1)
+  const partie2 = el('', mot, 'span')
+  const l2 = lettresDe('FORGE', partie2)
+  degrader(l2, 'linear-gradient(96deg,#5b6cff,#a855f7 46%,#ff4d8d)')
+  const lettres = [...l1, ...l2]
+
+  const regle = el('regle', centre)
+  regle.style.cssText = `left:${W / 2 - 210}px;top:766px;width:420px;transform-origin:center;`
+
+  const sous = el('', centre)
+  sous.style.cssText = `position:absolute;left:0;top:806px;width:${W}px;text-align:center;`
+    + 'font-size:31px;font-weight:500;color:#aab0c6;letter-spacing:-0.012em;'
+  const sousMots = motsDe('L’éditeur de pixel art pensé pour le jeu vidéo', sous)
+
+  const kicker = el('kicker', centre)
+  kicker.style.cssText = `position:absolute;left:0;top:900px;width:${W}px;text-align:center;font-size:17px;`
+  const kMots = motsDe('DESSIN · SQUELETTE · ANIMATION · EXPORT MOTEUR', kicker)
+
+  return (l) => {
+    // Le premier pixel, puis les quinze autres.
+    const naissance = E.expo(seg(l, 0.15, 0.95))
+    cellules.forEach((c, i) => {
+      const d = 0.55 + i * 0.052
+      const p = E.souple(seg(l, d, d + 0.95))
+      const depart = i === 0 ? naissance : p
+      const dx = (1 - p) * ((c.x - 1.5) * -22)
+      const dy = (1 - p) * ((c.y - 1.5) * -22 + 14)
+      const ech = i === 0 ? mix(0.2, 1, naissance) : mix(0.1, 1, p)
+      c.n.style.transform = `translate3d(${round(dx)}px,${round(dy)}px,0) scale(${round(ech)})`
+      c.n.style.opacity = round(clamp(depart * 1.6))
+    })
+    halo.style.opacity = round(E.out(seg(l, 0.3, 2.2)) * mix(0.55, 1, 0.5 + 0.5 * Math.sin(l * 1.6)))
+
+    monter(lettres, seg(l, 1.55, 3.15), 0.038, 1.1)
+    regle.style.transform = `scaleX(${round(E.expo(seg(l, 2.5, 3.5)))})`
+    monter(sousMots, seg(l, 2.85, 4.0), 0.045)
+    monter(kMots, seg(l, 3.6, 4.8), 0.03)
+
+    // Respiration lente de l'ensemble avant la sortie.
+    const derive = Math.sin(l * 0.5) * 5
+    centre.style.transform = `translate3d(0, ${round(derive)}px, 0)`
+    sortir(root, l, 7.55, 1.0)
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/* 01 · Manifeste : dessiner, animer, exporter                         */
+/* ------------------------------------------------------------------ */
+scene(8.45, 16.6, (root) => {
+  const BEATS = [
+    { mot: 'DESSINER', couleur: '#5b6cff', note: 'pinceaux, tramage, symétrie, calques' },
+    { mot: 'ANIMER', couleur: '#a855f7', note: 'squelette, cycles, courbes, inertie' },
+    { mot: 'EXPORTER', couleur: '#ff4d8d', note: 'planche, Unity, Godot, GIF' },
+  ]
+  const DUREE = 2.55
+  const blocs = BEATS.map((b, i) => {
+    const box = el('', root)
+    box.style.cssText = 'position:absolute;left:150px;top:392px;'
+    const t = el('titre', box)
+    t.style.cssText = 'font-size:170px;white-space:nowrap;'
+    const lettres = lettresDe(b.mot, t)
+    const n = el('', box)
+    n.style.cssText = `margin-top:26px;font-size:27px;font-weight:600;color:${b.couleur};letter-spacing:0.01em;`
+    const nMots = motsDe(b.note, n)
+    const r = el('regle', box)
+    r.style.cssText = `left:4px;top:-42px;width:210px;background:${b.couleur};`
+    return { ...b, box, lettres, nMots, r }
+  })
+
+  // Le visuel qui accompagne chaque mot vient de l'application elle-meme.
+  const scene1 = el('', root)
+  scene1.style.cssText = 'position:absolute;left:1090px;top:170px;width:700px;height:740px;'
+  const statique = fixe(scene1, 'assets/sprite/repos.png', 520)
+  statique.style.left = '350px'; statique.style.top = '330px'
+  const marche = lecteur(scene1, 'walk', 520)
+  marche.boite.style.left = '350px'; marche.boite.style.top = '330px'
+  const planche = el('', scene1)
+  planche.style.cssText = 'position:absolute;left:0;top:180px;width:700px;'
+    + 'display:grid;grid-template-columns:repeat(4,1fr);gap:12px;'
+  const vignettes = CLIPS.walk.images.concat(CLIPS.run.images).slice(0, 12).map((src) => {
+    const c = el('', planche)
+    c.style.cssText = 'position:relative;height:150px;border-radius:11px;'
+      + 'background:rgba(255,255,255,0.035);border:1px solid rgba(255,255,255,0.08);'
+    const h = boiteSprite(c, 112)
+    h.style.left = '50%'; h.style.top = '50%'
+    const i = el('sprite', h, 'img')
+    i.src = src
+    i.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    return c
+  })
+
+  // Balayage colore entre deux mots : une bande qui traverse, pas un voile.
+  const balai = el('', root)
+  balai.style.cssText = 'position:absolute;top:-160px;bottom:-160px;left:0;width:620px;'
+    + 'transform:translate3d(-2000px,0,0) skewX(-11deg);'
+
+  return (l) => {
+    const actif = clamp(Math.floor(l / DUREE), 0, 2)
+    blocs.forEach((b, i) => {
+      const local = l - i * DUREE
+      const dedans = i === actif
+      b.box.style.display = local > -0.4 && local < DUREE + 0.5 ? 'block' : 'none'
+      if (b.box.style.display === 'none') return
+      const entree = seg(local, 0.05, 1.05)
+      const sortieP = i === 2 ? 0 : E.in(seg(local, DUREE - 0.42, DUREE + 0.05))
+      monter(b.lettres, entree, 0.05, 1.1)
+      monter(b.nMots, seg(local, 0.3, 1.2), 0.07)
+      b.r.style.transform = `scaleX(${round(E.expo(seg(local, 0.0, 0.7)))})`
+      b.box.style.opacity = round(1 - sortieP)
+      b.box.style.transform = `translate3d(0, ${round(-sortieP * 70)}px, 0)`
+      void dedans
+    })
+
+    statique.style.opacity = round(fenetre(l, 0.35, DUREE + 0.2, 0.7, 0.45))
+    statique.style.transform = `scale(${round(mix(0.9, 1.0, E.out(seg(l, 0.2, 2.2))))})`
+
+    const vis2 = fenetre(l, DUREE + 0.3, DUREE * 2 + 0.2, 0.6, 0.45)
+    marche.boite.style.opacity = round(vis2)
+    marche.a(l)
+
+    const vis3 = fenetre(l, DUREE * 2 + 0.3, 99, 0.6)
+    planche.style.opacity = round(vis3)
+    vignettes.forEach((v, i) => {
+      const p = E.souple(seg(l, DUREE * 2 + 0.35 + i * 0.045, DUREE * 2 + 1.2 + i * 0.045))
+      v.style.transform = `translate3d(0, ${round((1 - p) * 34)}px,0) scale(${round(mix(0.8, 1, p))})`
+      v.style.opacity = round(p)
+    })
+
+    // Deux balayages, exactement sur les changements de mot.
+    let couvre = 0, teinte = '#5b6cff'
+    for (let i = 1; i <= 2; i++) {
+      const c = seg(l, i * DUREE - 0.35, i * DUREE + 0.35)
+      if (c > 0 && c < 1) { couvre = c; teinte = BEATS[i].couleur }
+    }
+    if (couvre > 0 && couvre < 1) {
+      const p = E.expoInOut(couvre)
+      balai.style.background = `linear-gradient(90deg, transparent, ${teinte}, transparent)`
+      balai.style.transform = `translate3d(${round(mix(-700, W + 100, p))}px,0,0) skewX(-11deg)`
+      balai.style.opacity = round(Math.sin(couvre * Math.PI) * 0.5)
+    } else balai.style.opacity = 0
+
+    sortir(root, l, 7.4, 0.75)
+  }
+})
+
+/**
+ * Zoom dans une capture : le cadre ne bouge pas, l'image se rapproche d'un
+ * point precis. C'est ce qui permet de montrer un detail sans changer de
+ * plan, et le montrer sur la vraie capture plutot que sur un recadrage.
+ */
+function viseur(img, largeurCadre, hauteurCadre, ratio) {
+  return (echelle, cx, cy) => {
+    const l = largeurCadre * echelle
+    const h = l / ratio
+    const x = largeurCadre / 2 - cx * l
+    const y = hauteurCadre / 2 - cy * h
+    img.style.width = px(l)
+    img.style.height = px(h)
+    img.style.transform = `translate3d(${px(x)}, ${px(y)}, 0)`
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 02 · Dessin                                                         */
+/* ------------------------------------------------------------------ */
+scene(16.4, 29.6, (root) => {
+  const tete = chapitre(root, '01', 'DESSIN', 'le geste, d’abord')
+
+  /* --- temps fort : l'editeur entier --- */
+  const CX = 676, CY = 200, CL = 1128, CH = CL / (16 / 9)
+  const plein = el('cadre', root)
+  plein.style.cssText = `left:${CX}px;top:${CY}px;width:${CL}px;height:${CH}px;`
+  const img = el('', plein, 'img')
+  img.src = 'assets/ui/app-dessin.png'
+  img.style.cssText = 'position:absolute;left:0;top:0;max-width:none;'
+  const vise = viseur(img, CL, CH, 16 / 9)
+
+  /* --- second temps : les panneaux, en captures serrees --- */
+  const morceau = (nom, x, y, w, h, imgW, imgX = 0, imgY = 0) => {
+    const c = el('cadre', root)
+    c.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;`
+    const i = el('', c, 'img')
+    i.src = `assets/ui/${nom}.png`
+    i.style.cssText = `position:absolute;left:${imgX}px;top:${imgY}px;width:${imgW}px;max-width:none;`
+    return c
+  }
+  // La barre d'options fait quarante fois sa hauteur : la montrer entiere la
+  // rendrait illisible, on en cadre le debut a taille reelle.
+  const bandeau = morceau('options', 676, 196, 1128, 70, 2820)
+  const outils = morceau('outils', 676, 300, 78, 580, 78)
+  const calques = morceau('calques', 790, 300, 470, 272, 470)
+  const couleurs = morceau('couleurs', 1300, 300, 404, 470, 404)
+  const petits = [outils, calques, couleurs]
+
+  const legende = el('legende', root)
+  legende.style.cssText = `position:absolute;left:${CX + 2}px;top:${CY + CH + 42}px;`
+  const legendes = [
+    'MODE DESSIN · 48 × 48 px · zoom 12×',
+    'BARRE D’OPTIONS, OUTILS, CALQUES, COULEUR',
+  ]
+
+  const GROUPES = [
+    [['Crayon, formes, remplissage', '#5b6cff'], ['Sélection, déplacement, lasso', '#ff4d8d'],
+      ['Rendu net à tout zoom', '#a855f7']],
+    [['Formes de pinceau', '#5b6cff'], ['Tramage ordonné', '#ffb020'],
+      ['Symétrie et pixel-perfect', '#2ee6a8'], ['Calques et modes de fusion', '#a855f7']],
+  ]
+  const groupes = GROUPES.map((g) => g.map(([texte, teinte], i) =>
+    puce(root, texte, teinte, 138, 452 + i * 84)))
+
+  return (l) => {
+    tete(l)
+
+    // Une derive lente : un plan fixe sur une capture se voit tout de suite.
+    vise(1 + E.out(seg(l, 0.4, 7)) * 0.05, 0.5, 0.5)
+    const entree = E.expo(seg(l, 0.45, 1.7))
+    const sortie1 = E.in(seg(l, 6.1, 6.9))
+    plein.style.opacity = round(entree * (1 - sortie1))
+    plein.style.transform = `translate3d(${round((1 - entree) * 90)}px, ${round((1 - entree) * 26)}px, 0)`
+      + ` scale(${round(mix(0.965, 1, entree) * mix(1, 0.96, sortie1))})`
+
+    const deux = fenetre(l, 7.0, 12.4, 0.6, 0.45)
+    const pb = E.souple(seg(l, 7.0, 7.9))
+    bandeau.style.opacity = round(deux)
+    bandeau.style.transform = `translate3d(0,${round((1 - pb) * -34)}px,0) scale(${round(mix(0.96, 1, pb))})`
+    petits.forEach((c, i) => {
+      const d = 7.3 + i * 0.16
+      const p = E.souple(seg(l, d, d + 0.9))
+      c.style.opacity = round(deux)
+      c.style.transform = `translate3d(0,${round((1 - p) * 52)}px,0) scale(${round(mix(0.93, 1, p))})`
+    })
+
+    const enDeux = l > 6.9
+    legende.textContent = legendes[enDeux ? 1 : 0]
+    legende.style.opacity = round(fenetre(l, 1.5, 12.4, 0.6, 0.4)
+      * (1 - Math.sin(clamp(seg(l, 6.1, 7.4)) * Math.PI) * 0.95))
+
+    groupes.forEach((g, gi) => {
+      const debut = [1.1, 7.1][gi]
+      const fin = [6.4, 12.4][gi]
+      g.forEach((p, i) => {
+        const v = fenetre(l, debut + i * 0.13, fin, 0.55, 0.32)
+        const e = E.souple(seg(l, debut + i * 0.13, debut + i * 0.13 + 0.7))
+        p.style.opacity = round(v)
+        p.style.transform = `translate3d(${round((1 - e) * -34)}px,0,0) scale(${round(mix(0.94, 1, e))})`
+      })
+    })
+
+    sortir(root, l, 12.4, 0.8)
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/* 03 · Assiste                                                        */
+/* ------------------------------------------------------------------ */
+scene(29.4, 42.6, (root) => {
+  const tete = chapitre(root, '02', 'ASSISTÉ', 'ce que la machine fait mieux')
+
+  /* --- temps fort : un seul dessin, un rideau qui glisse dessus --- */
+  const CH = 620, CW = largeurSprite(CH)
+  const duo = el('', root)
+  duo.style.cssText = `position:absolute;left:${round(1240 - CW / 2)}px;top:230px;`
+    + `width:${round(CW)}px;height:${CH}px;`
+  const plaque = (fichier, parent) => {
+    const h = boiteSprite(parent, CH)
+    h.style.left = '50%'; h.style.top = '50%'
+    const i = el('sprite', h, 'img')
+    i.src = fichier
+    i.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    return h
+  }
+  plaque('assets/sprite/avant.png', duo)
+  const apresBoite = el('', duo)
+  apresBoite.style.cssText = 'position:absolute;inset:0;overflow:hidden;'
+  plaque('assets/sprite/lisse.png', apresBoite)
+  const rideau = el('', duo)
+  rideau.style.cssText = 'position:absolute;top:-40px;bottom:-40px;width:3px;'
+    + 'background:linear-gradient(180deg,transparent,#fff,transparent);box-shadow:0 0 22px rgba(255,255,255,0.55);'
+
+  const barreEtiq = el('', root)
+  barreEtiq.style.cssText = 'position:absolute;left:820px;top:170px;width:840px;'
+    + 'display:flex;justify-content:space-between;'
+  const eAvant = el('kicker', barreEtiq)
+  eAvant.style.cssText = 'font-size:15px;color:#c8ccdd;'
+  eAvant.textContent = 'AVANT'
+  const eApres = el('kicker', barreEtiq)
+  eApres.style.cssText = 'font-size:15px;color:#c8ccdd;'
+  eApres.textContent = 'APRÈS'
+  const sousDuo = el('legende', root)
+  sousDuo.style.cssText = 'position:absolute;left:820px;top:900px;width:840px;text-align:center;'
+  sousDuo.textContent = 'ombrage automatique, puis anti-crénelage des marches'
+
+  /* --- second temps : les rampes extraites, et les outils qui les servent --- */
+  const rampes = el('', root)
+  rampes.style.cssText = 'position:absolute;left:700px;top:206px;width:1040px;'
+    + 'display:grid;grid-template-columns:repeat(3,1fr);gap:34px;'
+  const lignes = (meta.rampes ?? []).slice(0, 3).map((r) => {
+    const ligne = el('', rampes)
+    const nom = el('kicker', ligne)
+    nom.style.cssText = 'font-size:13px;margin-bottom:12px;color:#9096ad;'
+    nom.textContent = r.nom
+    const bande = el('', ligne)
+    bande.style.cssText = 'display:flex;gap:6px;'
+    const cases = r.couleurs.map((c) => {
+      const sw = el('', bande)
+      sw.style.cssText = `flex:1;height:56px;border-radius:6px;background:${c};`
+      return sw
+    })
+    return { ligne, cases }
+  })
+  const sousRampes = el('legende', root)
+  sousRampes.style.cssText = 'position:absolute;left:700px;top:322px;width:1040px;'
+  sousRampes.textContent = 'rampes lues dans le dessin · l’ombre glisse vers le froid, la lumière vers le chaud'
+
+  const cartes = [
+    { nom: 'rampe', x: 700, y: 404, w: 520 },
+    { nom: 'ombrage', x: 1288, y: 364, w: 430 },
+  ].map((d) => ({ ...d, n: cadre(root, d.nom, d.x, d.y, d.w) }))
+
+  const puces = [
+    ['Rampes déduites du dessin', '#a855f7'],
+    ['Ombrage suivant la lumière', '#ffb020'],
+    ['Anti-crénelage des marches', '#2ee6a8'],
+    ['Variantes de palette', '#ff4d8d'],
+  ].map(([t, c], i) => puce(root, t, c, 138, 452 + i * 84))
+
+  return (l) => {
+    tete(l)
+
+    const v = fenetre(l, 0.5, 6.5, 0.8, 0.5)
+    duo.style.opacity = round(v)
+    // Le rideau descend une fois, puis va-et-vient lentement : les deux etats
+    // restent lisibles cote a cote au lieu d'etre montres puis oublies.
+    const va = E.expoInOut(seg(l, 1.4, 3.2))
+    const berce = 0.5 + 0.3 * Math.sin((l - 3.5) * 1.05)
+    const pos = clamp(mix(mix(0, 1, va), berce, E.inOut(seg(l, 3.5, 4.6))))
+    apresBoite.style.clipPath = `inset(0 0 0 ${round(pos * 100)}%)`
+    rideau.style.left = px(pos * CW)
+    rideau.style.opacity = round(v * (pos > 0.002 && pos < 0.998 ? 1 : 0))
+    barreEtiq.style.opacity = round(v * E.out(seg(l, 1.1, 2.1)))
+    eAvant.style.opacity = round(0.32 + 0.68 * (1 - pos))
+    eApres.style.opacity = round(0.32 + 0.68 * pos)
+    sousDuo.style.opacity = round(v * E.out(seg(l, 2.2, 3.4)))
+    const sortie1 = E.in(seg(l, 6.0, 6.7))
+    duo.style.transform = `scale(${round(mix(1, 0.92, sortie1))})`
+
+    const deux = fenetre(l, 6.7, 12.6, 0.7, 0.5)
+    rampes.style.opacity = round(deux)
+    sousRampes.style.opacity = round(deux * E.out(seg(l, 7.6, 8.4)))
+    lignes.forEach((r, i) => {
+      const d = 6.8 + i * 0.22
+      r.cases.forEach((sw, j) => {
+        const p = E.souple(seg(l, d + j * 0.055, d + 0.75 + j * 0.055))
+        sw.style.transform = `scale(${round(mix(0.15, 1, p))})`
+        sw.style.opacity = round(p)
+      })
+    })
+
+    cartes.forEach((c, i) => {
+      const d = 8.3 + i * 0.28
+      const vv = fenetre(l, d, 12.8, 0.6, 0.4)
+      const p = E.souple(seg(l, d, d + 0.95))
+      c.n.style.opacity = round(vv)
+      c.n.style.transform = `translate3d(0, ${round((1 - p) * 62)}px, 0)`
+        + ` rotate(${round((1 - p) * (i ? 2.2 : -2.2))}deg) scale(${round(mix(0.93, 1, p))})`
+    })
+
+    puces.forEach((p, i) => {
+      const d = 1.0 + i * 0.15
+      const vv = fenetre(l, d, 12.5, 0.55, 0.35)
+      const e = E.souple(seg(l, d, d + 0.7))
+      p.style.opacity = round(vv)
+      p.style.transform = `translate3d(${round((1 - e) * -34)}px,0,0) scale(${round(mix(0.94, 1, e))})`
+    })
+
+    sortir(root, l, 12.4, 0.8)
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/* 04 · Squelette                                                      */
+/* ------------------------------------------------------------------ */
+scene(42.4, 56.8, (root) => {
+  const tete = chapitre(root, '03', 'SQUELETTE', 'poser, ne plus redessiner')
+
+  const HAUT = 660
+  const boite = boiteSprite(root, HAUT)
+  boite.style.left = '1140px'; boite.style.top = '546px'
+
+  const repos = el('sprite', boite, 'img')
+  repos.src = 'assets/sprite/repos.png'
+  repos.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+  const vivant = lecteur(boite, 'idle', HAUT, { remplir: true })
+
+  // Les os sont redessines a partir des coordonnees reelles du rig.
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', `0 0 ${meta.largeur} ${meta.hauteur}`)
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;'
+  boite.appendChild(svg)
+  const os = meta.os.map((b) => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+    const long = Math.hypot(b.ex - b.x, b.ey - b.y) || 0.001
+    const trait = (largeur, opacite) => {
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+      ln.setAttribute('x1', b.x); ln.setAttribute('y1', b.y)
+      ln.setAttribute('x2', b.ex); ln.setAttribute('y2', b.ey)
+      ln.setAttribute('stroke', b.couleur)
+      ln.setAttribute('stroke-width', largeur)
+      ln.setAttribute('stroke-linecap', 'round')
+      ln.setAttribute('opacity', opacite)
+      ln.setAttribute('stroke-dasharray', long)
+      g.appendChild(ln)
+      return ln
+    }
+    const halo = trait(2.6, 0.22)
+    const corps = trait(0.95, 1)
+    const noeud = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    noeud.setAttribute('cx', b.x); noeud.setAttribute('cy', b.y); noeud.setAttribute('r', 0.85)
+    noeud.setAttribute('fill', b.couleur)
+    g.appendChild(noeud)
+    svg.appendChild(g)
+    return { g, halo, corps, noeud, long, b }
+  })
+
+  const carte = cadre(root, 'panneau-os', 1568, 206, 232)
+  const legende = el('legende', root)
+  legende.style.cssText = 'position:absolute;left:820px;top:912px;width:640px;text-align:center;'
+  legende.textContent = 'squelette humanoïde · ' + meta.os.length + ' os · pondération automatique'
+
+  const puces = [
+    [`${meta.os.length} os reliés en hiérarchie`, '#ff004d'],
+    ['Pondération automatique des pixels', '#29adff'],
+    ['Rotation qualité RotSprite', '#ffa300'],
+    ['Retouche possible sans relier', '#00e436'],
+  ].map(([t, c], i) => puce(root, t, c, 138, 452 + i * 84))
+
+  return (l) => {
+    tete(l)
+
+    const v = fenetre(l, 0.45, 14.0, 0.8, 0.5)
+    boite.style.opacity = round(v)
+    const e = E.expo(seg(l, 0.45, 2.0))
+    boite.style.transform = `scale(${round(mix(0.92, 1, e))})`
+
+    // Les os se tracent un par un, du torse vers les extremites.
+    os.forEach((o, i) => {
+      const d = 1.5 + i * 0.16
+      const p = E.out4(seg(l, d, d + 0.55))
+      const dispar = E.inOut(seg(l, 10.4, 11.6))
+      const reste = round(o.long * (1 - p))
+      o.corps.setAttribute('stroke-dashoffset', reste)
+      o.halo.setAttribute('stroke-dashoffset', reste)
+      o.g.setAttribute('opacity', round((1 - dispar) * v))
+      o.noeud.setAttribute('r', round(0.85 * E.souple(seg(l, d + 0.1, d + 0.7))))
+    })
+
+    // Puis le personnage prend vie : c'est le squelette qui le fait bouger.
+    const anime = seg(l, 10.9, 11.4)
+    repos.style.opacity = round((1 - anime) * v)
+    vivant.boite.style.opacity = round(anime * v)
+    vivant.a(l - 10.9)
+
+    legende.style.opacity = round(fenetre(l, 3.4, 13.4, 0.6, 0.4))
+    const vc = fenetre(l, 6.6, 14.0, 0.7, 0.45)
+    const pc = E.souple(seg(l, 6.6, 7.6))
+    carte.style.opacity = round(vc)
+    carte.style.transform = `translate3d(${round((1 - pc) * 70)}px,0,0) scale(${round(mix(0.94, 1, pc))})`
+
+    puces.forEach((p, i) => {
+      const d = 1.1 + i * 0.16
+      const vv = fenetre(l, d, 13.4, 0.55, 0.35)
+      const ee = E.souple(seg(l, d, d + 0.7))
+      p.style.opacity = round(vv)
+      p.style.transform = `translate3d(${round((1 - ee) * -34)}px,0,0) scale(${round(mix(0.94, 1, ee))})`
+    })
+
+    sortir(root, l, 13.6, 0.8)
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/* 05 · Animation                                                      */
+/* ------------------------------------------------------------------ */
+scene(56.6, 72.4, (root) => {
+  const tete = chapitre(root, '04', 'ANIMATION', 'des cycles qui bouclent vraiment')
+
+  /* --- temps fort : la marche en grand, sur un sol qui defile --- */
+  const scene1 = el('', root)
+  scene1.style.cssText = 'position:absolute;left:690px;top:150px;width:1100px;height:760px;'
+
+  const HAUT = 430
+  const marche = lecteur(scene1, 'walk', HAUT)
+  marche.boite.style.left = '550px'
+  marche.boite.style.top = '264px'
+
+  const sol = el('', scene1)
+  sol.style.cssText = 'position:absolute;left:40px;right:40px;top:474px;height:2px;background:rgba(255,255,255,0.14);'
+  const traits = []
+  for (let i = 0; i < 26; i++) {
+    const t = el('', scene1)
+    t.style.cssText = 'position:absolute;top:484px;width:26px;height:5px;border-radius:3px;background:rgba(255,255,255,0.16);'
+    traits.push(t)
+  }
+
+  // La bande d'images : les huit poses du cycle, avec une tete de lecture.
+  const bande = el('', scene1)
+  bande.style.cssText = 'position:absolute;left:40px;top:566px;width:1020px;display:flex;gap:10px;'
+  const cases = CLIPS.walk.images.map((src) => {
+    const c = el('', bande)
+    c.style.cssText = 'flex:1;height:158px;position:relative;border-radius:11px;'
+      + 'background:rgba(255,255,255,0.035);border:1px solid rgba(255,255,255,0.08);'
+    const h = boiteSprite(c, 116)
+    h.style.left = '50%'; h.style.top = '50%'
+    const i = el('sprite', h, 'img')
+    i.src = src
+    i.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    return c
+  })
+  const sousBande = el('legende', scene1)
+  sousBande.style.cssText = 'position:absolute;left:40px;top:746px;width:1020px;text-align:center;'
+  sousBande.textContent = 'cycle de marche · ' + CLIPS.walk.frames + ' images · '
+    + CLIPS.walk.ms + ' ms · bouclé'
+
+  /* --- second temps : tous les cycles cote a cote --- */
+  const scene2 = el('', root)
+  scene2.style.cssText = 'position:absolute;left:610px;top:196px;width:1200px;'
+    + 'display:grid;grid-template-columns:repeat(3,1fr);gap:22px;'
+  const IDS = ['idle', 'walk', 'run', 'jump', 'attack', 'wag'].filter((i) => CLIPS[i])
+  const vignettes = IDS.map((id) => {
+    const c = el('', scene2)
+    c.style.cssText = 'position:relative;height:328px;border-radius:16px;background:rgba(255,255,255,0.032);'
+      + 'border:1px solid rgba(255,255,255,0.085);overflow:hidden;'
+    const l = lecteur(c, id, 232)
+    l.boite.style.left = '50%'; l.boite.style.top = '138px'
+    const nom = el('kicker', c)
+    nom.style.cssText = 'position:absolute;left:20px;bottom:18px;font-size:14px;color:#c4c9dc;'
+    nom.textContent = CLIPS[id].label
+    const compte = el('', c)
+    compte.style.cssText = 'position:absolute;right:20px;bottom:14px;font-family:Mono,monospace;font-size:15px;color:#6f7490;'
+    compte.textContent = `${CLIPS[id].frames}f · ${CLIPS[id].ms}ms`
+    return { c, l }
+  })
+
+  // La courbe de vitesse, tracee en direct.
+  const courbe = el('', root)
+  courbe.style.cssText = 'position:absolute;left:138px;top:702px;width:430px;'
+  const cSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  cSvg.setAttribute('viewBox', '0 0 100 60')
+  cSvg.style.cssText = 'width:430px;height:258px;'
+  courbe.appendChild(cSvg)
+  const grille = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  let dGrille = ''
+  for (let i = 0; i <= 4; i++) { dGrille += `M0 ${i * 15} H100 M${i * 25} 0 V60 ` }
+  grille.setAttribute('d', dGrille)
+  grille.setAttribute('stroke', 'rgba(255,255,255,0.08)')
+  grille.setAttribute('stroke-width', '0.4')
+  grille.setAttribute('fill', 'none')
+  cSvg.appendChild(grille)
+  const trace = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  let dTrace = ''
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60
+    const y = 60 - (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) * 60
+    dTrace += `${i ? 'L' : 'M'}${(t * 100).toFixed(2)} ${y.toFixed(2)} `
+  }
+  trace.setAttribute('d', dTrace)
+  trace.setAttribute('stroke', 'url(#deg)')
+  trace.setAttribute('stroke-width', '1.7')
+  trace.setAttribute('fill', 'none')
+  trace.setAttribute('stroke-linecap', 'round')
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
+  defs.innerHTML = '<linearGradient id="deg" x1="0" y1="1" x2="1" y2="0">'
+    + '<stop offset="0" stop-color="#5b6cff"/><stop offset="0.5" stop-color="#a855f7"/>'
+    + '<stop offset="1" stop-color="#ff4d8d"/></linearGradient>'
+  cSvg.appendChild(defs)
+  cSvg.appendChild(trace)
+  const LONG = trace.getTotalLength() || 150
+  trace.setAttribute('stroke-dasharray', LONG)
+  const bille = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+  bille.setAttribute('r', '1.9'); bille.setAttribute('fill', '#fff')
+  cSvg.appendChild(bille)
+  const legende = el('kicker', courbe)
+  legende.style.cssText = 'font-size:14px;margin-top:6px;'
+  legende.textContent = 'COURBE DE VITESSE · DOUX AUX DEUX BOUTS'
+
+  const puces = [
+    ['Cycles prêts à poser sur le rig', '#a855f7'],
+    ['Bouclage sans coupure', '#2ee6a8'],
+    ['Inertie et suivi automatiques', '#ffb020'],
+  ].map(([t, c], i) => puce(root, t, c, 138, 452 + i * 84))
+
+  return (l) => {
+    tete(l)
+
+    const un = fenetre(l, 0.4, 8.2, 0.7, 0.5)
+    scene1.style.opacity = round(un)
+    sousBande.style.opacity = round(E.out(seg(l, 2.4, 3.4)))
+    scene1.style.transform = `scale(${round(mix(0.95, 1, E.expo(seg(l, 0.4, 2.0))))})`
+    const k = marche.a(l - 0.4)
+
+    // Le sol defile a la vitesse du cycle : c'est ce qui fait lire la marche.
+    const vitesse = 210
+    traits.forEach((t, i) => {
+      const x = ((i * 62 - (l * vitesse)) % 1620 + 1620) % 1620
+      t.style.transform = `translate3d(${round(x - 260)}px,0,0)`
+      t.style.opacity = round(clamp((x - 60) / 200) * clamp((1500 - x) / 200) * 0.9)
+    })
+    sol.style.opacity = round(un)
+
+    cases.forEach((c, i) => {
+      const actif = i === k
+      c.style.background = actif ? 'rgba(168,85,247,0.16)' : 'rgba(255,255,255,0.035)'
+      c.style.borderColor = actif ? 'rgba(196,140,255,0.55)' : 'rgba(255,255,255,0.08)'
+      const p = E.souple(seg(l, 1.0 + i * 0.06, 1.7 + i * 0.06))
+      c.style.transform = `translate3d(0,${round((1 - p) * 30)}px,0) scale(${round(mix(0.9, actif ? 1.06 : 1, p))})`
+      c.style.opacity = round(p)
+    })
+
+    const deux = fenetre(l, 8.4, 14.4, 0.7, 0.5)
+    scene2.style.opacity = round(deux)
+    scene2.style.display = deux > 0.001 ? 'grid' : 'none'
+    vignettes.forEach((v, i) => {
+      const d = 8.4 + i * 0.1
+      const p = E.souple(seg(l, d, d + 0.8))
+      v.c.style.transform = `translate3d(0,${round((1 - p) * 44)}px,0) scale(${round(mix(0.9, 1, p))})`
+      v.c.style.opacity = round(p)
+      v.l.a(l - d, i)
+    })
+
+    const vc = fenetre(l, 3.2, 14.4, 0.6, 0.4)
+    courbe.style.opacity = round(vc)
+    const pc = E.out(seg(l, 3.2, 4.6))
+    trace.setAttribute('stroke-dashoffset', round(-LONG * (1 - pc)))
+    const bt = ((l - 4.4) % 2.4) / 2.4
+    const bx = clamp(bt) * 100
+    const by = 60 - (bt < 0.5 ? 4 * bt * bt * bt : 1 - Math.pow(-2 * bt + 2, 3) / 2) * 60
+    bille.setAttribute('cx', round(bx)); bille.setAttribute('cy', round(clamp(by, 0, 60)))
+    bille.setAttribute('opacity', round(pc >= 1 ? 1 : 0))
+
+    puces.forEach((p, i) => {
+      const d = 1.0 + i * 0.16
+      const vv = fenetre(l, d, 14.4, 0.55, 0.35)
+      const ee = E.souple(seg(l, d, d + 0.7))
+      p.style.opacity = round(vv)
+      p.style.transform = `translate3d(${round((1 - ee) * -34)}px,0,0) scale(${round(mix(0.94, 1, ee))})`
+    })
+
+    sortir(root, l, 14.9, 0.8)
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/* 06 · Export                                                         */
+/* ------------------------------------------------------------------ */
+scene(72.2, 82.9, (root) => {
+  const tete = chapitre(root, '05', 'EXPORT', 'au format du moteur')
+
+  // La planche se monte sous nos yeux, image par image.
+  const SL = 1100, CASES = CLIPS.walk.frames, CASE = (SL - 26) / CASES
+  const planche = el('cadre', root)
+  planche.style.cssText = `left:690px;top:250px;width:${SL}px;height:${CASE + 26}px;padding:13px;`
+  const grille = el('', planche)
+  grille.style.cssText = `position:absolute;left:13px;top:13px;width:${SL - 26}px;height:${CASE}px;`
+  const alveoles = []
+  for (let i = 0; i < CASES; i++) {
+    const a = el('', grille)
+    a.style.cssText = `position:absolute;left:${i * CASE}px;top:0;width:${CASE}px;height:${CASE}px;`
+      + 'border:1px dashed rgba(255,255,255,0.12);border-radius:4px;'
+    alveoles.push(a)
+  }
+  const volants = CLIPS.walk.images.map((src, i) => {
+    const h = boiteSprite(grille, CASE * 0.86)
+    h.style.left = px(i * CASE + CASE / 2)
+    h.style.top = px(CASE / 2)
+    const im = el('sprite', h, 'img')
+    im.src = src
+    im.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    return h
+  })
+  const legende = el('', root)
+  legende.style.cssText = 'position:absolute;left:690px;top:' + (250 + CASE + 46) + 'px;'
+    + 'font-family:Mono,monospace;font-size:17px;color:#7c8199;letter-spacing:0.03em;'
+  legende.textContent = `demo_perso.png · planche ${CASES} × 1 · ${meta.largeur}×${meta.hauteur} px par case`
+
+  const FORMATS = [
+    { nom: 'UNITY', teinte: '#5b6cff', lignes: ['demo_perso.png', 'demo_perso.png.meta', 'demo_perso_Marche.anim', 'pivot et découpage inclus'] },
+    { nom: 'GODOT', teinte: '#2ee6a8', lignes: ['demo_perso.png', 'demo_perso_frames.tres', 'demo_perso_tileset.tres', 'AnimatedSprite2D prêt'] },
+    { nom: 'UNIVERSEL', teinte: '#ff4d8d', lignes: ['GIF animé', 'frames.zip', 'JSON compatible Aseprite', 'PNG par frame'] },
+  ]
+  const cartes = FORMATS.map((f, i) => {
+    const c = el('', root)
+    c.style.cssText = `position:absolute;left:${690 + i * 372}px;top:576px;width:340px;height:312px;`
+      + 'border-radius:18px;background:rgba(17,18,27,0.9);border:1px solid rgba(255,255,255,0.10);'
+      + 'padding:28px 30px;box-shadow:0 40px 90px rgba(0,0,0,0.6);'
+    const barre = el('', c)
+    barre.style.cssText = `position:absolute;left:0;top:0;width:100%;height:4px;background:${f.teinte};`
+      + 'border-radius:18px 18px 0 0;transform-origin:left center;'
+    const n = el('kicker', c)
+    n.style.cssText = `font-size:16px;color:${f.teinte};margin-bottom:22px;`
+    n.textContent = f.nom
+    const lignes = f.lignes.map((txt) => {
+      const p = el('', c)
+      p.style.cssText = 'font-family:Mono,monospace;font-size:17px;color:#c3c8dc;margin-bottom:13px;'
+        + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+      p.textContent = txt
+      return p
+    })
+    return { c, barre, lignes }
+  })
+
+  const puces = [
+    ['Une planche, tous les moteurs', '#5b6cff'],
+    ['Tags convertis en clips', '#a855f7'],
+    ['Rien à recouper à la main', '#2ee6a8'],
+  ].map(([t, c], i) => puce(root, t, c, 138, 452 + i * 84))
+
+  return (l) => {
+    tete(l)
+
+    const v = fenetre(l, 0.4, 9.6, 0.7, 0.4)
+    planche.style.opacity = round(v)
+    planche.style.transform = `scale(${round(mix(0.96, 1, E.expo(seg(l, 0.4, 1.8))))})`
+    alveoles.forEach((a, i) => { a.style.opacity = round(E.out(seg(l, 0.7 + i * 0.03, 1.2 + i * 0.03)) * 0.9) })
+    volants.forEach((im, i) => {
+      const d = 1.5 + i * 0.11
+      const p = E.souple(seg(l, d, d + 0.85))
+      // Chaque image arrive de la ou elle a ete dessinee, pas d'un point neutre.
+      const dx = (1 - p) * ((i % 2 ? 1 : -1) * 220 + (i - CASES / 2) * 26)
+      const dy = (1 - p) * (i % 3 === 0 ? -260 : 220)
+      im.style.transform = `translate3d(${round(dx)}px,${round(dy)}px,0) `
+        + `rotate(${round((1 - p) * (i % 2 ? 14 : -12))}deg) scale(${round(mix(0.55, 1, p))})`
+      im.style.opacity = round(clamp(p * 1.8))
+    })
+    legende.style.opacity = round(fenetre(l, 2.9, 9.6, 0.6, 0.4))
+
+    cartes.forEach((c, i) => {
+      const d = 4.3 + i * 0.24
+      const vv = fenetre(l, d, 9.9, 0.6, 0.4)
+      const p = E.souple(seg(l, d, d + 0.9))
+      c.c.style.opacity = round(vv)
+      c.c.style.transform = `translate3d(0,${round((1 - p) * 60)}px,0) scale(${round(mix(0.93, 1, p))})`
+      c.barre.style.transform = `scaleX(${round(E.expo(seg(l, d + 0.25, d + 1.1)))})`
+      c.lignes.forEach((ln, j) => {
+        const pp = E.out(seg(l, d + 0.45 + j * 0.09, d + 1.0 + j * 0.09))
+        ln.style.opacity = round(pp)
+        ln.style.transform = `translate3d(${round((1 - pp) * -16)}px,0,0)`
+      })
+    })
+
+    puces.forEach((p, i) => {
+      const d = 1.0 + i * 0.16
+      const vv = fenetre(l, d, 9.9, 0.55, 0.35)
+      const ee = E.souple(seg(l, d, d + 0.7))
+      p.style.opacity = round(vv)
+      p.style.transform = `translate3d(${round((1 - ee) * -34)}px,0,0) scale(${round(mix(0.94, 1, ee))})`
+    })
+
+    sortir(root, l, 9.9, 0.75)
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/* 07 · Final                                                          */
+/* ------------------------------------------------------------------ */
+scene(82.7, 91.5, (root) => {
+  const centre = el('', root)
+  centre.style.cssText = 'position:absolute;inset:0;'
+
+  const CASE = 34, ECART = 4, N = 4
+  const cote = N * CASE + (N - 1) * ECART
+  const marque = el('', centre)
+  marque.style.cssText = `position:absolute;left:${(W - cote) / 2}px;top:328px;width:${cote}px;height:${cote}px;`
+  const TEINTES = ['#5b6cff', '#7b5cff', '#a855f7', '#ff4d8d', '#ff6b3d', '#ffb020']
+  const cellules = []
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (x === 3 && y === 0) continue
+    const c = el('', marque)
+    const d = (x + y) / (2 * N - 2)
+    c.style.cssText = `position:absolute;width:${CASE}px;height:${CASE}px;border-radius:5px;`
+      + `left:${x * (CASE + ECART)}px;top:${y * (CASE + ECART)}px;`
+      + `background:${TEINTES[Math.min(5, Math.round(d * 5))]};`
+    cellules.push(c)
+  }
+
+  const mot = el('titre', centre)
+  mot.style.cssText = `position:absolute;left:0;top:512px;width:${W}px;text-align:center;font-size:140px;`
+  const l1 = lettresDe('PIXEL', el('', mot, 'span'))
+  const l2 = lettresDe('FORGE', el('', mot, 'span'))
+  degrader(l2, 'linear-gradient(96deg,#5b6cff,#a855f7 46%,#ff4d8d)')
+
+  const phrase = el('', centre)
+  phrase.style.cssText = `position:absolute;left:0;top:690px;width:${W}px;text-align:center;`
+    + 'font-size:34px;font-weight:600;color:#d6dae8;letter-spacing:-0.015em;'
+  const phraseMots = motsDe('Dessiner, animer, exporter. Sans quitter le navigateur.', phrase)
+
+  const pied = el('kicker', centre)
+  pied.style.cssText = `position:absolute;left:0;top:772px;width:${W}px;text-align:center;font-size:16px;`
+  const piedMots = motsDe('LOGICIEL LIBRE · AUCUNE INSTALLATION · EXPORT UNITY ET GODOT', pied)
+
+  // Les personnages defilent en bas, tres discretement : la derniere image
+  // du film reste celle du produit qui bouge.
+  const frise = el('', centre)
+  frise.style.cssText = 'position:absolute;left:0;top:872px;width:1920px;height:170px;overflow:hidden;'
+  const IDS = ['walk', 'run', 'idle', 'attack', 'wag', 'jump'].filter((i) => CLIPS[i])
+  const passants = IDS.map((id, i) => {
+    const l = lecteur(frise, id, 128)
+    l.boite.style.top = '84px'
+    return { l, id, i }
+  })
+
+  const noir = el('', root)
+  noir.style.cssText = 'position:absolute;inset:0;background:#000;opacity:0;'
+
+  return (l) => {
+    cellules.forEach((c, i) => {
+      const d = 0.1 + i * 0.035
+      const p = E.souple(seg(l, d, d + 0.8))
+      c.style.transform = `scale(${round(mix(0.2, 1, p))})`
+      c.style.opacity = round(clamp(p * 1.6))
+    })
+    monter([...l1, ...l2], seg(l, 0.75, 2.2), 0.035, 1.1)
+    monter(phraseMots, seg(l, 1.5, 2.9), 0.05)
+    monter(piedMots, seg(l, 2.1, 3.6), 0.028)
+
+    passants.forEach((p) => {
+      const x = ((p.i * 330 - l * 118) % 2280 + 2280) % 2280 - 180
+      p.l.boite.style.left = px(x)
+      p.l.boite.style.opacity = round(0.30 * E.out(seg(l, 2.4, 4.0)))
+      p.l.a(l, p.i * 2)
+    })
+
+    centre.style.transform = `translate3d(0, ${round(-E.out(seg(l, 0, 8)) * 14)}px, 0)`
+    noir.style.opacity = round(E.inOut(seg(l, 7.5, 8.8)))
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/* Lecture                                                             */
+/* ------------------------------------------------------------------ */
+const DUREE = Math.max(...scenes.map((s) => s.fin))
+
+function seek(t) {
+  // Le fond se calme pendant les chapitres, pour que le contenu domine.
+  const teinte = t < 8.5 || t > 82 ? 1 : 0.72
+  dessinerFond(t, teinte)
+  for (const s of scenes) {
+    const dedans = t >= s.debut && t < s.fin
+    if (!dedans) {
+      if (s.root.style.display !== 'none') s.root.style.display = 'none'
+      continue
+    }
+    if (s.root.style.display !== 'block') s.root.style.display = 'block'
+    s.root.style.opacity = 1
+    s.root.style.filter = 'none'
+    s.root.style.transform = 'none'
+    s.jouer(t - s.debut)
+  }
+  dessinerGrain(Math.round(t * 60))
+}
+
+window.FILM = {
+  duree: DUREE, seek, pret: true,
+  // Publie pour la verification : elle doit pouvoir constater qu'aucune
+  // scene n'est morte et qu'il n'y a pas de trou dans le montage.
+  scenes: scenes.map((s) => ({ debut: s.debut, fin: s.fin })),
+}
+seek(0)
+document.body.dataset.pret = '1'
+</script>

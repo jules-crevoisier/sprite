@@ -21,6 +21,8 @@ export function buildLessons(app: App): Lesson[] {
   let etendue = ''
   let relies = 0
   let couleurDepart = 0
+  let epaisseur = 1
+  let bord = 'tramage'
 
   return [
     {
@@ -303,6 +305,69 @@ export function buildLessons(app: App): Lesson[] {
           text: 'Choisissez la famille des verts, une methode, puis appliquez : les variantes deviennent des frames taguees, pretes a partir dans une planche.',
           enter: setMark,
           done: () => ed.frameCount > 1,
+        },
+      ],
+    },
+
+    {
+      id: 'effets',
+      title: 'Effets de calque',
+      hint: 'Ombre, contour, biseau, teinte — sans toucher aux pixels',
+      icon: 'shading',
+      setup: () => ed.loadSprite(demoCharacter()),
+      steps: [
+        {
+          text: 'Les effets de calque se posent par-dessus le dessin sans jamais le modifier : '
+            + 'ils sont recalcules au moment d\'afficher. On peut donc les regler en les regardant, '
+            + 'et changer d\'avis. Ouvrez le panneau Calques, en bas a droite.',
+          target: q('[data-panel="layers"]'),
+          enter: () => { app.workspace.setVisible('layers', true) },
+          done: () => !!document.querySelector('.fx-head'),
+        },
+        {
+          text: 'Cliquez le + de la section EFFETS et choisissez « Contour ». '
+            + 'Un lisere se pose autour de la silhouette, sur toutes les frames a la fois.',
+          target: q('.fx-head'),
+          done: () => ed.layer.effects.some((f) => f.kind === 'contour'),
+        },
+        {
+          text: 'Cliquez le nom de l\'effet pour ouvrir ses reglages, puis tirez « Epaisseur ». '
+            + 'Le dessin suit le curseur : rien n\'est calcule d\'avance.',
+          target: q('.fx-row'),
+          enter: () => { epaisseur = ed.layer.effects.find((f) => f.kind === 'contour')?.size ?? 1 },
+          done: () => (ed.layer.effects.find((f) => f.kind === 'contour')?.size ?? 1) !== epaisseur,
+        },
+        {
+          text: 'Ajoutez maintenant une « Ombre portee ». L\'angle dit d\'ou vient la lumiere, '
+            + 'la distance de combien de pixels l\'ombre s\'ecarte.',
+          target: q('.fx-head'),
+          done: () => ed.layer.effects.some((f) => f.kind === 'ombre-portee'),
+        },
+        {
+          text: 'Regardez la ligne « Bord ». Un flou ferait exploser le nombre de couleurs et casserait '
+            + 'le pixel art : ici l\'attenuation est soit nette, soit decoupee en quelques paliers, '
+            + 'soit tramee. Essayez les trois.',
+          target: q('.fx-body'),
+          enter: () => { bord = ed.layer.effects.find((f) => f.kind === 'ombre-portee')?.falloff ?? 'tramage' },
+          done: () => (ed.layer.effects.find((f) => f.kind === 'ombre-portee')?.falloff ?? 'tramage') !== bord,
+        },
+        {
+          text: 'Ajoutez « Teinte » : une seule couleur recouvre tout le calque. '
+            + 'C\'est le clignotement d\'un personnage touche, ou la couleur d\'une equipe — '
+            + 'sans dupliquer une seule frame.',
+          target: q('.fx-head'),
+          done: () => ed.layer.effects.some((f) => f.kind === 'teinte'),
+        },
+        {
+          text: 'L\'oeil coupe un effet, la corbeille le retire, et vos pixels n\'ont pas bouge d\'un iota. '
+            + 'Coupez-en un pour voir.',
+          target: q('.fx-row'),
+          done: () => ed.layer.effects.some((f) => !f.enabled) || ed.layer.effects.length < 3,
+        },
+        {
+          text: 'L\'export applique les effets tout seul : planche, GIF, Unity, Godot. '
+            + 'Si vous voulez les retoucher a la main, « Calque > Graver les effets » les inscrit '
+            + 'dans les pixels une bonne fois.',
         },
       ],
     },
