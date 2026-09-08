@@ -1738,7 +1738,7 @@ check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
 
 /* --- mascotte et ses cycles --- */
 const mascotte = await page.evaluate(async () => {
-  const { CLIPS_PIXL, debordsDePatte, lignesDePatteVisibles, spritePixl } = await import('/src/ui/mascot-clips.ts')
+  const { CLIPS_PIXL, debordsDePatte, lignesDePatteVisibles, patteDecrochee, spritePixl } = await import('/src/ui/mascot-clips.ts')
   const { imageDePose, TAILLE } = await import('/src/ui/mascot-anim.ts')
 
   /**
@@ -1770,7 +1770,7 @@ const mascotte = await page.evaluate(async () => {
     return n
   }
 
-  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], lignesMin: 99 }
+  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], lignesMin: 99 }
   for (const clip of CLIPS_PIXL) {
     bilan.cycles++
     const bmps = clip.poses.map(imageDePose)
@@ -1783,6 +1783,8 @@ const mascotte = await page.evaluate(async () => {
       // cents : l'ecart de masse totale ne la voit pas disparaitre.
       const lignes = lignesDePatteVisibles(clip.poses[i])
       if (lignes < 2) bilan.pattesAvalees.push(`${clip.id}#${i + 1} (${lignes})`)
+      // Une patte restee au sol pendant que le corps monte pend dans le vide.
+      if (patteDecrochee(clip.poses[i])) bilan.pattesPendantes.push(`${clip.id}#${i + 1}`)
       bilan.lignesMin = Math.min(bilan.lignesMin, lignes)
       let n = 0, x0 = 99, x1 = -1, y0 = 99
       for (let y = 0; y < TAILLE; y++) for (let x = 0; x < TAILLE; x++) {
@@ -1820,6 +1822,8 @@ check('aucune patte ne deborde du torse', mascotte.debords === 0, `${mascotte.de
 check('rien ne sort du cadre', mascotte.horsCadre.length === 0, mascotte.horsCadre.join(', '))
 check('la masse reste stable dans un cycle', mascotte.masseMax < 0.12,
   `${(mascotte.masseMax * 100).toFixed(1)}% d'ecart au pire`)
+check('aucune patte ne pend sous un corps monte', mascotte.pattesPendantes.length === 0,
+  mascotte.pattesPendantes.join(', '))
 check('aucune patte n\'est avalee par le torse', mascotte.pattesAvalees.length === 0,
   mascotte.pattesAvalees.length ? mascotte.pattesAvalees.join(', ') : `${mascotte.lignesMin} lignes au minimum`)
 

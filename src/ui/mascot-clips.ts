@@ -16,7 +16,20 @@ import type { Sprite } from '../core/document'
 const { TETE_CLIN, TETE_MI_CLOS, TETE_ECRASEE, TETE_ECRASEE_CLIN, CORPS_ECRASE, CORPS_ETIRE } = PIECES
 const CORPS_NORMAL = PIECES.CORPS
 
-/** Position de repos : corps en (11, 18), pieds a la ligne 29. */
+/**
+ * Position de repos : corps en (10, 18), pieds a la ligne 31.
+ *
+ * Le budget de lever se lit d'une soustraction. Le bas du corps tombe
+ * toujours a `by + 8`, la patte fait six lignes et son pied touche la
+ * derniere du cadre. Il reste donc, sous l'ourlet :
+ *
+ *   lignes de patte visibles = 24 - by - lever
+ *
+ * A hauteur de repos, chaque pixel de lever coute une ligne sur les six.
+ * Le lever doit donc tomber sur les images ou le corps est HAUT, pas sur
+ * celles ou il est bas — c'est gratuit, et c'est ce qui separe une patte
+ * levee d'un moignon.
+ */
 const CORPS_X = 10
 /**
  * Le personnage est pose bas dans le cadre : les pieds touchent la
@@ -24,11 +37,7 @@ const CORPS_X = 10
  * hauteur, le sommet du saut coupait les oreilles hors cadre.
  */
 const CORPS_Y = 18
-/**
- * Les pattes montent de deux pixels sous le corps : pas de trait de
- * jonction visible, et il en reste quatre en vue, ce qui suffit a lire un
- * pas. A un pixel de moins, le corps les avalait.
- */
+/** Les pattes montent sous le corps : six lignes restent en vue au repos. */
 const SOL = 26
 const PATTE_GX = 11
 const PATTE_DX = 17
@@ -182,10 +191,10 @@ function pose(r: Reglage = {}): Pose {
 const REPOS: Reglage[] = [
   { corps: [0, 0], tete: [0, 0], queue: 'milieu' },
   { corps: [0, 1], tete: [-1, 0], queue: 'milieu' },
-  { corps: [0, 1], tete: [-1, 1], queue: 'basmilieu' },
-  { corps: [0, 1], tete: [0, 1], queue: 'basse' },
-  { corps: [0, 0], teteArt: 'miclos', tete: [1, 1], queue: 'basmilieu' },
-  { corps: [0, 1], teteArt: 'clin', tete: [1, 0], queue: 'milieu' },
+  { corps: [0, 1], teteArt: 'miclos', tete: [-1, 1], queue: 'basmilieu' },
+  { corps: [0, 1], teteArt: 'clin', tete: [0, 1], queue: 'basse' },
+  { corps: [0, 1], teteArt: 'miclos', tete: [1, 1], queue: 'basmilieu' },
+  { corps: [0, 0], tete: [1, 0], queue: 'milieu' },
 ]
 
 /**
@@ -201,11 +210,11 @@ const REPOS: Reglage[] = [
  */
 const MARCHE: Reglage[] = [
   { corps: [-1, 1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
-  { corps: [-1, 1], tete: [0, 1], gauche: [0, 0], droite: [0, -3], queue: 'basmilieu' },
+  { corps: [-1, 1], tete: [0, 1], gauche: [0, 0], droite: [0, -2], queue: 'basmilieu' },
   { corps: [0, -1], tete: [-1, 1], gauche: [0, -1], droite: [0, -4], queue: 'basse' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
   { corps: [1, 1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
-  { corps: [1, 1], tete: [0, 1], gauche: [0, -3], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [1, 1], tete: [0, 1], gauche: [0, -2], droite: [0, 0], queue: 'basmilieu' },
   { corps: [0, -1], tete: [1, 1], gauche: [0, -4], droite: [0, -1], queue: 'basse' },
   { corps: [0, 0], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
 ]
@@ -217,16 +226,17 @@ const MARCHE: Reglage[] = [
  */
 const COURSE: Reglage[] = [
   { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -4], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [-1, 1], gauche: [0, -3], droite: [0, -5], queue: 'basse' },
+  { corps: [-1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -2], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -4], droite: [0, -3], queue: 'basse' },
   { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [0, 1], gauche: [0, -4], droite: [0, -2], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [1, 1], gauche: [0, -5], droite: [0, -3], queue: 'basse' },
+  { corps: [1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -2], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -3], droite: [0, -4], queue: 'basse' },
 ]
 
 /**
- * Saut. L'accroupissement precede la detente, et l'ecart entre images se
- * resserre au sommet — c'est ce qui y fait durer le personnage.
+ * Saut. L'accroupissement precede la detente, et les ecarts entre images
+ * valent trois, un, un, trois : le personnage dure au sommet et va vite aux
+ * deux bouts. Des ecarts constants donnent un triangle, pas un saut.
  *
  * La queue traine vers le bas pendant la montee et vers le haut pendant la
  * chute. L'inverse serait physiquement impossible, et c'est pourtant ce
@@ -234,27 +244,31 @@ const COURSE: Reglage[] = [
  */
 const SAUT: Reglage[] = [
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'haute' },
-  { corps: [0, -1], corpsArt: 'etire', tete: [0, 1], gauche: [0, -2], droite: [0, -2], queue: 'basse' },
+  { corps: [0, -2], corpsArt: 'etire', tete: [0, 1], gauche: [0, -2], droite: [0, -2], queue: 'basse' },
   { corps: [0, -3], tete: [0, 1], gauche: [0, -4], droite: [0, -4], queue: 'basmilieu' },
-  { corps: [0, -1], corpsArt: 'etire', tete: [0, 0], gauche: [0, -2], droite: [0, -2], queue: 'milieu' },
+  { corps: [0, -2], corpsArt: 'etire', tete: [0, 0], gauche: [0, -2], droite: [0, -2], queue: 'milieu' },
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [-1, 0], droite: [1, 0], queue: 'fouet' },
-  { corps: [0, -1], tete: [0, 0], gauche: [0, -1], droite: [0, -1], queue: 'haute' },
+  { corps: [0, -1], tete: [0, 0], gauche: [0, -1], droite: [0, -1], queue: 'basse' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
 /**
- * Bond d'attaque : recul, detente, coup, amorti, retour.
+ * Attaque : accroupissement, elan, detente, coup, amorti, retour.
  *
- * Le recul vaut deux pixels et emmene les pieds avec lui. A un pixel il
- * etait dans le code et pas a l'ecran. Le corps large est reserve au coup :
- * s'en servir aussi pour le recul rejouerait la silhouette de l'impact
- * avant l'impact.
+ * Le coup part vers le bas et l'anticipation aussi. Un recul lateral suivi
+ * d'une detente verticale, ce sont deux gestes sans rapport : ils ne
+ * partagent aucune ligne, donc l'ensemble ne decrit aucune courbe.
+ *
+ * L'image d'elan existe parce que sans elle on passait de la preparation a
+ * la detente en changeant les trois quarts de l'image en quatre-vingts
+ * millisecondes. Ce n'est pas un intervalle, c'est un raccord.
  */
 const ATTAQUE: Reglage[] = [
-  { corps: [-2, 1], tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'milieu' },
-  { corps: [0, -2], corpsArt: 'etire', tete: [1, 0], gauche: [-1, -2], droite: [-1, -2], queue: 'basmilieu' },
-  { corps: [0, 0], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [-1, 0], droite: [1, 0], queue: 'haute' },
-  { corps: [0, 1], tete: [0, 1], gauche: [-1, -2], droite: [1, 0], queue: 'fouet' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
+  { corps: [0, 0], gauche: [0, -1], droite: [0, -1], queue: 'basmilieu' },
+  { corps: [0, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [-1, 0], droite: [1, 0], queue: 'haute' },
+  { corps: [0, 1], tete: [0, 1], gauche: [-1, -1], droite: [1, -1], queue: 'fouet' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
@@ -268,9 +282,9 @@ const ATTAQUE: Reglage[] = [
  */
 const DEGATS: Reglage[] = [
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', queue: 'milieu' },
-  { corps: [-3, 2], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, -2], queue: 'fouet' },
-  { corps: [-2, 1], teteArt: 'clin', tete: [-1, 1], gauche: [-2, 0], droite: [-2, 0], queue: 'basse' },
-  { corps: [-1, 1], teteArt: 'clin', gauche: [-1, -2], droite: [-1, 0], queue: 'basmilieu' },
+  { corps: [-3, 2], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'fouet' },
+  { corps: [-1, 1], teteArt: 'clin', tete: [-1, 1], gauche: [-1, 0], droite: [-1, 0], queue: 'basse' },
+  { corps: [0, 1], teteArt: 'miclos', gauche: [-1, -2], droite: [-1, 0], queue: 'basmilieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
