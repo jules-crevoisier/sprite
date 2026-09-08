@@ -22,6 +22,75 @@ npm run build    # génère dist/ (site statique, déployable tel quel)
 npm run preview  # sert le build
 ```
 
+## Déploiement
+
+L'image finale ne contient que nginx et les fichiers construits : **21,5 Mo**,
+dont 288 Ko de site. Ni Node, ni `node_modules`, ni sources. Elle tourne en
+utilisateur non privilégié sur le port **8080**.
+
+### Dokploy
+
+C'est le chemin le plus court, aucun fichier à modifier :
+
+1. **Create Application** → source **GitHub**, ce dépôt, la branche voulue.
+2. Build Type : **Dockerfile** (le `Dockerfile` est à la racine, il est
+   détecté tout seul).
+3. **Port : `8080`** — c'est le seul réglage à ne pas oublier, l'image
+   n'écoute pas sur 80.
+4. Onglet **Domains** : ajouter le domaine, activer HTTPS (Let's Encrypt).
+5. **Deploy**.
+
+Aucune variable d'environnement n'est requise : l'application est entièrement
+statique et ne parle à aucun service.
+
+Pour passer par une application de type **Docker Compose** à la place,
+utiliser le `docker-compose.yml` fourni : retirer le bloc `ports`,
+décommenter le bloc `networks` (réseau `dokploy-network`), puis pointer le
+domaine vers le service `pixelforge` sur le port 8080.
+
+### Docker, sans Dokploy
+
+```bash
+docker compose up -d --build     # http://localhost:8080
+```
+
+```bash
+# ou sans compose
+docker build -t pixelforge .
+docker run -d -p 8080:8080 --name pixelforge pixelforge
+```
+
+Le port hôte se change avec `PIXELFORGE_PORT` (voir `.env.example`).
+
+Le `docker-compose.yml` applique un durcissement vérifié : système de
+fichiers en lecture seule, `cap_drop: ALL`, `no-new-privileges`, et les
+fichiers temporaires de nginx en mémoire.
+
+### Ce que fait l'image
+
+- **Construction en deux étapes** : Node compile puis disparaît. Les
+  dépendances sont dans une couche distincte du code, donc un changement de
+  source ne réinstalle rien.
+- **Le typage est vérifié pendant le build** : une erreur casse l'image au
+  lieu d'arriver en production.
+- **Compression au build** : les fichiers sont pré-compressés en gzip et
+  servis tels quels via `gzip_static`. Le bundle passe de 180 Ko à 58 Ko sans
+  aucun travail à chaque requête.
+- **Cache** : les assets ont un nom haché, donc `immutable` pendant un an ;
+  `index.html` est en `no-cache`, ce qui évite qu'un déploiement laisse des
+  navigateurs sur l'ancienne version.
+- **En-têtes** : CSP stricte (`default-src 'self'`, aucune ressource
+  externe — `blob:` et `data:` restent autorisés pour les exports),
+  `nosniff`, `no-referrer`, `frame-ancestors 'none'`.
+- **Sonde `/healthz`** utilisée par le `HEALTHCHECK` du conteneur et
+  exploitable par l'orchestrateur.
+
+### Hébergement statique
+
+`npm run build` produit un `dist/` autonome en chemins relatifs : il se dépose
+tel quel sur Netlify, Vercel, GitHub Pages, Cloudflare Pages ou un simple
+bucket, sans configuration.
+
 ## Ce qu'on peut faire
 
 ### Dessiner
@@ -130,6 +199,7 @@ src/
   export/      planches, JSON, Unity, Godot, GIF, ZIP
   io/          sauvegarde du projet et import d'images
   ui/          panneaux, menus, dialogues, raccourcis
+docker/        configuration nginx de l'image de production
 ```
 
 Deux choix structurants :

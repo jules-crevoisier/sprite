@@ -1,0 +1,53 @@
+# Deploiement de PixelForge.
+#
+# Local ou VPS simple :
+#     docker compose up -d --build      puis http://localhost:8080
+#
+# Dokploy : creer une application de type « Docker Compose », pointer sur ce
+# fichier, puis ajouter un domaine vers le service `pixelforge` port 8080.
+# Dans ce cas, decommenter le bloc `networks` en bas et retirer `ports` :
+# Traefik joint le conteneur par le reseau interne et gere le TLS.
+
+services:
+  pixelforge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pixelforge:latest
+    restart: unless-stopped
+
+    # Le conteneur ecoute sur 8080 (port non privilegie, utilisateur nginx).
+    ports:
+      - "${PIXELFORGE_PORT:-8080}:8080"
+    # expose:
+    #   - "8080"
+
+    # Le site est entierement statique : rien n'a besoin d'etre ecrit sur le
+    # disque. Seuls les fichiers temporaires de nginx vivent en memoire.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:uid=101,gid=101,mode=0700
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "--tries=1", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Reseau gere par Dokploy : a activer pour un deploiement derriere son Traefik.
+# networks:
+#   default:
+#     name: dokploy-network
+#     external: true
