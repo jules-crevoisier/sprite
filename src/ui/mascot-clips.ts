@@ -119,7 +119,32 @@ const LIGNE_DU_SOL = 31
  * fois par seconde et le personnage a l'air de flotter.
  */
 export function piedAuSol(p: Pose): boolean {
-  return [p.patteG, p.patteD].some(([, y]) => y + HAUTEUR_PATTE - 1 === LIGNE_DU_SOL)
+  return semellesPosees(p).some(Boolean)
+}
+
+/** Quelles semelles touchent le sol, dans l'ordre gauche puis droite. */
+export function semellesPosees(p: Pose): [boolean, boolean] {
+  const posee = ([, y]: [number, number]) => y + HAUTEUR_PATTE - 1 === LIGNE_DU_SOL
+  return [posee(p.patteG), posee(p.patteD)]
+}
+
+/**
+ * Vrai si les deux semelles quittent le sol en meme temps sans qu'aucune
+ * force ne souleve le personnage.
+ *
+ * Un invariant peut en forcer un pire : interdire aux semelles de patiner
+ * sans interdire ce decollage-la, c'est laisser le seul autre moyen de
+ * repositionner deux appuis en une image — faire leviter le personnage.
+ * On l'autorise donc quand le corps est pousse lateralement d'au moins deux
+ * pixels, ou quand il monte : dans ces deux cas quelque chose le souleve.
+ */
+export function decollageSansPoussee(avant: Pose, apres: Pose): boolean {
+  const a = semellesPosees(avant), b = semellesPosees(apres)
+  if (!(a[0] && a[1])) return false
+  if (b[0] || b[1]) return false
+  const pousse = Math.abs(apres.corps[0] - avant.corps[0]) >= 2
+  const monte = apres.corps[1] < avant.corps[1]
+  return !pousse && !monte
 }
 
 /**
@@ -223,6 +248,13 @@ function pose(r: Reglage = {}): Pose {
  * apres le corps — ce retard distingue un souffle d'un aller-retour — et
  * derive lateralement d'un pixel, sans quoi elle monterait et
  * descendrait sur une verticale parfaite.
+ *
+ * L'oeil se ferme en une image et se rouvre en deux. C'est le sens
+ * physique du clignement, et c'est deja ce que fait le cycle de degats :
+ * l'ordre inverse donnait une paupiere qui remonte d'un coup.
+ *
+ * Le souffle fait exactement huit images, comme le clip : une periode de
+ * six dans un cycle de huit bafouille au raccord, une fois par tour.
  */
 const REPOS: Reglage[] = [
   { corps: [0, 0], tete: [0, 0], queue: 'milieu' },
@@ -230,9 +262,9 @@ const REPOS: Reglage[] = [
   { corps: [0, 1], tete: [-1, 1], queue: 'basmilieu' },
   { corps: [0, 1], tete: [0, 1], queue: 'basse' },
   { corps: [0, 1], tete: [1, 1], queue: 'basmilieu' },
-  { corps: [0, 0], tete: [1, 0], queue: 'milieu' },
-  { corps: [0, 0], teteArt: 'miclos', tete: [0, 0], queue: 'milieu' },
-  { corps: [0, 1], teteArt: 'clin', tete: [-1, 0], queue: 'milieu' },
+  { corps: [0, 0], tete: [1, 0], queue: 'basmilieu' },
+  { corps: [0, 0], teteArt: 'clin', tete: [0, 0], queue: 'milieu' },
+  { corps: [0, 0], teteArt: 'miclos', tete: [-1, 0], queue: 'milieu' },
 ]
 
 /**
@@ -265,14 +297,25 @@ const MARCHE: Reglage[] = [
  * Course. Un seul pied au sol par contact — le double appui est la
  * signature d'une marche. Meme balancement adouci que la marche, et la
  * queue en retard d'une image : quand le corps monte, elle traine encore.
+ *
+ * Les deux contacts sont poses a bx 10 et 12 pour que `pose`, qui recentre
+ * un corps ecrase d'un pixel vers la gauche, les dessine a cx 9 et 11 —
+ * symetriques autour de 10. Avec bx 9 et 11 les deux appuis tombaient du
+ * meme cote du centre : la couture translatait le torse de deux pixels la
+ * ou le milieu du cycle n'en translatait aucun, et le personnage boitait
+ * une fois par tour.
+ *
+ * Le ciseau continue pendant le vol : sans ca les images 2 et 3 avaient
+ * exactement les memes pattes, et la jambe restait figee cent soixante
+ * millisecondes en pleine foulee.
  */
 const COURSE: Reglage[] = [
-  { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [0, 1], gauche: [0, -4], droite: [0, -2], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -4], droite: [0, -2], queue: 'basse' },
-  { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [0, 1], gauche: [0, -2], droite: [0, -4], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -2], droite: [0, -4], queue: 'basse' },
+  { corps: [0, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
+  { corps: [-1, -2], tete: [0, 1], gauche: [-1, -4], droite: [0, -2], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -6], droite: [0, -2], queue: 'basse' },
+  { corps: [2, 0], corpsArt: 'ecrase', gauche: [1, -3], droite: [0, 0], queue: 'haute' },
+  { corps: [1, -2], tete: [0, 1], gauche: [0, -2], droite: [1, -4], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -2], droite: [0, -6], queue: 'basse' },
 ]
 
 /**
@@ -287,6 +330,11 @@ const COURSE: Reglage[] = [
  * que les pieds quittent le sol, c'est ce qui fait la poussee. Sans elle le
  * personnage se contente de monter.
  *
+ * Le sommet garde le corps etire comme les images qui l'encadrent. Avec le
+ * corps normal, le torse s'elargissait de deux pixels pendant une seule
+ * image, pile la ou le personnage est cense se suspendre : un pouls de
+ * largeur sur les trois images les plus lentes de l'arc.
+ *
  * La queue traine vers le bas pendant la montee et vers le haut pendant la
  * chute. L'inverse serait physiquement impossible, et c'est pourtant ce
  * que faisait la version precedente.
@@ -295,9 +343,9 @@ const SAUT: Reglage[] = [
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'haute' },
   { corps: [0, -1], corpsArt: 'etire', tete: [0, 1], queue: 'basse' },
   { corps: [0, -2], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
-  { corps: [0, -4], tete: [0, 0], gauche: [0, -6], droite: [0, -6], queue: 'basmilieu' },
+  { corps: [0, -3], corpsArt: 'etire', tete: [0, 0], gauche: [0, -6], droite: [0, -6], queue: 'basmilieu' },
   { corps: [0, -2], corpsArt: 'etire', tete: [0, 0], gauche: [0, -3], droite: [0, -3], queue: 'milieu' },
-  { corps: [0, 0], corpsArt: 'etire', gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
+  { corps: [0, 0], corpsArt: 'etire', gauche: [0, 0], droite: [0, 0], queue: 'haute' },
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [0, -1], tete: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basse' },
   { corps: [0, 0], queue: 'milieu' },
@@ -312,32 +360,49 @@ const SAUT: Reglage[] = [
  *
  * L'image d'elan existe parce que sans elle on passait de la preparation a
  * la detente en changeant les trois quarts de l'image en quatre-vingts
- * millisecondes. Ce n'est pas un intervalle, c'est un raccord.
+ * millisecondes. Ce n'est pas un intervalle, c'est un raccord. La chute sur
+ * le coup avait le meme defaut, en pire : soixante pour cent de la
+ * silhouette changeaient d'un coup. Elle a maintenant son intervalle.
+ *
+ * Les appuis se reprennent un pied a la fois. En les ramenant tous les deux
+ * dans la meme image, la regle anti-patinage forcait le seul geste qui reste
+ * : decoller les deux semelles ensemble. Le personnage levitait de deux
+ * pixels au milieu du retour, sans qu'aucune force ne le souleve.
  */
 const ATTAQUE: Reglage[] = [
-  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
   { corps: [0, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
-  { corps: [0, -1], gauche: [-1, -3], droite: [1, -3], queue: 'milieu' },
-  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [-2, 0], droite: [2, 0], queue: 'haute' },
-  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [-2, 0], droite: [2, 0], queue: 'fouet' },
-  { corps: [0, 0], gauche: [-1, -2], droite: [1, -2], queue: 'basmilieu' },
+  { corps: [0, -1], gauche: [-1, -3], droite: [1, -3], queue: 'basmilieu' },
+  { corps: [0, 1], gauche: [-1, -2], droite: [1, -2], queue: 'milieu' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [-1, 0], droite: [1, 0], queue: 'haute' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [-1, 0], droite: [1, 0], queue: 'fouet' },
+  { corps: [0, 0], gauche: [-1, -2], droite: [1, 0], queue: 'basmilieu' },
+  { corps: [0, 0], gauche: [0, 0], droite: [1, -2], queue: 'milieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
 /**
  * Degats. La compression est l'impact lui-meme, pas une preparation, et
  * les yeux se ferment des cette image : une seconde de retard sur le
- * visage et la reaction n'appartient plus au coup.
+ * visage et la reaction n'appartient plus au coup. Le corps descend d'un
+ * pixel sur le choc avant de remonter : sans ce creux, l'impact est un
+ * pousse purement horizontal et rien n'est encaisse.
  *
- * Un pied se leve a chaque changement d'appui. Deux semelles plaquees au
- * sol pendant que le corps recule de trois pixels, c'est du patinage.
+ * Le coup arrache le personnage du sol pendant une image. C'est ce qui
+ * remplace le patinage : deux semelles plaquees au sol pendant que le corps
+ * recule de trois pixels, ca ne s'appelle pas encaisser, ca s'appelle
+ * glisser. Le recul se fait donc en deux temps, les pieds en l'air.
+ *
+ * Le depassement du retour vaut deux pixels, les deux tiers du recul. A un
+ * seul pixel il se perdait dans le bruit du reste du dessin.
  */
 const DEGATS: Reglage[] = [
-  { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', queue: 'milieu' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecraseeClin', queue: 'milieu' },
+  { corps: [-2, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', tete: [-1, 0], gauche: [-1, -2], droite: [-1, -2], queue: 'haute' },
   { corps: [-3, 2], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'fouet' },
   { corps: [-1, 1], teteArt: 'clin', tete: [-1, 1], gauche: [0, -2], droite: [-2, 0], queue: 'basse' },
-  { corps: [1, 1], teteArt: 'miclos', gauche: [0, 0], droite: [-2, -2], queue: 'basmilieu' },
+  { corps: [2, 1], teteArt: 'miclos', gauche: [1, -2], droite: [-2, -2], queue: 'basmilieu' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
 ]
 

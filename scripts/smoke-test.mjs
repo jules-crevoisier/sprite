@@ -1738,7 +1738,7 @@ check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
 
 /* --- mascotte et ses cycles --- */
 const mascotte = await page.evaluate(async () => {
-  const { CLIPS_PIXL, debordsDePatte, lignesDePatteVisibles, patteDecrochee, piedAuSol, semellesQuiGlissent, spritePixl } = await import('/src/ui/mascot-clips.ts')
+  const { CLIPS_PIXL, debordsDePatte, decollageSansPoussee, lignesDePatteVisibles, patteDecrochee, piedAuSol, semellesQuiGlissent, spritePixl } = await import('/src/ui/mascot-clips.ts')
   const { imageDePose, TAILLE } = await import('/src/ui/mascot-anim.ts')
 
   /**
@@ -1770,7 +1770,7 @@ const mascotte = await page.evaluate(async () => {
     return n
   }
 
-  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], piedsEnLair: [], glissements: [], lignesMin: 99 }
+  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], piedsEnLair: [], glissements: [], levitations: [], lignesMin: 99, degagementMin: 99 }
   for (const clip of CLIPS_PIXL) {
     bilan.cycles++
     const bmps = clip.poses.map(imageDePose)
@@ -1800,6 +1800,9 @@ const mascotte = await page.evaluate(async () => {
       const auSol = piedAuSol(clip.poses[i])
       const decolle = y1 <= 29
       if (!auSol && !decolle) bilan.piedsEnLair.push(`${clip.id}#${i + 1} (bas ${y1})`)
+      // Le degagement le plus juste du lot : une regle qu'on frole partout
+      // n'est plus une garantie, et seul le releve le dit.
+      if (!auSol) bilan.degagementMin = Math.min(bilan.degagementMin, 31 - y1)
       // Les pieds touchent la derniere ligne : c'est le pivot au sol.
       // Sortir par le haut ou les cotes, en revanche, coupe le dessin.
       if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1}`)
@@ -1811,6 +1814,9 @@ const mascotte = await page.evaluate(async () => {
       if (!clip.loop && suivant === 0) continue
       const n = semellesQuiGlissent(clip.poses[i], clip.poses[suivant])
       if (n) bilan.glissements.push(`${clip.id} ${i + 1}->${suivant + 1}`)
+      if (decollageSansPoussee(clip.poses[i], clip.poses[suivant])) {
+        bilan.levitations.push(`${clip.id} ${i + 1}->${suivant + 1}`)
+      }
     }
     for (let a = 0; a < bmps.length; a++) for (let b = a + 1; b < bmps.length; b++) {
       let d = 0
@@ -1819,6 +1825,7 @@ const mascotte = await page.evaluate(async () => {
     }
     const ecart = (Math.max(...masses) - Math.min(...masses)) / Math.min(...masses)
     bilan.masseMax = Math.max(bilan.masseMax, ecart)
+    bilan.masses = (bilan.masses ?? []).concat(`${clip.id} ${(ecart * 100).toFixed(1)}%`)
   }
 
   const sprite = spritePixl()
@@ -1837,14 +1844,20 @@ check('aucune image n\'en repete une autre', mascotte.jumelles.length === 0,
 check('aucune patte ne deborde du torse', mascotte.debords === 0, `${mascotte.debords} pixels`)
 check('rien ne sort du cadre', mascotte.horsCadre.length === 0, mascotte.horsCadre.join(', '))
 check('la masse reste stable dans un cycle', mascotte.masseMax < 0.12,
-  `${(mascotte.masseMax * 100).toFixed(1)}% d'ecart au pire`)
+  mascotte.masses.join(' · '))
 check('les images de contact gardent un pied au sol', mascotte.piedsEnLair.length === 0,
   mascotte.piedsEnLair.join(', '))
 // Le seul derapage voulu est celui du choc : le personnage encaisse et ses
 // deux pieds ripent. Partout ailleurs, une semelle qui bouge est du patinage.
-check('aucune semelle ne patine, sauf sous le choc',
-  mascotte.glissements.length === 1 && mascotte.glissements[0] === 'degats 1->2',
-  mascotte.glissements.join(', ') || 'aucun')
+check('aucune semelle ne patine',
+  mascotte.glissements.length === 0,
+  mascotte.glissements.join(', ') || 'aucun glissement')
+check('les deux semelles ne decollent jamais sans poussee',
+  mascotte.levitations.length === 0,
+  mascotte.levitations.join(', ') || 'aucune levitation')
+check('le vol garde sa marge au sol',
+  mascotte.degagementMin >= 2,
+  `${mascotte.degagementMin} px de degagement au plus juste`)
 check('aucune patte ne pend sous un corps monte', mascotte.pattesPendantes.length === 0,
   mascotte.pattesPendantes.join(', '))
 check('aucune patte n\'est avalee par le torse', mascotte.pattesAvalees.length === 0,
