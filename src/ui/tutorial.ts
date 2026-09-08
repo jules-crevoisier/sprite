@@ -31,6 +31,12 @@ export interface Lesson {
   steps: TutorialStep[]
 }
 
+/**
+ * Delai avant de proposer une sortie sur une etape qui attend un geste. Assez
+ * long pour qu'on essaie vraiment, assez court pour ne pas coincer.
+ */
+const SKIP_AFTER_MS = 25000
+
 const DONE_KEY = 'pixelforge.tutorials.done'
 const SEEN_KEY = 'pixelforge.tutorials.seen'
 
@@ -57,6 +63,9 @@ export class Tutorial {
   private spotlight = el('div', { class: 'tutor-spotlight', hidden: true })
   private poll = 0
   private raf = 0
+  /** Minuteur du filet de securite, et son etat. */
+  private skipTimer = 0
+  private skipOffered = false
   private target: Element | null = null
 
   constructor(app: App) {
@@ -88,6 +97,8 @@ export class Tutorial {
   }
 
   stop(completed = false): void {
+    window.clearTimeout(this.skipTimer)
+    this.skipOffered = false
     if (completed && this.lesson) markDone(this.lesson.id)
     this.lesson = null
     this.target = null
@@ -99,8 +110,19 @@ export class Tutorial {
     cancelAnimationFrame(this.raf)
   }
 
-  private next(): void {
+  /**
+   * Passe a l'etape suivante.
+   *
+   * `force` distingue le geste accompli du bouton : une etape en attente ne
+   * s'ouvre qu'au geste, et le bouton n'apparait qu'une fois le filet de
+   * securite propose.
+   */
+  private next(force = false): void {
     if (!this.lesson) return
+    const courante = this.lesson.steps[this.index]
+    if (force && courante?.done && !courante.done() && !this.skipOffered) return
+    window.clearTimeout(this.skipTimer)
+    this.skipOffered = false
     this.index++
     if (this.index >= this.lesson.steps.length) {
       const title = this.lesson.title
@@ -114,12 +136,24 @@ export class Tutorial {
     this.app.viewport.gesture = step.gesture?.() ?? null
     this.app.viewport.invalidate()
     this.render()
+
+    // Un `done()` peut se reveler impossible — un panneau ferme, un document
+    // remplace. On ne retient donc personne indefiniment : passe un delai,
+    // une sortie discrete apparait.
+    if (step.done && !step.done()) {
+      this.skipTimer = window.setTimeout(() => {
+        this.skipOffered = true
+        if (this.lesson) this.render()
+      }, SKIP_AFTER_MS)
+    }
   }
 
   private previous(): void {
     if (this.index <= 0) return
+    window.clearTimeout(this.skipTimer)
+    this.skipOffered = false
     this.index -= 2
-    this.next()
+    this.next(true)
   }
 
   /** Surveille la reussite de l'etape et suit la cible si la vue bouge. */
@@ -228,28 +262,46 @@ export class Tutorial {
       class: 'btn sm', disabled: this.index === 0, onclick: () => this.previous(),
     }, 'Precedent'))
     foot.appendChild(el('span', { class: 'spacer' }))
+
+    // Une etape qui attend un geste ne se passe pas au bouton.
+    //
+    // C'est tout l'interet d'un tutoriel qui fait faire : tant que le geste
+    // n'est pas accompli, « Suivant » reste inerte. L'etape se valide seule
+    // des que c'est fait — le bouton n'est la que pour les etapes qui ne
+    // demandent rien, et comme filet de securite au bout d'un moment.
+    const enAttente = !!step.done && !step.done()
+
     if (step.auto) {
       foot.appendChild(el('button', {
         class: 'btn sm',
-        title: 'Executer cette etape a votre place',
-        onclick: async () => {
-          await step.auto!()
-          if (!step.done?.()) this.next()
-        },
-      }, step.autoLabel ?? 'Faire pour moi'))
+        title: 'Montrer le resultat — a vous de refaire le geste ensuite',
+        onclick: async () => { await step.auto!() },
+      }, step.autoLabel ?? 'Montrer'))
     }
-    foot.appendChild(el('button', {
-      class: 'btn sm primary', onclick: () => this.next(),
-    }, this.index === lesson.steps.length - 1 ? 'Terminer' : 'Suivant'))
+
+    if (enAttente && !this.skipOffered) {
+      foot.appendChild(el('button', {
+        class: 'btn sm primary', disabled: true,
+        title: 'Faites le geste decrit : l\'etape se valide toute seule',
+      }, 'En attente…'))
+    } else {
+      if (enAttente) {
+        // Filet de securite : au bout d'un moment, on ne retient personne.
+        foot.appendChild(el('button', {
+          class: 'btn sm',
+          title: 'Passer sans faire le geste',
+          onclick: () => this.next(true),
+        }, 'Passer'))
+      }
+      foot.appendChild(el('button', {
+        class: 'btn sm primary', onclick: () => this.next(true),
+      }, this.index === lesson.steps.length - 1 ? 'Terminer' : 'Suivant'))
+    }
     this.card.appendChild(foot)
 
-    if (step.done && !step.auto) {
-      // Sans bouton de secours, l'etape attend vraiment le geste.
+    if (enAttente) {
       this.card.appendChild(el('p', { class: 'tutor-tip' },
         'A vous de jouer : l\'etape se valide des que c\'est fait.'))
-    } else if (step.done) {
-      this.card.appendChild(el('p', { class: 'tutor-tip' },
-        'L\'etape se valide toute seule des que c\'est fait.'))
     }
   }
 

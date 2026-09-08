@@ -276,12 +276,18 @@ const guided = await page.evaluate(async () => {
   app.rigPanel.generateClip(ANIM_CLIPS.find((c) => c.id === 'walk'))
   out.avance.push(await jusqua(12))
 
-  // Les dernieres etapes se lisent et se passent au bouton.
-  for (let i = 0; i < 4; i++) {
-    suivant()
-    await attendre(() => false)
-  }
-  out.avance.push(etape())
+  // Les dernieres etapes attendent de vrais gestes : le bouton ne les ouvre
+  // plus. On les accomplit donc pour de bon.
+  app.playback.play()
+  out.avance.push(await jusqua(13))
+
+  ed.setActiveLayer(0)
+  app.rigPanel.bind()          // detache le calque : le compte change
+  out.avance.push(await jusqua(14))
+
+  ed.sprite.rig.bones[ed.sprite.rig.bones.length - 1].softness = 0.6
+  await attendre(() => !document.querySelector('.tutor-card:not([hidden])'))
+  out.avance.push(etape() || 'terminee')
 
   app.tutorial.stop()
   out.carteFermee = !document.querySelector('.tutor-card:not([hidden])')
@@ -1483,6 +1489,56 @@ check('les lecons nomment les fonctions avancees',
   couverture.absents.length === 0,
   couverture.absents.length ? `non couvert : ${couverture.absents.join(', ')}`
     : `${couverture.etapes} etapes sur ${couverture.lecons} lecons`)
+
+/* --- le tutoriel doit faire faire, pas laisser cliquer --- */
+const exigence = await page.evaluate(async () => {
+  const app = window.pixelforge
+  const lecons = app.lessons()
+  const etapes = lecons.flatMap((l) => l.steps)
+  return {
+    total: etapes.length,
+    verifiees: etapes.filter((s) => s.done).length,
+    // Un bouton « Montrer » sans verification serait un bouton « passer » :
+    // il ferait le travail a la place de l'utilisateur.
+    montrerSansGeste: etapes.filter((s) => s.auto && !s.done).length,
+  }
+})
+check('la plupart des etapes attendent un vrai geste',
+  exigence.verifiees / exigence.total >= 0.8,
+  `${exigence.verifiees}/${exigence.total} etapes verifiees`)
+check('aucun bouton ne fait l\'etape a la place de l\'utilisateur',
+  exigence.montrerSansGeste === 0, `${exigence.montrerSansGeste} raccourcis`)
+
+const blocage = await page.evaluate(async () => {
+  const app = window.pixelforge
+  // Une lecon dont la premiere etape attend un geste ne doit pas s'ouvrir au
+  // bouton : c'est tout l'interet d'un tutoriel qui fait faire.
+  app.tutorial.start(app.lessons().find((l) => l.id === 'rig'))
+  await new Promise((r) => setTimeout(r, 500))
+  const confirmer = document.querySelector('.modal-foot button:last-child')
+  if (confirmer) { confirmer.click(); await new Promise((r) => setTimeout(r, 600)) }
+
+  const compteur = () => document.querySelector('.tutor-count')?.textContent ?? ''
+  const avant = compteur()
+  const primaire = document.querySelector('.tutor-foot button.primary')
+  const libelle = primaire?.textContent ?? ''
+  const inerte = !!primaire?.disabled
+  primaire?.click()
+  await new Promise((r) => setTimeout(r, 400))
+  const apres = compteur()
+
+  // Le vrai geste, lui, fait avancer.
+  app.setMode('rig')
+  await new Promise((r) => setTimeout(r, 900))
+  const apresGeste = compteur()
+  app.tutorial.stop()
+  return { avant, apres, apresGeste, libelle: libelle.trim(), inerte }
+})
+check('le bouton n\'ouvre pas une etape en attente',
+  blocage.inerte && blocage.apres === blocage.avant,
+  `bouton « ${blocage.libelle} », ${blocage.avant} -> ${blocage.apres}`)
+check('le geste accompli fait avancer',
+  blocage.apresGeste !== blocage.avant, `${blocage.avant} -> ${blocage.apresGeste}`)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 

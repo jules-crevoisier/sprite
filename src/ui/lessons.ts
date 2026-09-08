@@ -14,6 +14,13 @@ export function buildLessons(app: App): Lesson[] {
   /** Repere l'historique a l'entree d'une etape, pour mesurer une action. */
   let mark = 0
   const setMark = () => { mark = ed.history.depth }
+  // Reperes pris a l'entree d'une etape : chaque etape se valide en comparant
+  // l'etat courant a celui d'avant, plutot qu'a une valeur figee.
+  let zoomDepart = 0
+  let profondeur = 0
+  let etendue = ''
+  let relies = 0
+  let couleurDepart = 0
 
   return [
     {
@@ -24,8 +31,10 @@ export function buildLessons(app: App): Lesson[] {
       setup: () => ed.loadSprite(demoGrassBlock()),
       steps: [
         {
-          text: 'Voici une tuile de 16 pixels de cote. La molette zoome, la barre espace deplace la vue. Essayez.',
+          text: 'Voici une tuile de 16 pixels de cote. La molette zoome, la barre espace deplace la vue. Essayez : changez le zoom.',
           target: q('#canvas'),
+          enter: () => { zoomDepart = ed.view.zoom },
+          done: () => ed.view.zoom !== zoomDepart,
         },
         {
           text: 'Choisissez une couleur dans la palette, a droite. Un clic la met en couleur principale, un clic droit en secondaire.',
@@ -40,9 +49,9 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.history.depth > mark,
         },
         {
-          text: 'Ctrl+Z annule, Ctrl+Y retablit. L\'historique remonte loin : n\'ayez pas peur d\'essayer.',
-          auto: () => { ed.undo() },
-          autoLabel: 'Annuler',
+          text: 'Ctrl+Z annule, Ctrl+Y retablit. L\'historique remonte loin : n\'ayez pas peur d\'essayer. Annulez votre trait.',
+          enter: () => { profondeur = ed.history.depth },
+          done: () => ed.history.depth < profondeur,
         },
         {
           text: 'Deux reglages de la barre du haut se ressemblent sans faire la meme chose. '
@@ -84,9 +93,10 @@ export function buildLessons(app: App): Lesson[] {
       setup: () => ed.loadSprite(demoBall()),
       steps: [
         {
-          text: 'Cette balle occupe quatre frames. La timeline, en bas, montre une colonne par frame. Cliquez-en une pour vous y placer.',
+          text: 'Cette balle occupe quatre frames. La timeline, en bas, montre une colonne par frame. Cliquez-en une autre pour vous y placer.',
           target: q('#timeline'),
-          enter: () => { app.workspace.setTimelineVisible(true) },
+          enter: () => { app.workspace.setTimelineVisible(true); ed.setActiveFrame(0) },
+          done: () => ed.activeFrame !== 0,
         },
         {
           text: 'Lancez la lecture. Le rendu s\'anime aussi sur la toile, pas seulement dans l\'apercu.',
@@ -120,12 +130,16 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.sprite.tags.length > 0,
         },
         {
-          text: 'Le tag se manipule a la souris : glissez-le pour le deplacer, tirez ses bords pour l\'etendre. Deux tags qui se chevauchent s\'empilent sur deux bandes.',
+          text: 'Le tag se manipule a la souris : glissez-le pour le deplacer, tirez ses bords pour l\'etendre. Essayez — deux tags qui se chevauchent s\'empilent sur deux bandes.',
           target: q('.tl-tag'),
+          enter: () => { etendue = ed.sprite.tags.map((t) => `${t.from}-${t.to}`).join() },
+          done: () => ed.sprite.tags.map((t) => `${t.from}-${t.to}`).join() !== etendue,
         },
         {
-          text: 'La duree se regle par frame, et le bouton voisin l\'applique a toutes d\'un coup — c\'est le cas le plus courant : une seule cadence pour l\'animation entiere.',
+          text: 'La duree se regle par frame, et le bouton voisin l\'applique a toutes d\'un coup — c\'est le cas le plus courant : une seule cadence pour l\'animation entiere. Appliquez-la.',
           target: q('#timeline button[title^="Appliquer cette duree"]'),
+          enter: () => { ed.sprite.frameDurations = ed.sprite.frameDurations.map((_, i) => 80 + i * 40); profondeur = ed.history.depth },
+          done: () => ed.history.depth > profondeur && new Set(ed.sprite.frameDurations).size === 1,
         },
         {
           text: 'La courbe de vitesse, a cote, repartit le temps autrement. Choisissez « Arrivee douce » puis appliquez-la : les dernieres images durent plus longtemps, le mouvement se pose. La duree totale ne change pas.',
@@ -214,16 +228,20 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.sprite.tags.some((t) => t.name === 'marche'),
         },
         {
-          text: 'Huit frames et un tag, d\'un clic. Les poses restent modifiables : le cycle est une base, pas un verrou. Un cycle grise reclame des os que ce squelette n\'a pas — le vol demande des ailes.',
-          target: q('[data-panel="rig"]'),
+          text: 'Huit frames et un tag, d\'un clic. Les poses restent modifiables : le cycle est une base, pas un verrou. Lancez la lecture pour juger le resultat.',
+          target: q('#timeline button[title*="Lecture"]'),
+          done: () => ed.playing,
         },
         {
-          text: 'Un personnage tient rarement sur un calque. Cochez plusieurs calques dans « Calques relies » : corps, arme et cape suivent alors les memes os, chacun avec sa propre carte de poids.',
+          text: 'Arretez la lecture. Un personnage tient rarement sur un calque : dans « Calques relies », un clic relie ou detache un calque. Corps, arme et cape suivent alors les memes os, chacun avec sa propre carte de poids.',
+          enter: () => { app.playback.stop(); relies = ed.sprite.rig.parts.length },
           target: q('[data-panel="rig"]'),
+          done: () => ed.sprite.rig.parts.length !== relies,
         },
         {
-          text: 'Enfin, montez la souplesse d\'un os — une cape, une queue, une meche. Il cesse de suivre le corps a l\'image pres : il traine derriere, depasse a l\'arret, puis se stabilise. Ce retard se dessinait a la main ; ici il se calcule.',
+          text: 'Enfin, choisissez un os et montez sa souplesse — pensez a une cape, une queue, une meche. Il cesse alors de suivre le corps a l\'image pres : il traine derriere, depasse a l\'arret, puis se stabilise. Ce retard se dessinait a la main ; ici il se calcule.',
           target: q('[data-panel="rig"]'),
+          done: () => ed.sprite.rig.bones.some((b) => b.softness > 0),
         },
       ],
     },
@@ -237,8 +255,10 @@ export function buildLessons(app: App): Lesson[] {
         {
           text: 'Une tuile d\'herbe a plat. Les quatre outils qui suivent font le travail ingrat : '
             + 'trouver des tons, poser des ombres, texturer, decliner. Aucun n\'invente de couleur '
-            + 'qui ne soit deja dans le dessin.',
-          target: q('#canvas'),
+            + 'qui ne soit deja dans le dessin. Prenez la pipette et prelevez le vert de l\'herbe.',
+          target: q('.toolbar'),
+          enter: () => { app.setTool('eyedropper'); couleurDepart = ed.primary },
+          done: () => ed.primary !== couleurDepart,
         },
         {
           text: 'D\'abord les tons. Une ombre obtenue en baissant seulement la luminosite donne du gris : '
@@ -247,6 +267,7 @@ export function buildLessons(app: App): Lesson[] {
           enter: setMark,
           auto: () => { app.runCommand('sprite.ramp') },
           autoLabel: 'Ouvrir la rampe',
+          done: () => ed.history.depth > mark,
         },
         {
           text: 'Maintenant l\'ombrage. La silhouette suffit a deviner l\'orientation des surfaces : '
@@ -255,6 +276,7 @@ export function buildLessons(app: App): Lesson[] {
           enter: setMark,
           auto: () => { app.runCommand('sprite.shade') },
           autoLabel: 'Ouvrir l\'ombrage',
+          done: () => ed.history.depth > mark,
         },
         {
           text: 'Chaque pixel a pris un autre ton de sa propre famille : la palette reste la votre, '
@@ -275,6 +297,7 @@ export function buildLessons(app: App): Lesson[] {
           text: 'Ouvrez maintenant « Variantes de couleur » (Ctrl+Maj+V). L\'editeur a regroupe les couleurs en familles : verts et bruns.',
           auto: () => { app.runCommand('sprite.variants') },
           autoLabel: 'Ouvrir',
+          done: () => !!document.querySelector('.modal-head h2'),
         },
         {
           text: 'Choisissez la famille des verts, une methode, puis appliquez : les variantes deviennent des frames taguees, pretes a partir dans une planche.',
