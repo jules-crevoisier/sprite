@@ -261,6 +261,12 @@ const guided = await page.evaluate(async () => {
   suivant()
   out.avance.push(await jusqua(8))
 
+  // Les deux dernieres etapes font faire l'aller-retour dessin / squelette.
+  app.setMode('draw')
+  out.avance.push(await jusqua(9))
+  app.setMode('rig')
+  out.avance.push(await jusqua(10))
+
   app.tutorial.stop()
   out.carteFermee = !document.querySelector('.tutor-card:not([hidden])')
   return out
@@ -384,10 +390,159 @@ check('les modeles enchainent bien les os', guided.enfants)
 check('les lecons sont disponibles', guided.lecons === 5, `${guided.lecons} lecons`)
 check('la carte du tutoriel s\'affiche', guided.carte)
 check('la lecon exige de vrais gestes', guided.gestesExiges >= 4, `${guided.gestesExiges} etapes sans bouton de secours`)
+const dernierePas = guided.avance[guided.avance.length - 1] ?? ''
+const [fait, total] = dernierePas.split('/')
 check('la lecon se deroule jusqu\'au bout sur de vrais gestes',
-  guided.rigLie && guided.rigPose && guided.avance[guided.avance.length - 1] === '8/8',
+  guided.rigLie && guided.rigPose && fait === total && Number(total) >= 8,
   guided.avance.join(' -> '))
 check('quitter le tutoriel referme la carte', guided.carteFermee)
+
+/* --- l'interface du mode squelette ne se coupe ni ne se recouvre --- */
+const habillage = await page.evaluate(async () => {
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const app = window.pixelforge, ed = app.ed
+  ed.loadSprite(demoCharacter())
+  app.setMode('rig')
+  ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
+  await new Promise((r) => setTimeout(r, 150))
+
+  // Le selecteur de mode doit contenir son libelle.
+  const seg = [...document.querySelectorAll('.topbar .seg button')].every((b) => {
+    const r = b.getBoundingClientRect()
+    const span = b.querySelector('span')?.getBoundingClientRect()
+    return !span || (span.top >= r.top - 0.5 && span.bottom <= r.bottom + 0.5)
+  })
+
+  // Le menu des modeles ne doit pas s'etaler par-dessus le panneau.
+  document.querySelector('.panel[data-panel="rig"] .panel-head button[title="Modeles de squelette"]').click()
+  await new Promise((r) => setTimeout(r, 150))
+  const menu = document.querySelector('.dropdown')
+  const largeurMenu = menu ? menu.getBoundingClientRect().width : 9999
+  menu?.remove()
+
+  // Chaque champ d'une ligne d'os doit recevoir le clic lui-meme.
+  const champsAtteignables = [...document.querySelectorAll('.panel[data-panel="rig"] .layer-row select')]
+    .every((sel) => {
+      const r = sel.getBoundingClientRect()
+      const cible = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+      return cible === sel || sel.contains(cible)
+    })
+  return { seg, largeurMenu, champsAtteignables }
+})
+check('le selecteur de mode affiche son libelle en entier', habillage.seg)
+
+// Sur une fenetre etroite, la bascule de mode doit rester entiere.
+await page.setViewportSize({ width: 1024, height: 700 })
+await sleep(250)
+const etroit = await page.evaluate(() => {
+  const bar = document.querySelector('.topbar').getBoundingClientRect()
+  const seg = document.querySelector('.topbar .seg').getBoundingClientRect()
+  const entiers = [...document.querySelectorAll('.topbar .seg button span')].every((sp) => {
+    const r = sp.getBoundingClientRect(), b = sp.parentElement.getBoundingClientRect()
+    return r.left >= b.left - 0.5 && r.right <= b.right + 0.5 && r.bottom <= b.bottom + 0.5
+  })
+  return { entiers, dansLaBarre: seg.right <= bar.right + 0.5, largeur: Math.round(seg.width) }
+})
+await page.setViewportSize({ width: 1440, height: 900 })
+await sleep(250)
+check('la bascule de mode survit a une fenetre etroite',
+  etroit.entiers && etroit.dansLaBarre, `${etroit.largeur} px a 1024`)
+check('le menu des modeles reste etroit', habillage.largeurMenu <= 322, `${Math.round(habillage.largeurMenu)} px`)
+check('les champs des lignes d\'os recoivent le clic', habillage.champsAtteignables)
+
+/* --- la barre d'animation reste cliquable pendant la lecture --- */
+const barre = await page.evaluate(async () => {
+  const app = window.pixelforge, ed = app.ed
+  app.setMode('draw')
+  for (let i = 0; i < 4; i++) ed.sprite.addFrame(ed.frameCount)
+  ed.events.emit('doc', undefined)
+  await new Promise((r) => setTimeout(r, 150))
+  const outils = document.querySelector('.tl-toolbar')
+  const lecture = outils.querySelector('button[title^="Lecture"]')
+  let reconstructions = 0
+  const obs = new MutationObserver(() => { reconstructions++ })
+  obs.observe(outils, { childList: true })
+  app.playback.toggle()
+  await new Promise((r) => setTimeout(r, 900))
+  // Le bouton doit etre le meme objet qu'au depart : sinon un appui
+  // commence sur un element et se termine dans le vide.
+  const memeBouton = outils.querySelector('button[title^="Lecture"]') === lecture
+  const pause = lecture.getBoundingClientRect()
+  const atteignable = document.elementFromPoint(pause.x + pause.width / 2, pause.y + pause.height / 2)
+  // A mesurer avant d'arreter la lecture : le bouton reprend alors son icone.
+  const cliquable = atteignable === lecture || lecture.contains(atteignable)
+  const gene = atteignable
+    ? `${atteignable.tagName}.${String(atteignable.getAttribute?.('class') ?? '')}`
+    : `aucun element a ${Math.round(pause.x)},${Math.round(pause.y)}`
+  // L'icone doit avoir bascule sur Pause pendant la lecture.
+  const iconePause = lecture.innerHTML.length > 0 && lecture.dataset.state === 'true'
+  app.playback.toggle()
+  obs.disconnect()
+  return { reconstructions, memeBouton, cliquable, gene, iconePause }
+})
+check('la barre d\'animation ne se reconstruit pas pendant la lecture',
+  barre.reconstructions === 0 && barre.memeBouton, `${barre.reconstructions} reconstructions`)
+check('le bouton Lecture reste cliquable pendant la lecture', barre.cliquable, barre.gene)
+check('le bouton Lecture passe sur Pause pendant la lecture', barre.iconePause)
+
+/* --- retoucher en mode dessin puis revenir au squelette --- */
+const allerRetour = await page.evaluate(async () => {
+  const { fromHex, getA, getR, getG, getB } = await import('/src/core/color.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { deform } = await import('/src/smart/rig.ts')
+  const { rigState, seamSettings, refreshPose } = await import('/src/tools/index.ts')
+  const app = window.pixelforge, ed = app.ed
+
+  ed.loadSprite(demoCharacter())
+  app.setMode('rig')
+  ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.peekCel().bitmap, ed.sprite))
+  app.rigPanel.bind()
+  const rig = ed.sprite.rig
+
+  // On leve le bras, puis on rend la pose sur la toile.
+  const bras = rig.bones.find((b) => b.name === 'bras G')
+  bras.angle = 0.5
+  refreshPose(ed)
+
+  // Un pixel qui appartient au bras, dans la pose.
+  const n = rig.rest.width * rig.rest.height
+  const owners = new Uint8Array(n).fill(255)
+  deform(rig, { ...seamSettings(rigState.seam), owners })
+  const indexBras = rig.bones.indexOf(bras)
+  const cible = owners.indexOf(indexBras)
+  if (cible < 0) return { erreur: 'aucun pixel du bras' }
+
+  // Retouche en mode dessin : un pixel rouge par-dessus la pose.
+  app.setMode('draw')
+  const rouge = fromHex('#ff0000')
+  ed.run('retouche', () => { ed.peekCel().bitmap.u32[cible] = rouge })
+
+  // Retour au squelette : la retouche doit rejoindre le dessin de repos.
+  app.setMode('rig')
+  const estRouge = (c) => getA(c) > 200 && getR(c) > 200 && getG(c) < 60 && getB(c) < 60
+  let dansRepos = 0, osPorteur = null
+  for (let i = 0; i < rig.rest.u32.length; i++) {
+    if (!estRouge(rig.rest.u32[i])) continue
+    dansRepos++
+    osPorteur = rig.bones[rig.weights[i]]?.name ?? 'libre'
+  }
+
+  // Une nouvelle pose doit emmener la retouche avec l'os, sans reliaison.
+  bras.angle = 1
+  refreshPose(ed)
+  let surLaToile = 0
+  for (const c of ed.peekCel().bitmap.u32) if (estRouge(c)) surLaToile++
+
+  app.setMode('draw')
+  return { dansRepos, osPorteur, surLaToile }
+})
+check('une retouche faite en mode dessin rejoint le dessin de repos',
+  allerRetour.dansRepos > 0, allerRetour.erreur ?? `${allerRetour.dansRepos} px, os « ${allerRetour.osPorteur} »`)
+check('la retouche est rattachee au bon os', allerRetour.osPorteur === 'bras G', String(allerRetour.osPorteur))
+check('la retouche suit l\'os a la pose suivante, sans reliaison',
+  allerRetour.surLaToile > 0, `${allerRetour.surLaToile} px`)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 

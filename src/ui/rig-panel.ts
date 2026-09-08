@@ -4,7 +4,7 @@ import {
   resetPose, type Bone, type Pose,
 } from '../smart/rig'
 import { RIG_TEMPLATES, applyTemplate } from '../smart/rig-presets'
-import { rigState, refreshPose, seamSettings } from '../tools'
+import { rigState, refreshPose, seamSettings, syncRestFromCanvas } from '../tools'
 import { el, clear, iconButton, numberInput, slider } from './dom'
 import { icon } from './icons'
 import { confirmDialog, openMenu, showToast } from './overlay'
@@ -20,6 +20,8 @@ export class RigPanel {
   private body = el('div', { class: 'panel-body' })
   /** Pose de depart memorisee, pour generer les frames intermediaires. */
   private poseA: Pose | null = null
+  /** Empreinte de ce qui est affiche : on ne rebatit que si elle change. */
+  private drawn = ''
 
   constructor(editor: Editor) {
     this.ed = editor
@@ -29,15 +31,44 @@ export class RigPanel {
         (e) => this.templateMenu(e.currentTarget as HTMLElement), { className: 'ghost sm icon-only' }),
       iconButton(icon('refresh', 14), 'Reinitialiser la pose', () => this.resetPose(), { className: 'ghost sm icon-only' }),
     ]
-    editor.events.on('doc', () => this.render())
-    editor.events.on('settings', () => this.render())
+    editor.events.on('doc', () => this.sync())
+    editor.events.on('settings', () => this.sync())
     editor.events.on('reload', () => { this.poseA = null; this.render() })
     this.render()
   }
 
   private get rig() { return this.ed.sprite.rig }
 
+  /**
+   * Empreinte de la liste : tout ce dont le HTML depend, hors selection.
+   * La pose n'y figure pas : la tirer a la souris emet un evenement a chaque
+   * pixel, et rebatir la liste a ce rythme arracherait le champ en cours
+   * d'edition.
+   */
+  private signature(): string {
+    const rig = this.rig
+    return [
+      rig.bones.map((b) => `${b.id}/${b.name}/${b.parent ?? '-'}/${b.z}`).join(','),
+      rig.rest ? 'lie' : 'libre',
+      rigState.seam,
+      this.poseA ? 'A' : '-',
+    ].join('|')
+  }
+
+  /** Rebatit si la structure a bouge, sinon met juste la selection a jour. */
+  private sync(): void {
+    if (this.signature() !== this.drawn) { this.render(); return }
+    this.markSelection()
+  }
+
+  private markSelection(): void {
+    for (const node of this.body.querySelectorAll<HTMLElement>('[data-bone]')) {
+      node.classList.toggle('active', node.dataset.bone === String(rigState.selected))
+    }
+  }
+
   render(): void {
+    this.drawn = this.signature()
     clear(this.body)
     const rig = this.rig
     const bound = !!rig.rest && !!rig.weights
@@ -69,7 +100,8 @@ export class RigPanel {
     }, el('span', null, bound ? 'Relier les pixels' : 'Lier les pixels au squelette')))
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
       bound
-        ? 'Chaque couleur sur la toile montre l\'os qui porte le pixel. Le pinceau Ponderer corrige les frontieres.'
+        ? 'Les pixels suivent le squelette. Vous pouvez repasser en mode Dessin, retoucher, et revenir : '
+          + 'la retouche est reprise sans reliaison. Le pinceau Ponderer montre et corrige les frontieres.'
         : 'A faire une fois les os places : chaque pixel rejoint l\'os le plus proche.'))
 
     if (!bound) return
@@ -118,6 +150,16 @@ export class RigPanel {
       'l\'interpolation produit le mouvement complet.'))
   }
 
+  /**
+   * Change l'os selectionne sans reconstruire la liste : reconstruire
+   * arracherait le champ que l'on vient de toucher.
+   */
+  private select(id: number): void {
+    rigState.selected = id
+    this.markSelection()
+    this.ed.events.emit('settings', undefined)
+  }
+
   /** Liste des os, indentee selon la hierarchie. */
   private hierarchy(): HTMLElement {
     const rig = this.rig
@@ -150,29 +192,48 @@ export class RigPanel {
         background: 'transparent', border: '1px solid transparent', color: 'var(--text)',
       },
       onchange: () => { bone.name = name.value.trim() || bone.name; this.ed.history.touch() },
+      // Le champ arrete le clic pour ne pas etre detruit : il selectionne
+      // donc l'os lui-meme quand on vient y ecrire.
+      onfocus: () => this.select(bone.id),
     })
 
     const parents = [
-      { value: '', label: '— racine —' },
+      { value: '', label: 'racine' },
       ...rig.bones.filter((b) => b.id !== bone.id && canParent(rig, bone.id, b.id))
         .map((b) => ({ value: String(b.id), label: b.name })),
     ]
     const parentSelect = el('select', {
-      style: { height: '22px', fontSize: '11px', maxWidth: '74px' },
-      title: 'Os parent',
+      style: { height: '22px', fontSize: '11px', flex: 'none', width: '86px' },
+      title: 'Os parent — l\'os suit alors son parent',
+      onfocus: () => this.select(bone.id),
       onchange: () => {
         const value = parentSelect.value === '' ? null : Number(parentSelect.value)
-        if (canParent(rig, bone.id, value)) {
-          this.ed.run('Rattacher un os', () => { bone.parent = value })
-          refreshPose(this.ed)
+        if (!canParent(rig, bone.id, value)) {
+          showToast('Un os ne peut pas descendre de lui-meme', 'error')
+          parentSelect.value = String(bone.parent ?? '')
+          return
         }
+        this.ed.run('Rattacher un os', () => { bone.parent = value })
+        refreshPose(this.ed)
+        this.render()
       },
     }, ...parents.map((o) => el('option', { value: o.value, selected: String(bone.parent ?? '') === o.value }, o.label)))
+
+    // Le nom et le parent sont des champs : un clic dessus ne doit pas
+    // remonter jusqu'a la ligne, sinon le re-rendu detruit le champ ouvert
+    // et la liste deroulante du navigateur se referme aussitot.
+    const keepFocus = (node: HTMLElement) => {
+      node.addEventListener('mousedown', (e) => e.stopPropagation())
+      node.addEventListener('click', (e) => e.stopPropagation())
+      return node
+    }
+    keepFocus(name)
+    keepFocus(parentSelect)
 
     const row = el('div', {
       class: `layer-row ${selected ? 'active' : ''}`,
       style: { paddingLeft: `${6 + depth * 12}px` },
-      onclick: () => { rigState.selected = bone.id; this.render(); this.ed.events.emit('settings', undefined) },
+      onclick: () => { this.select(bone.id) },
     },
       el('i', {
         title: 'Couleur d\'influence sur la toile',
@@ -214,7 +275,8 @@ export class RigPanel {
     openMenu(anchor, [
       { title: 'Modeles' },
       ...RIG_TEMPLATES.map((template) => ({
-        label: `${template.label} — ${template.hint}`,
+        label: template.label,
+        hint: template.hint,
         icon: 'rig',
         onClick: () => {
           const cel = ed.peekCel()
@@ -241,12 +303,15 @@ export class RigPanel {
       autoBind(this.rig, cel.bitmap)
     })
     this.ed.updateSettings({ tool: 'rig-pose' })
-    showToast('Pixels lies : chaque couleur montre son os', 'success')
+    // Le dessin reprend sa place : la carte des os ne reste pas sur l'ecran.
+    this.ed.showWeights = false
+    showToast('Pixels lies : tirez le bout d\'un os pour poser', 'success')
     this.render()
   }
 
   private resetPose(): void {
     if (!this.rig.bones.length) return
+    syncRestFromCanvas(this.ed)
     this.ed.run('Reinitialiser la pose', () => resetPose(this.rig))
     refreshPose(this.ed)
     this.render()
@@ -275,6 +340,7 @@ export class RigPanel {
 
   /** Fige la pose courante dans une nouvelle frame. */
   private frameFromPose(): void {
+    syncRestFromCanvas(this.ed)
     const posed = deform(this.rig, seamSettings(rigState.seam))
     if (!posed) { showToast('Liez d\'abord les pixels', 'error'); return }
     const ed = this.ed
@@ -290,6 +356,7 @@ export class RigPanel {
 
   /** Genere les frames entre la pose memorisee et la pose courante. */
   private tween(steps: number): void {
+    syncRestFromCanvas(this.ed)
     const rig = this.rig
     if (!this.poseA) return
     const poseB = capturePose(rig)

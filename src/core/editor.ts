@@ -131,8 +131,12 @@ export class Editor {
 
   onion: OnionSkin = { enabled: false, prev: 1, next: 1, opacity: 110, tint: true }
 
-  /** Affiche l'influence de chaque os en couleur par-dessus le dessin. */
-  showWeights = true
+  /**
+   * Affiche l'influence de chaque os en couleur par-dessus le dessin.
+   * Par defaut la teinte ne sort que pendant la ponderation : une fois les
+   * pixels lies, on veut revoir le dessin, pas la carte des os.
+   */
+  showWeights = false
 
   view: ViewSettings = {
     zoom: 8,

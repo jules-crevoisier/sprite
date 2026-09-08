@@ -33,6 +33,8 @@ export function showToast(text: string, kind: 'info' | 'error' | 'success' = 'in
 
 export interface MenuItem {
   label?: string
+  /** Explication placee sous le libelle, sur une seconde ligne. */
+  hint?: string
   icon?: string
   keys?: string
   checked?: boolean
@@ -62,15 +64,17 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], align: 'left' |
       continue
     }
     const btn = el('button', {
-      class: `menu-item ${item.checked ? 'checked' : ''}`,
+      class: `menu-item ${item.checked ? 'checked' : ''} ${item.hint ? 'two-lines' : ''}`,
       disabled: item.disabled ?? false,
       onclick: () => { closeMenus(); item.onClick?.() },
     })
     btn.appendChild(el('span', {
-      style: { width: '18px', display: 'grid', placeItems: 'center' },
+      style: { width: '18px', display: 'grid', placeItems: 'center', paddingTop: item.hint ? '2px' : '0' },
       html: item.icon ? icon(item.icon, 16) : '',
     }))
-    btn.appendChild(el('span', { class: 'label' }, item.label ?? ''))
+    const label = el('span', { class: 'label' }, el('span', null, item.label ?? ''))
+    if (item.hint) label.appendChild(el('span', { class: 'hint' }, item.hint))
+    btn.appendChild(label)
     if (item.keys) btn.appendChild(el('span', { class: 'keys' }, item.keys))
     menu.appendChild(btn)
   }

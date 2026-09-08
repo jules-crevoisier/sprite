@@ -228,6 +228,12 @@ export interface DeformOptions {
    * dessin pose, et pas seulement sur le dessin de repos.
    */
   owners?: Uint8Array
+  /**
+   * Rempli, si fourni, avec l'index du pixel de repos dont chaque pixel
+   * d'arrivee provient (-1 = aucun). C'est la carte qui permet de renvoyer
+   * vers le repos une retouche faite sur le dessin pose.
+   */
+  sources?: Int32Array
 }
 
 /**
@@ -249,6 +255,8 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
   const fillPasses = options.fillPasses ?? 1
   const seamNeighbours = options.seamNeighbours ?? 4
   const owners = options.owners
+  const sources = options.sources
+  if (sources) sources.fill(-1)
   const w = rest.width, h = rest.height
   const out = new Bitmap(w, h)
 
@@ -260,12 +268,16 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
   const inverses = new Map<number, Mat>()
   for (const { bone } of order) inverses.set(bone.id, invert(world.get(bone.id) ?? IDENTITY))
 
+  /** Index du dernier pixel de repos echantillonne avec succes. */
+  let lastSource = -1
   const sampleAt = (index: number, sx: number, sy: number): RGBA | null => {
     if (sx < 0 || sy < 0 || sx >= w || sy >= h) return null
     const si = sy * w + sx
     if (weights[si] !== index) return null
     const color = rest.u32[si]
-    return getA(color) === 0 ? null : color
+    if (getA(color) === 0) return null
+    lastSource = si
+    return color
   }
 
   // Passe 1 : echantillonnage exact. Elargir la recherche des ici gonflerait
@@ -278,6 +290,7 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
       if (weights[restIndex] === 255 && getA(rest.u32[restIndex]) !== 0) {
         out.u32[restIndex] = rest.u32[restIndex]
         if (owners) owners[restIndex] = 255
+        if (sources) sources[restIndex] = restIndex
         continue
       }
       for (const { bone, index } of order) {
@@ -290,6 +303,7 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
         if (color !== null) {
           out.u32[restIndex] = color
           if (owners) owners[restIndex] = index
+          if (sources) sources[restIndex] = lastSource
           break
         }
       }
@@ -330,9 +344,12 @@ export function deform(rig: Rig, options: DeformOptions = {}): Bitmap | null {
               }
             }
           }
-          if (color !== null) break
+          if (color !== null) { if (owners) owners[i] = index; break }
         }
-        if (color !== null) out.u32[i] = color
+        if (color !== null) {
+          out.u32[i] = color
+          if (sources) sources[i] = lastSource
+        }
       }
     }
   }
@@ -379,6 +396,95 @@ function fillHoles(bm: Bitmap): number {
     }
   }
   return filled
+}
+
+/* ------------------------------------------------------------------ */
+/* Retour du dessin pose vers le repos                                 */
+/* ------------------------------------------------------------------ */
+
+export interface BakeResult {
+  /** Pixels du repos reecrits par la retouche. */
+  changed: number
+  /** Pixels peints hors de toute zone connue, rattaches a un os voisin. */
+  adopted: number
+}
+
+/**
+ * Renvoie vers le dessin de repos une retouche faite sur le dessin pose.
+ *
+ * `posed` est le rendu que la deformation avait produit, `sources` la carte
+ * qui dit de quel pixel de repos chaque pixel pose provient, et `edited` la
+ * toile telle que l'utilisateur l'a laissee. Tout pixel qui differe est
+ * reporte a sa source : le repos reste donc la reference, et les poses
+ * suivantes tiennent compte du nouveau dessin sans avoir a relier les pixels.
+ *
+ * Un pixel peint la ou rien n'existait n'a pas de source. On le rattache
+ * alors a l'os du voisin connu le plus proche et on remonte par sa
+ * transformation inverse : un detail ajoute sur un bras leve suit ensuite
+ * le bras.
+ */
+export function bakePose(
+  rig: Rig,
+  posed: Bitmap,
+  sources: Int32Array,
+  owners: Uint8Array,
+  edited: Bitmap,
+): BakeResult {
+  const rest = rig.rest
+  const weights = rig.weights
+  const out: BakeResult = { changed: 0, adopted: 0 }
+  if (!rest || !weights) return out
+  if (edited.width !== rest.width || edited.height !== rest.height) return out
+
+  const w = rest.width, h = rest.height
+  const world = worldTransforms(rig)
+  const inverses = rig.bones.map((b) => invert(world.get(b.id) ?? IDENTITY))
+
+  for (let i = 0; i < edited.u32.length; i++) {
+    const now = edited.u32[i]
+    if (now === posed.u32[i]) continue
+
+    const source = sources[i]
+    if (source >= 0) {
+      rest.u32[source] = now
+      // Un pixel efface sur la pose disparait aussi du repos.
+      if (getA(now) === 0) weights[source] = 255
+      out.changed++
+      continue
+    }
+    if (getA(now) === 0) continue
+
+    // Pixel neuf : on cherche a quel os il appartient, en regardant autour.
+    const x = i % w, y = (i / w) | 0
+    let bone = -1
+    for (let r = 1; r <= 4 && bone < 0; r++) {
+      for (let dy = -r; dy <= r && bone < 0; dy++) {
+        for (let dx = -r; dx <= r && bone < 0; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue
+          const nx = x + dx, ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+          const o = owners[ny * w + nx]
+          if (o !== 255 && o < rig.bones.length) bone = o
+        }
+      }
+    }
+    if (bone < 0) {
+      // Aucun os autour : le pixel reste ou il est, libre de toute influence.
+      rest.u32[i] = now
+      weights[i] = 255
+      out.adopted++
+      continue
+    }
+    const inv = inverses[bone]
+    const sx = Math.floor(applyX(inv, x + 0.5, y + 0.5))
+    const sy = Math.floor(applyY(inv, x + 0.5, y + 0.5))
+    if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue
+    const at = sy * w + sx
+    rest.u32[at] = now
+    weights[at] = bone
+    out.adopted++
+  }
+  return out
 }
 
 /** Remet toutes les poses a zero. */

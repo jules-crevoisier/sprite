@@ -20,6 +20,20 @@ export class TimelinePanel {
   private toolbar = el('div', { class: 'tl-toolbar' })
   private scroll = el('div', { class: 'tl-scroll' })
   private grid = el('div', { class: 'tl-grid' })
+  /**
+   * Boutons et champs de la barre, batis une seule fois. Les reconstruire a
+   * chaque evenement les detruisait entre l'appui et le relachement : pendant
+   * la lecture, un clic sur Pause tombait dans le vide et la duree perdait le
+   * focus des qu'on la tapait.
+   */
+  private bar: {
+    play: HTMLButtonElement
+    tagOnly: HTMLButtonElement
+    onion: HTMLButtonElement
+    duration: HTMLInputElement
+    fps: HTMLElement
+    total: HTMLElement
+  } | null = null
   private showThumbs = true
   private container: HTMLElement | null = null
   /** Hauteur fixee a la souris ; null = ajustement automatique. */
@@ -30,6 +44,7 @@ export class TimelinePanel {
     this.playback = playback
     this.container = container
     this.scroll.appendChild(this.grid)
+    this.buildToolbar()
     // Les enfants vont directement dans le conteneur : un wrapper en
     // display:contents ne peut pas recevoir de hauteur.
     clear(container)
@@ -104,53 +119,81 @@ export class TimelinePanel {
   /* Barre d'outils                                                    */
   /* ---------------------------------------------------------------- */
 
-  private renderToolbar(): void {
+  /** Batit la barre une fois pour toutes ; l'etat est ensuite mis a jour. */
+  private buildToolbar(): void {
     clear(this.toolbar)
     const ed = this.ed
     const t = this.toolbar
-    const duration = ed.sprite.frameDurations[ed.activeFrame] ?? 100
+
+    const play = iconButton(icon('play', 15), 'Lecture (Entree)', () => this.playback.toggle(),
+      { className: 'sm icon-only' })
+    const tagOnly = iconButton(icon('loop', 15), 'Limiter la lecture au tag courant', () => {
+      ed.playTagOnly = !ed.playTagOnly
+      this.syncToolbar()
+    }, { className: 'sm icon-only ghost' })
+    const onion = iconButton(icon('onion', 15), 'Pelure d\'oignon', () => {
+      ed.onion.enabled = !ed.onion.enabled
+      ed.events.emit('settings', undefined)
+      this.syncToolbar()
+    }, { className: 'sm icon-only ghost' })
+    const duration = numberInput(100, (v) => this.setDuration(Math.max(1, v)), { min: 1, max: 60000, width: '62px' })
+    const fps = el('span', { style: { color: 'var(--text-faint)' } })
+    const total = el('span')
 
     t.append(
       iconButton(icon('prev', 15), 'Frame precedente (,)', () => ed.setActiveFrame(ed.activeFrame - 1), { className: 'ghost sm icon-only' }),
-      iconButton(icon(ed.playing ? 'pause' : 'play', 15), 'Lecture (Entree)', () => this.playback.toggle(),
-        { className: `sm icon-only ${ed.playing ? 'active' : ''}` }),
+      play,
       iconButton(icon('next', 15), 'Frame suivante (.)', () => ed.setActiveFrame(ed.activeFrame + 1), { className: 'ghost sm icon-only' }),
-      iconButton(icon('loop', 15), 'Limiter la lecture au tag courant', () => {
-        ed.playTagOnly = !ed.playTagOnly
-        this.renderToolbar()
-      }, { className: `sm icon-only ${ed.playTagOnly ? 'active' : 'ghost'}` }),
+      tagOnly,
       el('div', { class: 'opt-sep' }),
       iconButton(icon('plus', 15), 'Nouvelle frame — reprend le dessin actuel (Alt+N)', () => this.addFrame(), { className: 'ghost sm icon-only' }),
       iconButton(icon('frame-empty', 15), 'Nouvelle frame vide (Alt+Maj+N)', () => this.addEmptyFrame(), { className: 'ghost sm icon-only' }),
       iconButton(icon('trash', 15), 'Supprimer la frame', () => this.deleteFrame(), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
-    )
-
-    const durInput = numberInput(duration, (v) => this.setDuration(Math.max(1, v)), { min: 1, max: 60000, width: '62px' })
-    t.append(el('div', { class: 'tl-fps' },
-      el('span', null, 'Duree'),
-      durInput,
-      el('span', null, 'ms'),
-      el('span', { style: { color: 'var(--text-faint)' } }, `≈ ${Math.round(1000 / Math.max(1, duration))} fps`),
-    ))
-
-    t.append(
+      el('div', { class: 'tl-fps' }, el('span', null, 'Duree'), duration, el('span', null, 'ms'), fps),
       el('div', { class: 'opt-sep' }),
-      iconButton(icon('onion', 15), 'Pelure d\'oignon', () => {
-        ed.onion.enabled = !ed.onion.enabled
-        ed.events.emit('settings', undefined)
-        this.renderToolbar()
-      }, { className: `sm icon-only ${ed.onion.enabled ? 'active' : 'ghost'}` }),
+      onion,
       iconButton(icon('settings', 14), 'Reglages de la pelure d\'oignon', (e) => this.onionMenu(e), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
       iconButton(icon('tag', 15), 'Nouveau tag d\'animation sur la selection', () => this.createTag(), { className: 'ghost sm icon-only', label: 'Tag' }),
+      el('div', { class: 'spacer' }),
+      el('div', { class: 'tl-fps' }, total),
     )
 
-    t.append(el('div', { class: 'spacer' }))
-    t.append(el('div', { class: 'tl-fps' },
-      el('span', null, `${ed.frameCount} frame${ed.frameCount > 1 ? 's' : ''} · ${(ed.sprite.totalDuration() / 1000).toFixed(2)}s`),
-    ))
+    this.bar = { play, tagOnly, onion, duration, fps, total }
+    this.syncToolbar()
   }
+
+  /**
+   * Met la barre a l'heure sans toucher au DOM structurel : la lecture emet
+   * un evenement par frame, et remplacer les boutons a ce rythme les rendrait
+   * incliquables.
+   */
+  private syncToolbar(): void {
+    const bar = this.bar
+    if (!bar) return
+    const ed = this.ed
+    const duration = ed.sprite.frameDurations[ed.activeFrame] ?? 100
+
+    // L'icone n'est remplacee qu'au changement d'etat : la reecrire a chaque
+    // frame detacherait le dessin sous le curseur dix fois par seconde.
+    if (bar.play.dataset.state !== String(ed.playing)) {
+      bar.play.dataset.state = String(ed.playing)
+      bar.play.innerHTML = icon(ed.playing ? 'pause' : 'play', 15)
+    }
+    bar.play.classList.toggle('active', ed.playing)
+    bar.tagOnly.classList.toggle('active', ed.playTagOnly)
+    bar.tagOnly.classList.toggle('ghost', !ed.playTagOnly)
+    bar.onion.classList.toggle('active', ed.onion.enabled)
+    bar.onion.classList.toggle('ghost', !ed.onion.enabled)
+    // On ne bouscule pas un champ en cours de saisie.
+    if (document.activeElement !== bar.duration) bar.duration.value = String(duration)
+    bar.fps.textContent = `≈ ${Math.round(1000 / Math.max(1, duration))} fps`
+    bar.total.textContent =
+      `${ed.frameCount} frame${ed.frameCount > 1 ? 's' : ''} · ${(ed.sprite.totalDuration() / 1000).toFixed(2)}s`
+  }
+
+  private renderToolbar(): void { this.syncToolbar() }
 
   private onionMenu(e: MouseEvent): void {
     const ed = this.ed
@@ -160,13 +203,13 @@ export class TimelinePanel {
       ...[0, 1, 2, 3].map((n) => ({
         label: `${n}`,
         checked: o.prev === n,
-        onClick: () => { o.prev = n; o.enabled = true; ed.events.emit('settings', undefined); this.renderToolbar() },
+        onClick: () => { o.prev = n; o.enabled = true; ed.events.emit('settings', undefined); this.syncToolbar() },
       })),
       { title: 'Frames suivantes' },
       ...[0, 1, 2, 3].map((n) => ({
         label: `${n}`,
         checked: o.next === n,
-        onClick: () => { o.next = n; o.enabled = true; ed.events.emit('settings', undefined); this.renderToolbar() },
+        onClick: () => { o.next = n; o.enabled = true; ed.events.emit('settings', undefined); this.syncToolbar() },
       })),
       { separator: true },
       {

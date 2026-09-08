@@ -9,7 +9,7 @@ import { loadImageBitmap } from '../export/files'
 import { imageToBitmap, spriteFromImage } from '../io/import'
 import { pasteClipboard } from '../core/operations'
 import { installShortcuts } from './shortcuts'
-import { toolById } from '../tools'
+import { toolById, syncRestFromCanvas, invalidateBake } from '../tools'
 import { buildCommands, type Command } from './commands'
 import { openCommandPalette } from './command-palette'
 import { ColorPanel } from './color-panel'
@@ -156,7 +156,7 @@ export class App {
     ed.events.on('settings', () => { this.renderOptions(); this.renderHud(); this.viewport.updateCursorStyle() })
     ed.events.on('mode', () => { this.renderTools(); this.renderOptions(); this.renderTop() })
     ed.events.on('doc', () => { this.renderTop(); this.renderHud(); this.maybeAutosave() })
-    ed.events.on('reload', () => { this.renderTop(); this.renderHud(); this.colorPanel.renderPalette() })
+    ed.events.on('reload', () => { invalidateBake(); this.renderTop(); this.renderHud(); this.colorPanel.renderPalette() })
     ed.history.onChange(() => this.renderTop())
 
     this.viewport.onCursorMove = (x, y) => this.status.setCursor(x, y)
@@ -221,6 +221,11 @@ export class App {
   setMode(mode: EditorMode): void {
     if (this.ed.mode === mode) return
     toolById(this.ed.settings.tool).cancel?.(this.ed)
+    // En revenant au squelette, on reprend d'abord ce qui a ete redessine :
+    // les poses suivantes partent du dessin corrige, sans reliaison.
+    if (mode === 'rig' && syncRestFromCanvas(this.ed)) {
+      showToast('Retouches reprises dans le squelette', 'success')
+    }
     this.ed.setMode(mode)
     this.workspace.setMode(mode)
     this.renderTools()

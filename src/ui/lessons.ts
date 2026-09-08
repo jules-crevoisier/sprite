@@ -125,7 +125,11 @@ export function buildLessons(app: App): Lesson[] {
         },
         {
           text: 'Passez sur l\'outil Poser et tirez le bout du bras gauche vers le haut, en suivant la fleche. Le membre pivote et les pixels sont regeneres.',
-          enter: () => app.setTool('rig-pose'),
+          enter: () => {
+            // La carte d'influence a joue son role : on rend le dessin.
+            ed.showWeights = false
+            app.setTool('rig-pose')
+          },
           gesture: () => {
             const arm = ed.sprite.rig.bones.find((b) => b.name === 'bras G')
             if (!arm) return null
@@ -137,6 +141,16 @@ export function buildLessons(app: App): Lesson[] {
           text: 'Si une frontiere tombe mal — un bout d\'epaule qui part avec le bras — choisissez l\'os dans la liste, prenez l\'outil Ponderer et repeignez. Alt retire l\'influence.',
           target: q('.toolbar'),
           enter: () => app.setTool('rig-weight'),
+        },
+        {
+          text: 'La pose ne fige rien : repassez en mode Dessin, retouchez le bras leve au crayon, puis revenez au Squelette. La retouche est reprise dans le repos — inutile de relier les pixels a nouveau.',
+          target: q('.topbar .seg'),
+          done: () => ed.mode === 'draw',
+        },
+        {
+          text: 'Revenez au mode Squelette : le dessin corrige suit desormais l\'os, et la prochaine pose en tiendra compte.',
+          target: q('.topbar .seg'),
+          done: () => ed.mode === 'rig',
         },
         {
           text: 'Reste a en faire une animation : memorisez la pose de depart, bougez le squelette, puis demandez les frames intermediaires. Le mouvement complet est genere par interpolation.',

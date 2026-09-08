@@ -1,9 +1,11 @@
+import type { Cel } from '../core/document'
 import type { Editor } from '../core/editor'
 import { snapshotStructure, restoreStructure } from '../core/history'
 import {
-  applyX, applyY, boneAngle, createBone, deform, invert,
+  applyX, applyY, bakePose, boneAngle, boneColor, createBone, deform, invert,
   worldTransforms, type Bone, type Mat,
 } from '../smart/rig'
+import type { Bitmap } from '../core/bitmap'
 import { ICONS } from '../ui/icons'
 import { brushOffsets } from './algorithms'
 import type { OverlayContext, PointerInfo, Tool } from './types'
@@ -34,15 +36,91 @@ export const seamSettings = (level: number): { seamRadius: number; seamNeighbour
 const HIT = 3
 const dist = (ax: number, ay: number, bx: number, by: number): number => Math.hypot(ax - bx, ay - by)
 
+/* ------------------------------------------------------------------ */
+/* Va-et-vient entre le dessin pose et le dessin de repos              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Dernier rendu de pose ecrit sur la toile, avec de quoi le relire :
+ * la case visee, le dessin de repos d'alors, la signature de la pose et
+ * l'origine de chaque pixel. C'est ce qui permet de repasser en mode Dessin,
+ * retoucher, puis revenir sans avoir a relier les pixels.
+ */
+interface Baked {
+  cel: Cel
+  rest: Bitmap
+  pose: string
+  pixels: Uint32Array
+  sources: Int32Array
+  owners: Uint8Array
+}
+
+let baked: Baked | null = null
+
+/** Signature de la pose : deux rendus ne sont comparables qu'a pose egale. */
+const poseSignature = (ed: Editor): string =>
+  ed.sprite.rig.bones.map((b) => `${b.id}:${b.angle.toFixed(5)}:${b.tx}:${b.ty}:${b.scale}`).join('|')
+
+/** Oublie le rendu memorise : le document a change sous nos pieds. */
+export function invalidateBake(): void { baked = null }
+
+/**
+ * Reporte vers le dessin de repos les retouches faites sur la toile depuis
+ * le dernier rendu de pose. Sans effet si la toile n'a pas bouge, si la case
+ * ou le repos ont change, ou si la pose n'est plus celle du rendu : dans ces
+ * cas la toile n'est pas comparable et on ne toucherait pas au bon pixel.
+ */
+export function syncRestFromCanvas(ed: Editor): boolean {
+  const snap = baked
+  if (!snap) return false
+  const rig = ed.sprite.rig
+  const cel = ed.peekCel()
+  if (!cel || cel !== snap.cel || rig.rest !== snap.rest || !rig.weights) return false
+  if (poseSignature(ed) !== snap.pose) return false
+  if (cel.bitmap.u32.length !== snap.pixels.length) return false
+
+  let dirty = false
+  for (let i = 0; i < snap.pixels.length; i++) {
+    if (cel.bitmap.u32[i] !== snap.pixels[i]) { dirty = true; break }
+  }
+  if (!dirty) return false
+
+  const posed = { u32: snap.pixels, width: rig.rest.width, height: rig.rest.height } as Bitmap
+  const restBefore = new Uint32Array(rig.rest.u32)
+  const weightsBefore = new Uint8Array(rig.weights)
+  const result = bakePose(rig, posed, snap.sources, snap.owners, cel.bitmap)
+  baked = null
+  if (result.changed + result.adopted === 0) return false
+
+  // La retouche entre dans l'historique : annuler le trait doit aussi
+  // annuler son report vers le repos.
+  const rest = rig.rest
+  const restAfter = new Uint32Array(rest.u32)
+  const weightsAfter = new Uint8Array(rig.weights)
+  ed.pushCommand({
+    label: 'Retouche reprise dans le squelette',
+    undo: () => { rest.u32.set(restBefore); rig.weights?.set(weightsBefore) },
+    redo: () => { rest.u32.set(restAfter); rig.weights?.set(weightsAfter) },
+  })
+  return true
+}
+
 /** Recalcule le dessin pose et l'ecrit dans la case active. */
 export function refreshPose(ed: Editor): void {
   const rig = ed.sprite.rig
   if (!rig.rest || !rig.weights) return
   const cel = ed.peekCel()
   if (!cel) return
-  const posed = deform(rig, seamSettings(rigState.seam))
+  const size = rig.rest.width * rig.rest.height
+  const sources = new Int32Array(size)
+  const owners = new Uint8Array(size).fill(255)
+  const posed = deform(rig, { ...seamSettings(rigState.seam), sources, owners })
   if (!posed) return
   cel.bitmap.copyFrom(posed)
+  baked = {
+    cel, rest: rig.rest, pose: poseSignature(ed),
+    pixels: new Uint32Array(posed.u32), sources, owners,
+  }
   ed.events.emit('doc', undefined)
 }
 
@@ -107,36 +185,69 @@ function drawSkeleton(ed: Editor, o: OverlayContext, extra?: { x1: number; y1: n
     ctx.setLineDash([])
   }
 
-  for (const bone of ed.sprite.rig.bones) {
+  // Chaque os porte sa couleur : la meme que sa pastille dans la liste et que
+  // la carte d'influence, pour lire d'un coup d'oeil qui commande quoi.
+  const bones = [...ed.sprite.rig.bones]
+    .map((bone, index) => ({ bone, index }))
+    .sort((a, b) => a.bone.z - b.bone.z)
+
+  for (const { bone, index } of bones) {
     const pt = bonePoints(ed, bone)
     const selected = bone.id === rigState.selected
-    const color = selected ? '#ffb454' : '#e8ebf2'
+    const color = boneColor(index)
 
     const dx = pt.x2 - pt.x1, dy = pt.y2 - pt.y1
     const len = Math.hypot(dx, dy) || 1
     const nx = -dy / len, ny = dx / len
     const width = Math.max(1.2, Math.min(3, len * 0.16))
-    ctx.beginPath()
-    ctx.moveTo(pt.x1, pt.y1)
-    ctx.lineTo(pt.x1 + dx * 0.25 + nx * width, pt.y1 + dy * 0.25 + ny * width)
-    ctx.lineTo(pt.x2, pt.y2)
-    ctx.lineTo(pt.x1 + dx * 0.25 - nx * width, pt.y1 + dy * 0.25 - ny * width)
-    ctx.closePath()
-    ctx.fillStyle = selected ? '#ffb45466' : '#0d0f1466'
+
+    const shape = () => {
+      ctx.beginPath()
+      ctx.moveTo(pt.x1, pt.y1)
+      ctx.lineTo(pt.x1 + dx * 0.25 + nx * width, pt.y1 + dy * 0.25 + ny * width)
+      ctx.lineTo(pt.x2, pt.y2)
+      ctx.lineTo(pt.x1 + dx * 0.25 - nx * width, pt.y1 + dy * 0.25 - ny * width)
+      ctx.closePath()
+    }
+
+    // Liseré sombre sous l'os : la couleur reste lisible sur un dessin clair.
+    shape()
+    ctx.strokeStyle = '#0d0f14cc'
+    ctx.lineWidth = (selected ? 3.4 : 2.6) * unit
+    ctx.lineJoin = 'round'
+    ctx.stroke()
+
+    shape()
+    ctx.fillStyle = `${color}${selected ? '99' : '55'}`
     ctx.fill()
     ctx.strokeStyle = color
-    ctx.lineWidth = (selected ? 1.6 : 1) * unit
+    ctx.lineWidth = (selected ? 1.8 : 1.1) * unit
+    ctx.stroke()
+
+    // Racine : anneau creux. Bout : disque plein, la poignee qui fait pivoter.
+    ctx.beginPath()
+    ctx.arc(pt.x1, pt.y1, 2 * unit + 0.6, 0, Math.PI * 2)
+    ctx.fillStyle = '#0d0f14ee'
+    ctx.fill()
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.4 * unit
     ctx.stroke()
 
     ctx.beginPath()
-    ctx.arc(pt.x1, pt.y1, 2 * unit + 0.6, 0, Math.PI * 2)
-    ctx.fillStyle = '#0d0f14dd'
-    ctx.fill()
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.arc(pt.x2, pt.y2, 1.6 * unit + 0.5, 0, Math.PI * 2)
+    ctx.arc(pt.x2, pt.y2, 1.9 * unit + 0.5, 0, Math.PI * 2)
     ctx.fillStyle = color
     ctx.fill()
+    ctx.strokeStyle = '#0d0f14ee'
+    ctx.lineWidth = 1 * unit
+    ctx.stroke()
+
+    if (selected) {
+      ctx.beginPath()
+      ctx.arc(pt.x2, pt.y2, 3.6 * unit + 0.8, 0, Math.PI * 2)
+      ctx.strokeStyle = '#ffffffcc'
+      ctx.lineWidth = 1.2 * unit
+      ctx.stroke()
+    }
   }
   ctx.restore()
 }
@@ -180,6 +291,7 @@ export const rigBoneTool: Tool = {
   cursor: 'crosshair',
 
   down(ed, p) {
+    syncRestFromCanvas(ed)
     structureBefore = snapshotStructure(ed.sprite)
     const joint = pickJoint(ed, p.x, p.y)
     if (joint && p.alt) {
@@ -274,6 +386,9 @@ export const rigPoseTool: Tool = {
   cursor: 'grab',
 
   down(ed, p) {
+    // Une retouche faite en mode Dessin rejoint le repos avant qu'on bouge :
+    // la nouvelle pose part donc du dessin tel qu'il vient d'etre corrige.
+    if (syncRestFromCanvas(ed)) ed.toast('Retouches reprises dans le squelette', 'info')
     const joint = pickJoint(ed, p.x, p.y)
     if (!joint) {
       const bone = pickBone(ed, p.x, p.y)
@@ -366,6 +481,7 @@ export const rigWeightTool: Tool = {
   cursor: 'crosshair',
 
   down(ed, p) {
+    syncRestFromCanvas(ed)
     const rig = ed.sprite.rig
     if (!rig.weights) { ed.toast('Liez d\'abord les pixels au squelette', 'error'); return }
     if (rigState.selected === null) { ed.toast('Choisissez un os a ponderer', 'error'); return }

@@ -241,7 +241,10 @@ export class Viewport {
     ctx.drawImage(this.frameCanvas, ox, oy, dw, dh)
 
     // En mode squelette, l'influence des os se lit directement sur le dessin.
-    if (ed.mode === 'rig' && ed.showWeights) this.drawWeights(ctx, ox, oy, dw, dh)
+    // La carte d'influence sert a ponderer : elle sort avec le pinceau
+    // Ponderer, ou a la demande, mais ne recouvre pas le dessin en continu.
+    const weighting = ed.settings.tool === 'rig-weight'
+    if (ed.mode === 'rig' && (ed.showWeights || weighting)) this.drawWeights(ctx, ox, oy, dw, dh)
 
     ctx.save()
     ctx.translate(ox, oy)

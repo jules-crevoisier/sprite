@@ -44,12 +44,16 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
           (v) => `${v}px`),
       ))
     }
-    add(el('div', { class: 'opt' },
-      checkbox('Montrer l\'influence des os', ed.showWeights, (v) => {
-        ed.showWeights = v
-        ed.events.emit('settings', undefined)
-      }),
-    ))
+    // Le pinceau Ponderer allume deja la carte : la case n'a de sens que
+    // pour les deux autres outils.
+    if (tool.id !== 'rig-weight') {
+      add(el('div', { class: 'opt' },
+        checkbox('Montrer l\'influence des os', ed.showWeights, (v) => {
+          ed.showWeights = v
+          ed.events.emit('settings', undefined)
+        }),
+      ))
+    }
     const seamLabels = ['aucun', 'discret', 'normal', 'genereux']
     add(el('div', { class: 'opt' },
       el('label', null, 'Jointures'),

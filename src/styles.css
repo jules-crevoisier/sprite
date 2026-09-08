@@ -154,6 +154,7 @@ button { cursor: pointer; }
   padding: 0 10px;
   background: var(--bg-1);
   min-width: 0;
+  overflow: hidden;
 }
 
 .brand {
@@ -196,6 +197,8 @@ button { cursor: pointer; }
   border-radius: var(--radius-sm);
   padding: 5px 8px;
   max-width: 240px;
+  min-width: 0;
+  flex: 0 1 auto;
   text-align: center;
   font-weight: 600;
   color: var(--text);
@@ -301,11 +304,18 @@ button { cursor: pointer; }
 .opt-sep { width: 1px; height: 20px; background: var(--line); flex: none; }
 .opt-hint { color: var(--text-faint); font-size: 12px; margin-left: auto; padding-left: 16px; white-space: nowrap; }
 
-.seg { display: flex; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+/* Un segmente ne se comprime pas : sur une fenetre etroite c'est le titre du
+   document qui cede la place, pas la bascule de mode. */
+.seg { display: flex; flex: none; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
 .seg button {
   border: 0; background: transparent; color: var(--text-dim);
-  height: 26px; padding: 0 9px; display: grid; place-items: center;
+  height: 26px; padding: 0 9px;
+  /* En ligne : une icone et son libelle se suivent au lieu de s'empiler,
+     sinon le texte deborde des 26px et se fait couper par le overflow. */
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  white-space: nowrap; line-height: 1;
 }
+.seg button svg { flex: none; display: block; }
 .seg button:hover { background: var(--bg-3); color: var(--text); }
 .seg button.active { background: var(--accent-soft); color: var(--accent-text); }
 
@@ -651,6 +661,7 @@ input[type="range"]::-moz-range-thumb {
 .dropdown {
   position: absolute;
   min-width: 230px;
+  max-width: min(320px, calc(100vw - 16px));
   background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -670,7 +681,14 @@ input[type="range"]::-moz-range-thumb {
 }
 .menu-item:hover:not(:disabled) { background: var(--bg-4); color: var(--text); }
 .menu-item:disabled { opacity: .35; cursor: default; }
-.menu-item .label { flex: 1; }
+.menu-item .label { flex: 1; min-width: 0; }
+/* Un menu large recouvrirait le panneau qui l'a ouvert : l'explication
+   passe donc sous le libelle plutot que de l'allonger. */
+.menu-item.two-lines { align-items: flex-start; white-space: normal; }
+.menu-item.two-lines .label { display: grid; gap: 1px; }
+.menu-item.two-lines .hint {
+  font-size: 11px; color: var(--text-faint); line-height: 1.25;
+}
 .menu-item .keys {
   font-family: var(--mono); font-size: 10.5px; color: var(--text-faint);
   background: var(--bg-0); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
@@ -815,6 +833,9 @@ input[type="range"]::-moz-range-thumb {
   :root { --h-timeline: 176px; --w-tools: 44px; }
   .toolbar { grid-template-columns: 1fr; }
   .brand-name { display: none; }
+  /* Les menus se resserrent pour laisser passer la bascule de mode. */
+  .menu-btn { padding: 6px 6px; }
+  .doc-title { max-width: 150px; }
 }
 
 
