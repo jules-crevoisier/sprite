@@ -338,13 +338,13 @@ const REPOS: Reglage[] = [
  */
 const MARCHE: Reglage[] = [
   { corps: [-1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
-  { corps: [-1, 1], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
+  { corps: [-1, 1], gauche: [0, 0], droite: [0, -1], queue: 'haute' },
   { corps: [0, -1], tete: [-1, 0], gauche: [0, 0], droite: [1, -4], queue: 'basse' },
-  { corps: [0, 0], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
+  { corps: [0, 0], gauche: [0, 0], droite: [1, -2], queue: 'basmilieu' },
   { corps: [1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
-  { corps: [1, 1], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [1, 1], gauche: [0, -1], droite: [0, 0], queue: 'haute' },
   { corps: [0, -1], tete: [1, 0], gauche: [-1, -4], droite: [0, 0], queue: 'basse' },
-  { corps: [0, 0], gauche: [-1, -1], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [0, 0], gauche: [-1, -2], droite: [0, 0], queue: 'basmilieu' },
 ]
 
 /**
@@ -366,10 +366,10 @@ const MARCHE: Reglage[] = [
  */
 const COURSE: Reglage[] = [
   { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [0, 1], gauche: [-1, -4], droite: [0, -3], queue: 'basmilieu' },
+  { corps: [-1, -2], tete: [0, 1], gauche: [-2, -4], droite: [0, -3], queue: 'basmilieu' },
   { corps: [0, -3], tete: [0, 1], gauche: [0, -6], droite: [0, -3], queue: 'basse' },
   { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [0, 1], gauche: [0, -3], droite: [1, -4], queue: 'basmilieu' },
+  { corps: [1, -2], tete: [0, 1], gauche: [0, -3], droite: [2, -4], queue: 'basmilieu' },
   { corps: [0, -3], tete: [0, 1], gauche: [0, -3], droite: [0, -6], queue: 'basse' },
 ]
 
@@ -402,7 +402,7 @@ const SAUT: Reglage[] = [
   { corps: [0, -2], corpsArt: 'etire', tete: [1, 0], gauche: [0, -3], droite: [0, -3], queue: 'milieu' },
   { corps: [0, 0], corpsArt: 'etire', gauche: [0, 0], droite: [0, 0], queue: 'haute' },
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
-  { corps: [0, -1], tete: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basse' },
+  { corps: [0, -1], tete: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]
 
@@ -431,20 +431,28 @@ const SAUT: Reglage[] = [
  * monter la tete seule ouvre une ligne vide entre elle et le torse, et le
  * personnage se coupe en deux.
  *
- * Le coup va quelque part. Les centres de torse font 10, 10, 9, 10, 11, 9,
- * 8, 10, 10 : recul a l'armement, appui en avant, puis la frappe qui
- * entraine le corps de trois colonnes. Sans composante horizontale, ce
- * cycle etait un saut sur place — ses images de frappe etaient d'ailleurs
- * celles du saut, au pixel pres.
+ * Le coup va quelque part, et ca se lit sur les centres REELLEMENT
+ * dessines — pas sur `corps[0]`, qui est le bord gauche de dessins de
+ * largeurs differentes : 16,5 · 16,5 · 17,5 · 16,5 · 16,5 · 15,5 · 14,5 ·
+ * 15,5 · 15,5 · 15,5. Le maximum de recul tombe sur le sommet de
+ * l'armement, puis le torse parcourt trois colonnes d'affilee dans le sens
+ * du coup sans jamais repartir en arriere. La version precedente
+ * oscillait autour du centre avec une periode de quatre images : ce n'est
+ * pas un trajet, c'est un tremblement.
+ *
+ * L'image d'amorti apres l'impact existe parce que sans elle le retour au
+ * repos etait le plus grand intervalle du cycle — le personnage revenait
+ * plus vite qu'il ne frappait.
  */
 const ATTAQUE: Reglage[] = [
   { corps: [1, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
-  { corps: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
-  { corps: [-1, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
-  { corps: [0, -1], gauche: [-1, -3], droite: [1, -3], queue: 'basmilieu' },
+  { corps: [1, 1], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [2, -3], corpsArt: 'etire', tete: [0, 1], gauche: [1, -3], droite: [1, -3], queue: 'basse' },
+  { corps: [1, -1], gauche: [0, -3], droite: [2, -3], queue: 'basmilieu' },
   { corps: [1, 1], gauche: [0, -2], droite: [1, -2], queue: 'milieu' },
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [-1, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'basse' },
+  { corps: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [0, -1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]

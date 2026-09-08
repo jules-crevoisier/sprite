@@ -66,8 +66,11 @@ const TETE_MI_CLOS = TETE.map((l, i) =>
 
 /**
  * Tete ecrasee : une ligne de moins, et deux colonnes de plus sur les
- * joues. Un ecrasement deplace la matiere, il ne l'efface pas — l'egalite
- * des masses est verifiee par le test, pas affirmee ici.
+ * joues. Un ecrasement deplace la matiere, il ne l'efface pas — cent
+ * quarante-quatre pixels dans les deux positions, et le test l'exige au
+ * pixel pres. Il a longtemps tolere quatre pour cent, ce qui laissait la
+ * tete maigrir de deux pixels a chaque ecrasement sans que rien ne le
+ * dise.
  */
 const TETE_ECRASEE = [
   '..oo........oo..',
@@ -79,7 +82,7 @@ const TETE_ECRASEE = [
   '.oFFFFFppFFFFFo.',
   '.odFFFFFFFFFFdo.',
   '..oFFFFFFFFFFo..',
-  '...oFFFFFFFFo...',
+  '..oFFFFFFFFFFo..',
   '...odFFFFFFdo...',
   '....oooooooo....',
 ]
@@ -108,18 +111,33 @@ const CORPS = [
   'oFFFFFFFFFFo',
 ]
 
-/** Corps ecrase : une ligne de moins, deux colonnes de plus. */
+/**
+ * Corps ecrase : une ligne de moins, deux colonnes de plus, et
+ * quatre-vingt-seize pixels comme le corps normal.
+ *
+ * Un seul coin coupe par ligne extreme au lieu de deux : a deux, le corps
+ * perdait deux pixels a chaque ecrasement. Le decalage entre le coin du
+ * haut et celui du bas penche legerement la silhouette, ce qui va dans le
+ * sens de l'ecrasement.
+ */
 const CORPS_ECRASE = [
-  '.oFFFFFFFFFFo.',
+  '.oFFFFFFFFFFFo',
   'oFFFwwwwwwFFFo',
   'oFFFwwwwwwFFFo',
   'oFFFwwwwwwFFFo',
   'odFFFFFFFFFFdo',
   'odFFFFFFFFFFdo',
-  '.oFFFFFFFFFFo.',
+  'oFFFFFFFFFFFo.',
 ]
 
-/** Corps etire : une ligne de plus, et les flancs rentres. */
+/**
+ * Corps etire : une ligne de plus, les flancs rentres, et
+ * quatre-vingt-seize pixels comme le corps normal.
+ *
+ * Les deux pixels manquants ont ete rendus a l'avant-derniere ligne et pas
+ * a la taille : la queue s'accroche en haut du torse, et elargir le haut
+ * l'aurait fait disparaitre sous le corps a chaque etirement.
+ */
 const CORPS_ETIRE = [
   'oFFFFFFFFFFo',
   '.oFFwwwwFFo.',
@@ -128,7 +146,7 @@ const CORPS_ETIRE = [
   '.oFFwwwwFFo.',
   '.oFFFFFFFFo.',
   '.odFFFFFFdo.',
-  '.odFFFFFFdo.',
+  'odFFFFFFFFdo',
   'oFFFFFFFFFFo',
 ]
 

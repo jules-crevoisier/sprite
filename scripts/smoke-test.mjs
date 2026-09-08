@@ -1790,7 +1790,7 @@ check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
 /* --- mascotte et ses cycles --- */
 const mascotte = await page.evaluate(async () => {
   const { CLIPS_PIXL, corpsEcrase, debordsDePatte, decollageSansPoussee, ecartDePattes, lignesDePatteVisibles, masseDessinee, patteDecrochee, piedAuSol, semellesQuiGlissent, spritePixl } = await import('/src/ui/mascot-clips.ts')
-  const { imageDePose, TAILLE } = await import('/src/ui/mascot-anim.ts')
+  const { imageDePose, PIECES, TAILLE } = await import('/src/ui/mascot-anim.ts')
 
   /**
    * Nombre de morceaux separes dans une image. Au-dela d'un, quelque chose
@@ -1937,6 +1937,20 @@ const mascotte = await page.evaluate(async () => {
       `${clip.id} ${(saut * 100).toFixed(1)}% (${(ecart * 100).toFixed(1)}% sur le cycle)`)
   }
 
+  // Un ecrasement deplace la matiere, il ne l'efface pas. C'etait ecrit
+  // dans le code et ce n'etait verifie nulle part : les variantes ecrasees
+  // pesaient deux pixels de moins que les normales, et la tolerance de
+  // quatre pour cent laissait passer.
+  const masseDArt = (art) => art.join('').split('').filter((c) => c !== '.').length
+  const familles = {
+    tetes: ['TETE', 'TETE_CLIN', 'TETE_MI_CLOS', 'TETE_ECRASEE', 'TETE_ECRASEE_CLIN'],
+    corps: ['CORPS', 'CORPS_ECRASE', 'CORPS_ETIRE'],
+  }
+  bilan.variantes = Object.entries(familles).map(([nom, cles]) => {
+    const masses = cles.map((c) => masseDArt(PIECES[c]))
+    return { nom, masses, egales: new Set(masses).size === 1 }
+  })
+
   const sprite = spritePixl()
   bilan.tags = sprite.tags.length
   bilan.frames = sprite.frameCount
@@ -1954,7 +1968,12 @@ check('aucune patte ne deborde du torse', mascotte.debords === 0, `${mascotte.de
 check('rien ne sort du cadre', mascotte.horsCadre.length === 0, mascotte.horsCadre.join(', '))
 // Deux mesures differentes, et il faut les deux : la premiere dit que le
 // personnage garde sa matiere, la seconde combien il s'en cache lui-meme.
-check('la matiere posee ne varie pas', mascotte.masseDessineeMax < 0.04,
+check('les variantes d\'une piece pesent le meme poids',
+  mascotte.variantes.every((v) => v.egales),
+  mascotte.variantes.map((v) => `${v.nom} ${v.masses.join('/')}`).join(' · '))
+// Ce qui reste vient des cinq dessins de queue, qui ne sont pas des
+// variantes d'une meme forme mais cinq positions differentes.
+check('la matiere posee ne varie pas', mascotte.masseDessineeMax < 0.02,
   `${(mascotte.masseDessineeMax * 100).toFixed(1)}% au pire`)
 // La matiere posee est verifiee juste au-dessus et ne bouge pas. Ce qui
 // reste ici est de l'occlusion : le personnage se cache lui-meme. Ce n'est
@@ -1991,7 +2010,7 @@ check('aucune patte n\'est avalee par le torse', mascotte.pattesAvalees.length =
 /* La mascotte armee                                                  */
 /* ---------------------------------------------------------------- */
 const armee = await page.evaluate(async () => {
-  const { ARMES, POSITIONS_ARME, clipsArmes, imageDePoseArmee, masseDArme } =
+  const { ARMES, POSITIONS_ARME, armeSeule, clipsArmes, imageDePoseArmee, masseDArme } =
     await import('/src/ui/mascot-armes.ts')
   const { CLIPS_PIXL } = await import('/src/ui/mascot-clips.ts')
   const { TAILLE, imageDePose } = await import('/src/ui/mascot-anim.ts')
@@ -2051,14 +2070,14 @@ const armee = await page.evaluate(async () => {
         // cotes, une arme pourrait un jour coller la colonne zero alors que
         // le personnage ne le peut pas.
         if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1} (${x0},${y0},${x1})`)
-        // L'arme passe derriere le personnage. Si le corps la recouvre
-        // entierement, elle a disparu sans que rien ne le signale : on
-        // compte donc les pixels que l'image armee ajoute a l'image nue.
-        const nu = imageDePose(clip.images[i].pose)
+        // Si le corps la recouvre entierement, l'arme a disparu sans que
+        // rien ne le signale. La mesure ne peut pas etre une soustraction
+        // « image armee moins image nue » : des que l'arme passe devant,
+        // elle remplace des pixels au lieu d'en ajouter, et la
+        // soustraction compte zero la ou l'arme se voit le mieux.
+        const seule = armeSeule(clip.images[i].pose, arme, clip.images[i].position)
         let visibles = 0
-        for (let k = 0; k < bm.u32.length; k++) {
-          if ((bm.u32[k] >>> 24) && !(nu.u32[k] >>> 24)) visibles++
-        }
+        for (let k = 0; k < seule.u32.length; k++) if (seule.u32[k] >>> 24) visibles++
         if (visibles < 6) bilan.armeInvisible.push(`${clip.id}#${i + 1} (${visibles} px)`)
         bilan.visibleMin = Math.min(bilan.visibleMin, visibles)
       })
@@ -2084,7 +2103,7 @@ check('aucune image armee n\'en repete une autre', armee.jumelles.length === 0,
 check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0) && armee.armesInegales.length === 0,
   armee.armesInegales.join(', ')
     || `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions, dessin abattu compris`)
-check('l\'arme reste visible derriere le personnage', armee.armeInvisible.length === 0,
+check('l\'arme ne disparait jamais sous le personnage', armee.armeInvisible.length === 0,
   armee.armeInvisible.join(', ') || `${armee.visibleMin} px visibles au minimum`)
 
 /* --- Pixl dans l'application --- */

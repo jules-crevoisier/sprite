@@ -196,14 +196,20 @@ export const POSITIONS_ARME = {
   // ne ballotte jamais.
   retard: [0, -1],
   retardBas: [0, 1],
-  levee: [-1, -3],
-  haute: [0, -6],
+  // Le retard vaut UNE IMAGE, pas une compensation. A un seul pixel, il
+  // annulait exactement le pas du corps : l'arme restait clouee a la meme
+  // altitude sur les huit images de la marche pendant que le personnage
+  // tressautait dessous. C'est l'objet qui doit trainer le plus qui ne
+  // bougeait pas du tout.
+  retardHaut: [0, 2],
+  haute: [2, -6],
   // Le contre-mouvement : l'arme descend avant de monter. L'accroupissement
   // seul ne la deplacait pas d'un pixel, parce que le corps descendait de
   // trois et que `levee` remontait de trois — les deux s'annulaient
   // exactement, et la preparation ne se voyait pas.
   contre: [-1, 2],
-  frappe: [1, 4],
+  // L'amorti : l'arme continue vers le bas apres l'impact.
+  retombee: [0, 3],
   // La seule position qui change de dessin : l'arme abattue, tranchant ou
   // masse vers l'exterieur. Verticale, la lame pointait vers le ciel
   // pendant tout le coup — ca ne se lit pas comme un coup porte.
@@ -213,6 +219,18 @@ export const POSITIONS_ARME = {
 
 /** Les positions qui utilisent le dessin pivote. */
 const ABATTUES = new Set<string>(['abattue'])
+
+/**
+ * Les positions ou l'arme passe DEVANT le personnage.
+ *
+ * La regle generale est l'inverse : devant, une lame couperait le visage.
+ * Mais au-dessus des epaules elle ne peut rien couper, et derriere elle
+ * n'a qu'une colonne de couloir visible a droite d'une tete large de
+ * quatorze pixels — mesure : dix-huit pixels visibles a l'aplomb, sept a
+ * un pixel de decalage, quatre a deux, un a trois. Aucun arc n'est
+ * possible dans un couloir d'une colonne.
+ */
+const DEVANT = new Set<string>(['haute'])
 
 export type PositionArme = keyof typeof POSITIONS_ARME
 
@@ -251,10 +269,25 @@ export function coinDeLArme(p: Pose, arme: Arme, position: PositionArme): [numbe
 }
 
 /**
- * Compose une pose armee. L'arme est peinte d'abord, le personnage
- * par-dessus : devant, la lame couperait le visage.
+ * Les seuls pixels d'arme qui se voient dans l'image finale.
+ *
+ * Deriver ca d'une soustraction « image armee moins image nue » serait
+ * faux des que l'arme passe devant : elle remplace alors des pixels du
+ * personnage au lieu d'en ajouter, et la soustraction compte zero la ou
+ * l'arme se voit le mieux.
  */
-export function imageDePoseArmee(p: Pose, arme: Arme, position: PositionArme): Bitmap {
+export function armeSeule(p: Pose, arme: Arme, position: PositionArme): Bitmap {
+  const brut = dessinDeLArmeSeul(p, arme, position)
+  if (DEVANT.has(position)) return brut
+  const perso = imageDePose(p)
+  for (let i = 0; i < brut.u32.length; i++) {
+    if (perso.u32[i] >>> 24) brut.u32[i] = 0
+  }
+  return brut
+}
+
+/** L'arme peinte seule, sans tenir compte du personnage. */
+function dessinDeLArmeSeul(p: Pose, arme: Arme, position: PositionArme): Bitmap {
   const bm = new Bitmap(TAILLE, TAILLE)
   const [ox, oy] = coinDeLArme(p, arme, position)
   const [art] = dessinDeLArme(arme, position)
@@ -270,9 +303,20 @@ export function imageDePoseArmee(p: Pose, arme: Arme, position: PositionArme): B
       bm.set(px, py, fromHex(hex))
     }
   }
+  return bm
+}
+
+/**
+ * Compose une pose armee. L'arme passe derriere le personnage, sauf
+ * au-dessus des epaules ou elle ne peut rien couper.
+ */
+export function imageDePoseArmee(p: Pose, arme: Arme, position: PositionArme): Bitmap {
+  const bm = new Bitmap(TAILLE, TAILLE)
   const perso = imageDePose(p)
-  for (let i = 0; i < perso.u32.length; i++) {
-    if (perso.u32[i] >>> 24) bm.u32[i] = perso.u32[i]
+  const seule = armeSeule(p, arme, position)
+  for (let i = 0; i < perso.u32.length; i++) bm.u32[i] = perso.u32[i]
+  for (let i = 0; i < seule.u32.length; i++) {
+    if (seule.u32[i] >>> 24) bm.u32[i] = seule.u32[i]
   }
   return bm
 }
@@ -307,7 +351,7 @@ export interface ClipArme {
  */
 const COUP: PositionArme[] = [
   'contre', 'haute', 'haute', 'haute', 'portee',
-  'abattue', 'abattue', 'rebond', 'portee',
+  'abattue', 'abattue', 'retombee', 'rebond', 'portee',
 ]
 
 /**
@@ -319,7 +363,7 @@ const COUP: PositionArme[] = [
  */
 const BALLANT: Record<string, PositionArme[]> = {
   repos: ['portee', 'retard', 'portee', 'portee', 'portee', 'retardBas', 'portee', 'portee'],
-  marche: ['portee', 'retard', 'retardBas', 'portee', 'portee', 'retard', 'retardBas', 'portee'],
+  marche: ['portee', 'retard', 'retardHaut', 'retard', 'portee', 'retard', 'retardHaut', 'retard'],
 }
 
 /**
@@ -387,8 +431,8 @@ export function spritePixlArme(base: { id: string; nom: string; ms: number; loop
   sprite.name = 'pixl-arme'
   sprite.pivot = { x: 0.5, y: 1 }
   sprite.frameDurations = []
-  const fond = new Layer('Arme', 0)
-  const dessus = new Layer('Pixl', 0)
+  const fond = new Layer('Pixl', 0)
+  const dessus = new Layer('Arme', 0)
   fond.cels = []
   dessus.cels = []
   sprite.tags = []
@@ -396,17 +440,12 @@ export function spritePixlArme(base: { id: string; nom: string; ms: number; loop
   for (const { arme, clip } of clips) {
     const debut = index
     for (const img of clip.images) {
-      // Le calque d'arme ne contient que l'arme : on retire du composite
-      // les pixels du personnage, sans quoi les deux calques se
-      // dupliqueraient et changer d'arme ne servirait a rien.
-      const complet = imageDePoseArmee(img.pose, arme, img.position)
-      const perso = imageDePose(img.pose)
-      const seule = new Bitmap(TAILLE, TAILLE)
-      for (let i = 0; i < complet.u32.length; i++) {
-        if ((complet.u32[i] >>> 24) && !(perso.u32[i] >>> 24)) seule.u32[i] = complet.u32[i]
-      }
-      fond.cels.push({ bitmap: seule, opacity: 255 })
-      dessus.cels.push({ bitmap: perso, opacity: 255 })
+      // Le calque d'arme ne porte que les pixels d'arme qui se voient, et
+      // il passe AU-DESSUS : c'est le seul ordre qui rende les deux cas —
+      // l'arme derriere le corps et l'arme au-dessus des epaules — avec un
+      // ordre de calques fixe.
+      fond.cels.push({ bitmap: imageDePose(img.pose), opacity: 255 })
+      dessus.cels.push({ bitmap: armeSeule(img.pose, arme, img.position), opacity: 255 })
       sprite.frameDurations.push(clip.ms)
       index++
     }
