@@ -357,8 +357,12 @@ export function buildCommands(app: App): Command[] {
   /* ---------------- Animation ---------------- */
 
   add({
-    id: 'frame.new', label: 'Nouvelle frame', group: 'Animation', keys: 'Alt+N', icon: 'plus',
+    id: 'frame.new', label: 'Nouvelle frame (reprend le dessin)', group: 'Animation', keys: 'Alt+N', icon: 'plus',
     run: () => app.timeline.addFrame(),
+  })
+  add({
+    id: 'frame.new-empty', label: 'Nouvelle frame vide', group: 'Animation', keys: 'Alt+Maj+N', icon: 'frame-empty',
+    run: () => app.timeline.addEmptyFrame(),
   })
   add({
     id: 'frame.duplicate', label: 'Dupliquer la frame', group: 'Animation', keys: 'Ctrl+Alt+N', icon: 'duplicate',

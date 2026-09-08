@@ -139,6 +139,13 @@ function pick(ed: Editor, p: PointerInfo): void {
     : compositeFrame(ed.sprite, ed.activeFrame)
   if (!src) return
   const c = src.get(p.px, p.py)
+  // Prelever du vide donnerait une couleur totalement transparente : les
+  // outils continueraient de fonctionner mais ne poseraient plus rien de
+  // visible. On ignore le prelevement plutot que de pieger l'utilisateur.
+  if (getA(c) === 0) {
+    ed.toast('Zone transparente : couleur inchangee')
+    return
+  }
   if (p.button === 2) ed.setSecondary(c)
   else ed.setPrimary(c)
 }

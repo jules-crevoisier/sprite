@@ -45,7 +45,7 @@ const MENUS: { label: string; items: string[] }[] = [
   {
     label: 'Animation',
     items: [
-      'frame.new', 'frame.duplicate', 'frame.delete', '---',
+      'frame.new', 'frame.new-empty', 'frame.duplicate', 'frame.delete', '---',
       'frame.prev', 'frame.next', 'frame.first', 'frame.last', '---',
       'frame.play', 'frame.onion', '---',
       'frame.tag', 'frame.propagate',

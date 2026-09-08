@@ -25,11 +25,16 @@ export class TimelinePanel {
   /** Hauteur fixee a la souris ; null = ajustement automatique. */
   private manualHeight: number | null = null
 
-  constructor(editor: Editor, playback: Playback) {
+  constructor(editor: Editor, playback: Playback, container: HTMLElement) {
     this.ed = editor
     this.playback = playback
+    this.container = container
     this.scroll.appendChild(this.grid)
-    this.root = el('div', { style: { display: 'contents' } }, this.makeResizer(), this.toolbar, this.scroll)
+    // Les enfants vont directement dans le conteneur : un wrapper en
+    // display:contents ne peut pas recevoir de hauteur.
+    clear(container)
+    container.append(this.makeResizer(), this.toolbar, this.scroll)
+    this.root = container
 
     editor.events.on('doc', () => this.render())
     editor.events.on('cursor', () => this.renderSelectionOnly())
@@ -70,7 +75,6 @@ export class TimelinePanel {
 
   /** Ajuste la hauteur du panneau au nombre de calques, sans exceder 45% de l'ecran. */
   private syncHeight(): void {
-    this.container ??= this.toolbar.parentElement as HTMLElement | null
     if (!this.container) return
     const needed = 5 + 36 + 26 + 20 + this.ed.sprite.layers.length * 30 + 14
     const height = this.manualHeight ?? Math.min(window.innerHeight * 0.45, needed)
@@ -116,8 +120,8 @@ export class TimelinePanel {
         this.renderToolbar()
       }, { className: `sm icon-only ${ed.playTagOnly ? 'active' : 'ghost'}` }),
       el('div', { class: 'opt-sep' }),
-      iconButton(icon('plus', 15), 'Nouvelle frame (Alt+N)', () => this.addFrame(), { className: 'ghost sm icon-only' }),
-      iconButton(icon('duplicate', 15), 'Dupliquer la frame (Ctrl+Alt+N)', () => this.duplicateFrame(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('plus', 15), 'Nouvelle frame — reprend le dessin actuel (Alt+N)', () => this.addFrame(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('frame-empty', 15), 'Nouvelle frame vide (Alt+Maj+N)', () => this.addEmptyFrame(), { className: 'ghost sm icon-only' }),
       iconButton(icon('trash', 15), 'Supprimer la frame', () => this.deleteFrame(), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
     )
@@ -267,10 +271,22 @@ export class TimelinePanel {
   /* Actions                                                           */
   /* ---------------------------------------------------------------- */
 
+  /**
+   * Nouvelle frame reprenant le contenu de la frame courante. C'est le
+   * comportement attendu pour animer : on repart du dessin precedent et on
+   * le modifie. Une frame reellement vide passe par `addEmptyFrame`.
+   */
   addFrame(): void {
     const ed = this.ed
     const at = ed.activeFrame + 1
-    ed.run('Nouvelle frame', () => { ed.sprite.addFrame(at) })
+    ed.run('Nouvelle frame', () => { ed.sprite.duplicateFrame(ed.activeFrame, at) })
+    ed.setActiveFrame(at)
+  }
+
+  addEmptyFrame(): void {
+    const ed = this.ed
+    const at = ed.activeFrame + 1
+    ed.run('Nouvelle frame vide', () => { ed.sprite.addFrame(at) })
     ed.setActiveFrame(at)
   }
 
@@ -310,7 +326,8 @@ export class TimelinePanel {
   private frameMenu(e: MouseEvent): void {
     const ed = this.ed
     openMenu(e.currentTarget as HTMLElement, [
-      { label: 'Inserer une frame', icon: 'plus', onClick: () => this.addFrame() },
+      { label: 'Nouvelle frame (copie du dessin)', icon: 'plus', onClick: () => this.addFrame() },
+      { label: 'Nouvelle frame vide', icon: 'frame-empty', onClick: () => this.addEmptyFrame() },
       { label: 'Dupliquer', icon: 'duplicate', onClick: () => this.duplicateFrame() },
       { label: 'Supprimer', icon: 'trash', onClick: () => this.deleteFrame() },
       { separator: true },

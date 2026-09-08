@@ -49,6 +49,7 @@ const BINDINGS: Record<string, string> = {
   pagedown: 'layer.down',
 
   'alt+n': 'frame.new',
+  'alt+shift+n': 'frame.new-empty',
   'ctrl+alt+n': 'frame.duplicate',
   '.': 'frame.next',
   ',': 'frame.prev',

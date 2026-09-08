@@ -1,4 +1,5 @@
 import { Editor, type ToolId } from '../core/editor'
+import { getA, withAlpha } from '../core/color'
 import { Sprite } from '../core/document'
 import { Palette } from '../core/palette'
 import { Viewport } from '../render/viewport'
@@ -51,7 +52,7 @@ export class App {
     this.colorPanel = new ColorPanel(this.ed)
     this.layersPanel = new LayersPanel(this.ed)
     this.preview = new PreviewPanel(this.ed)
-    this.timeline = new TimelinePanel(this.ed, this.playback)
+    this.timeline = new TimelinePanel(this.ed, this.playback, qs('#timeline'))
 
     this.commands = buildCommands(this)
     this.commandMap = new Map(this.commands.map((c) => [c.id, c]))
@@ -77,10 +78,6 @@ export class App {
       this.colorPanel.root,
     )
 
-    const timeline = qs('#timeline')
-    clear(timeline)
-    timeline.appendChild(this.timeline.root)
-
     this.renderTop()
     this.renderTools()
     this.renderOptions()
@@ -104,6 +101,16 @@ export class App {
     }
     if (this.ed.onion.enabled) hud.appendChild(el('span', { class: 'chip' }, 'pelure d\'oignon'))
     if (this.ed.layer?.locked) hud.appendChild(el('span', { class: 'chip', style: { color: 'var(--warn)' } }, 'calque verrouille'))
+    // Filet de securite : une couleur totalement transparente donne
+    // l'impression que les outils ne repondent plus.
+    if (getA(this.ed.primary) === 0 && toolById(this.ed.settings.tool).group === 'draw') {
+      hud.appendChild(el('span', {
+        class: 'chip',
+        style: { color: 'var(--warn)', cursor: 'pointer' },
+        title: 'Cliquer pour reprendre une couleur opaque',
+        onclick: () => this.ed.setPrimary(withAlpha(this.ed.primary, 255)),
+      }, 'couleur transparente'))
+    }
   }
 
   private wire(): void {
