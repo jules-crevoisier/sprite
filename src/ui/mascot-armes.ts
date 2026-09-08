@@ -93,20 +93,25 @@ function armer(a: Omit<Arme, 'abattue' | 'priseAbattue'>): Arme {
 /**
  * Epee. La lame double la hauteur de la silhouette : c'est elle qui donne
  * la direction du coup, une image avant que le corps ne suive.
+ *
+ * Deux colonnes, une claire et une sombre. A une seule colonne, la lame
+ * n'etait qu'un trait : en aplat, l'epee et le baton ne se distinguaient
+ * que par trois pixels de pointe, et une arme qu'on ne reconnait pas a sa
+ * silhouette ne sert a rien dans un jeu.
  */
 const EPEE = [
-  '..b..',
-  '..b..',
-  '..b..',
-  '..b..',
-  '..b..',
-  '..b..',
-  '..b..',
-  '..b..',
-  '.AAA.',
-  '..cPP',
-  '..cPP',
-  '..C..',
+  '..b...',
+  '..bA..',
+  '..bA..',
+  '..bA..',
+  '..bA..',
+  '..bA..',
+  '..bA..',
+  '..bA..',
+  '.AAAA.',
+  '...cPP',
+  '...cPP',
+  '...C..',
 ]
 
 /**
@@ -159,7 +164,7 @@ export const ARMES: Arme[] = [
     nom: 'Epee',
     pitch: 'La lame double la hauteur de la silhouette et donne la direction du coup avant le corps.',
     art: EPEE,
-    prise: [2, 9],
+    prise: [3, 9],
   }),
   armer({
     id: 'marteau',
@@ -202,7 +207,7 @@ export const POSITIONS_ARME = {
   // La seule position qui change de dessin : l'arme abattue, tranchant ou
   // masse vers l'exterieur. Verticale, la lame pointait vers le ciel
   // pendant tout le coup — ca ne se lit pas comme un coup porte.
-  abattue: [5, 4],
+  abattue: [6, 4],
   rebond: [0, -1],
 } as const
 
