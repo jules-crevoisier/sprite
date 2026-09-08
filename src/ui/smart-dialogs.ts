@@ -15,6 +15,7 @@ import {
   DEFAULT_RECIPE, DEFAULT_SHADE, antiAlias, autoShade, buildRamp,
 } from '../smart/shading'
 import { el, checkbox, numberInput, select, slider } from './dom'
+import { zoomablePreview } from './preview-zoom'
 import { icon } from './icons'
 import { openModal, showToast } from './overlay'
 
@@ -279,7 +280,8 @@ export function detailDialog(ed: Editor): void {
   let onlySelection = ed.selection.active
   let passes = 0
 
-  const preview = el('div', { class: 'export-preview', style: { minHeight: '150px' } })
+  const apercu = zoomablePreview({ hauteur: 200 })
+  const preview = apercu.node
   const info = el('p', { class: 'form-note' })
 
   const apply = () => {
@@ -292,7 +294,7 @@ export function detailDialog(ed: Editor): void {
       ? applyPreset(target.bitmap, index, presetId, seed, intensity, within)
       : addDetail(target.bitmap, index, { mode, density, strength: 1, seed, within })
     ed.events.emit('doc', undefined)
-    preview.replaceChildren(thumb(target.bitmap, 190))
+    apercu.show(target.bitmap)
     info.textContent = touched
       ? `${touched} pixels modifies · ${passes} passe(s) deja figee(s) · graine ${seed}`
       : 'Aucun pixel touche : baissez la selection ou augmentez la densite.'
@@ -403,7 +405,8 @@ export function shadeDialog(ed: Editor): void {
   let lissage = 0
   let poses = 0
 
-  const preview = el('div', { class: 'export-preview', style: { minHeight: '150px' } })
+  const apercu = zoomablePreview({ hauteur: 200 })
+  const preview = apercu.node
   const info = el('p', { class: 'form-note' })
   const boussole = el('div', { class: 'light-dial', title: 'Direction de la lumiere' },
     el('i'), el('b'))
@@ -423,7 +426,7 @@ export function shadeDialog(ed: Editor): void {
     const bilan = autoShade(target.bitmap, ramps, options)
     const lisses = lissage > 0 ? antiAlias(target.bitmap, ramps, lissage) : 0
     ed.events.emit('doc', undefined)
-    preview.replaceChildren(thumb(target.bitmap, 190))
+    apercu.show(target.bitmap)
     info.textContent = bilan.changed || lisses
       ? `${bilan.changed} pixels ombres sur ${bilan.ramps} matiere(s)`
         + (lisses ? `, ${lisses} coins adoucis` : '')

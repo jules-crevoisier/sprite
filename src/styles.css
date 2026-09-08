@@ -1103,3 +1103,29 @@ input[type="range"]::-moz-range-thumb {
 .fx-color::-webkit-color-swatch-wrapper { padding: 2px; }
 .fx-color::-webkit-color-swatch { border: none; border-radius: 2px; }
 .fx-hint { font-size: 10.5px; line-height: 1.4; color: var(--text-faint); margin: 5px 0 0; }
+
+/* ------------------------------------------------------------------ */
+/* Apercus zoomables des boites de dialogue                            */
+/* ------------------------------------------------------------------ */
+
+.apercu-bloc { display: flex; flex-direction: column; gap: 6px; }
+.apercu-zoom {
+  position: relative; overflow: hidden; cursor: grab;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background-color: var(--bg-0);
+  background-image:
+    linear-gradient(45deg, #ffffff0a 25%, transparent 25%), linear-gradient(-45deg, #ffffff0a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ffffff0a 75%), linear-gradient(-45deg, transparent 75%, #ffffff0a 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  touch-action: none;
+}
+.apercu-zoom.tire { cursor: grabbing; }
+.apercu-scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.apercu-scene canvas { display: block; image-rendering: pixelated; }
+.apercu-barre { display: flex; align-items: center; gap: 4px; }
+.apercu-zoom-valeur {
+  min-width: 40px; text-align: center; font-family: var(--mono, monospace);
+  font-size: 11.5px; color: var(--text-faint);
+}
+.apercu-aide { margin-left: auto; font-size: 11px; color: var(--text-faint); }

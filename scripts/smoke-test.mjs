@@ -1704,6 +1704,38 @@ const molette = await page.evaluate(async () => {
 check('Alt sur la molette change la taille', molette.alt === 4 && molette.zoomFige, `+${molette.alt} px`)
 check('le pincement du pave tactile zoome toujours', molette.pincement && molette.tailleFigee)
 
+/* --- zoomables zoomables des dialogues --- */
+const zoomables = []
+for (const [cmd, nom] of [['sprite.shade', 'ombrage'], ['sprite.detail', 'detail'], ['file.export', 'export']]) {
+  await page.evaluate((c) => window.pixelforge.runCommand(c), cmd)
+  await sleep(500)
+  const cadre = await page.locator('.apercu-zoom').first().boundingBox().catch(() => null)
+  if (!cadre) { zoomables.push({ nom, zoomable: false }); await page.keyboard.press('Escape'); await sleep(300); continue }
+  const valeur = () => page.evaluate(() => document.querySelector('.apercu-zoom-valeur')?.textContent ?? '')
+  const pose = () => page.evaluate(() => document.querySelector('.apercu-scene')?.style.transform ?? '')
+  const depart = await valeur()
+  const cx = cadre.x + cadre.width / 2, cy = cadre.y + cadre.height / 2
+  await page.mouse.move(cx, cy)
+  for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, -100); await sleep(50) }
+  const zoome = await valeur()
+  const avantGlisser = await pose()
+  await page.mouse.down()
+  await page.mouse.move(cx + 60, cy + 25)
+  await page.mouse.up()
+  await sleep(120)
+  const apresGlisser = await pose()
+  await page.mouse.dblclick(cx, cy)
+  await sleep(150)
+  const ajuste = await valeur()
+  zoomables.push({ nom, zoomable: true, zoom: depart !== zoome, deplace: avantGlisser !== apresGlisser, ajuste: ajuste !== zoome })
+  await page.keyboard.press('Escape')
+  await sleep(300)
+}
+check('les apercus des dialogues se zooment', zoomables.every((a) => a.zoomable && a.zoom),
+  zoomables.map((a) => `${a.nom}:${a.zoomable ? (a.zoom ? 'ok' : 'fige') : 'absent'}`).join(' '))
+check('les apercus se deplacent en les tirant', zoomables.every((a) => a.deplace))
+check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

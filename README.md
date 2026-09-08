@@ -306,6 +306,7 @@ courante est restaurée au chargement suivant.
 |---|---|
 | Outils | `B` crayon · `E` gomme · `G` pot · `I` pipette · `L` ligne · `U` rectangle · `Maj+U` ellipse · `Q` contour · `R` dégradé · `D` ombrage · `M` sélection · `W` baguette · `V` déplacer · `Z` loupe |
 | Pinceau | `[` `]` taille · **Alt + molette** sur la toile · le curseur de la barre d'options se tire jusqu'au bout |
+| Aperçus des dialogues | molette : zoom · glisser : déplacer · double-clic : ajuster |
 | Souris | clic droit = couleur secondaire · `Alt`+clic = pipette · `Espace`+glisser = déplacer la vue · molette = zoom |
 | Pendant un tracé | `Maj` contraint à 45° · `Alt` dessine depuis le centre |
 | Sélection | `Maj` ajoute · `Alt` soustrait · `Ctrl` intersecte · flèches déplacent les pixels |
