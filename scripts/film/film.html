@@ -187,6 +187,23 @@ for (const c of meta.clips) {
     CLIPS[c.id].images.push(`assets/sprite/${c.id}-${String(i).padStart(2, '0')}.png`)
   }
 }
+/**
+ * La mascotte : six cycles poses image par image. Le chapitre du rig montre
+ * ce que la machine deforme toute seule ; celui-ci montre l'autre moitie du
+ * logiciel. Si les images manquent, le chapitre ne s'inscrit pas.
+ */
+const MASCOTTE = {}
+try {
+  const metaM = await (await fetch('assets/mascotte.json')).json()
+  for (const c of metaM.clips) {
+    MASCOTTE[c.id] = { ...c, taille: metaM.taille, images: [] }
+    for (let i = 0; i < c.frames; i++) {
+      MASCOTTE[c.id].images.push(`assets/mascotte/${c.id}-${String(i).padStart(2, '0')}.png`)
+    }
+  }
+  for (const c of Object.values(MASCOTTE)) await Promise.all(c.images.map(charger))
+} catch { /* captures absentes : le chapitre se retire */ }
+
 const UI = {}
 for (const nom of ['app-dessin', 'app-squelette', 'outils', 'options', 'calques', 'couleurs', 'timeline', 'rampe', 'ombrage', 'panneau-os']) {
   try { UI[nom] = await charger(`assets/ui/${nom}.png`) } catch { /* capture absente */ }
@@ -251,6 +268,41 @@ function lecteur(parent, id, haut, opts = {}) {
       const duree = (clip.ms / 1000) / vitesse
       const n = clip.frames
       let k = Math.floor((t / duree) + decalage)
+      k = clip.loop ? ((k % n) + n) % n : clamp(k, 0, n - 1)
+      imgs.forEach((im, i) => { im.style.opacity = i === k ? 1 : 0 })
+      return k
+    },
+  }
+}
+
+/**
+ * Une boite de mascotte dont left/top designent les PIEDS, pas le centre.
+ * Le sol est la derniere ligne de la toile : ancrer par le bas fait que six
+ * cycles differents se posent exactement sur la meme ligne d'horizon.
+ */
+function boiteMascotte(parent, haut) {
+  const hote = el('', parent)
+  hote.style.cssText = `position:absolute;width:${px(haut)};height:${px(haut)};`
+    + `margin-left:${px(-haut / 2)};margin-top:${px(-haut)};transform-origin:50% 100%;`
+  return hote
+}
+
+/** Meme principe que lecteur(), pour un cycle pose a la main. */
+function lecteurMascotte(parent, id, haut) {
+  const clip = MASCOTTE[id]
+  const boite = boiteMascotte(parent, haut)
+  const imgs = clip.images.map((src) => {
+    const i = el('sprite', boite, 'img')
+    i.src = src
+    i.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    return i
+  })
+  return {
+    boite,
+    a(t) {
+      const duree = clip.ms / 1000
+      const n = clip.frames
+      let k = Math.floor(t / duree)
       k = clip.loop ? ((k % n) + n) % n : clamp(k, 0, n - 1)
       imgs.forEach((im, i) => { im.style.opacity = i === k ? 1 : 0 })
       return k
@@ -1099,10 +1151,116 @@ scene(56.6, 72.4, (root) => {
 })
 
 /* ------------------------------------------------------------------ */
-/* 06 · Export                                                         */
+/* 06 · La mascotte                                                    */
 /* ------------------------------------------------------------------ */
-scene(72.2, 82.9, (root) => {
-  const tete = chapitre(root, '05', 'EXPORT', 'au format du moteur')
+if (Object.keys(MASCOTTE).length) scene(72.2, 83.4, (root) => {
+  const tete = chapitre(root, '05', 'MASCOTTE', 'six cycles, une seule ligne de sol')
+
+  const IDS = ['repos', 'marche', 'course', 'saut', 'attaque', 'degats']
+    .filter((i) => MASCOTTE[i])
+  const HERO = IDS.indexOf('marche') >= 0 ? IDS.indexOf('marche') : 0
+
+  // Une seule ligne d'horizon traverse tout le cadre. C'est elle qui rend la
+  // demonstration verifiable a l'oeil : six cycles differents, aucun qui
+  // flotte ni qui s'enfonce.
+  const SOL_Y = 706, X0 = 690, X1 = 1880
+  const PAS = (X1 - X0) / IDS.length
+  const centre = (i) => X0 + PAS / 2 + i * PAS
+  const HAUT = 244, HAUT_HERO = 486
+
+  const ligne = el('', root)
+  ligne.style.cssText = `position:absolute;left:${X0}px;top:${SOL_Y}px;width:${X1 - X0}px;`
+    + 'height:2px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.30) 12%,'
+    + 'rgba(255,255,255,0.30) 88%,transparent);transform-origin:50% 50%;'
+
+  const tuiles = IDS.map((id, i) => {
+    const hote = el('', root)
+    hote.style.cssText = `position:absolute;left:${round(centre(i))}px;top:${SOL_Y}px;`
+    const lec = lecteurMascotte(hote, id, HAUT)
+    lec.boite.style.left = '0'; lec.boite.style.top = '0'
+
+    const nom = el('kicker', root)
+    nom.style.cssText = `position:absolute;left:${round(centre(i))}px;top:${SOL_Y + 26}px;`
+      + 'transform:translateX(-50%);font-size:14px;color:#c4c9dc;white-space:nowrap;'
+    nom.textContent = MASCOTTE[id].nom
+    const compte = el('', root)
+    compte.style.cssText = `position:absolute;left:${round(centre(i))}px;top:${SOL_Y + 50}px;`
+      + 'transform:translateX(-50%);font-family:Mono,monospace;font-size:15px;color:#6f7490;'
+      + 'white-space:nowrap;'
+    compte.textContent = `${MASCOTTE[id].frames}f · ${MASCOTTE[id].ms}ms`
+
+    return { hote, lec, nom, compte, id }
+  })
+
+  const puces = [
+    ['Le raccord de boucle est verifie', '#2ee6a8'],
+    ['La masse ne change pas d\u2019une image \u00e0 l\u2019autre', '#5b6cff'],
+    ['Aucune semelle ne patine au sol', '#ff4d8d'],
+  ].map(([t, c], i) => puce(root, t, c, 138, 452 + i * 84))
+
+  const total = IDS.reduce((n, id) => n + MASCOTTE[id].frames, 0)
+  const taille = MASCOTTE[IDS[0]].taille
+  const plaque = el('', root)
+  plaque.style.cssText = 'position:absolute;left:690px;top:846px;font-family:Mono,monospace;'
+    + 'font-size:24px;letter-spacing:0.12em;color:#8b90ab;'
+  plaque.textContent = `${IDS.length} CYCLES · ${total} IMAGES · ${taille} \u00d7 ${taille}`
+
+  return (l) => {
+    tete(l)
+
+    const pl = E.expo(seg(l, 0.35, 1.6))
+    ligne.style.opacity = round(fenetre(l, 0.3, 10.6, 0.5, 0.5))
+    ligne.style.transform = `scaleX(${round(pl)})`
+
+    // Le heros marche seul, en grand, puis rejoint sa place dans la file.
+    const rejoint = E.expoInOut(seg(l, 4.4, 5.6))
+
+    tuiles.forEach((t, i) => {
+      const clip = MASCOTTE[t.id]
+      // Les cycles a jouer une fois se rejouent apres une pause : sur une
+      // ligne ou tout bouge, une image figee passe pour un bug.
+      const cycle = clip.loop ? l : l % (clip.frames * clip.ms / 1000 + 0.85)
+      t.lec.a(cycle)
+
+      const seul = i === HERO
+      const apparait = seul
+        ? fenetre(l, 0.55, 10.5, 0.7, 0.4)
+        : fenetre(l, 5.0 + Math.abs(i - HERO) * 0.17, 10.5, 0.6, 0.4)
+      t.hote.style.opacity = round(apparait)
+      t.nom.style.opacity = round(seul ? rejoint * apparait : apparait)
+      t.compte.style.opacity = round(seul ? rejoint * apparait : apparait)
+
+      if (seul) {
+        const dx = mix(1284 - centre(HERO), 0, rejoint)
+        const ech = mix(HAUT_HERO / HAUT, 1, rejoint)
+        t.lec.boite.style.transform = `translate3d(${round(dx)}px,0,0) scale(${round(ech)})`
+      } else {
+        const ee = E.souple(seg(l, 5.0 + Math.abs(i - HERO) * 0.17, 5.9 + Math.abs(i - HERO) * 0.17))
+        t.lec.boite.style.transform = `translate3d(0,${round((1 - ee) * 26)}px,0) scale(${round(mix(0.82, 1, ee))})`
+      }
+    })
+
+    puces.forEach((p, i) => {
+      const d = 1.1 + i * 0.18
+      const vv = fenetre(l, d, 10.5, 0.55, 0.35)
+      const ee = E.souple(seg(l, d, d + 0.7))
+      p.style.opacity = round(vv)
+      p.style.transform = `translate3d(${round((1 - ee) * -34)}px,0,0) scale(${round(mix(0.94, 1, ee))})`
+    })
+
+    const vp = fenetre(l, 6.5, 10.5, 0.7, 0.4)
+    plaque.style.opacity = round(vp)
+    plaque.style.transform = `translate3d(${round((1 - E.out(seg(l, 6.5, 7.4))) * -20)}px,0,0)`
+
+    sortir(root, l, 10.4, 0.8)
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/* 07 · Export                                                         */
+/* ------------------------------------------------------------------ */
+scene(83.2, 93.9, (root) => {
+  const tete = chapitre(root, '06', 'EXPORT', 'au format du moteur')
 
   // La planche se monte sous nos yeux, image par image.
   const SL = 1100, CASES = CLIPS.walk.frames, CASE = (SL - 26) / CASES
@@ -1211,7 +1369,7 @@ scene(72.2, 82.9, (root) => {
 /* ------------------------------------------------------------------ */
 /* 07 · Final                                                          */
 /* ------------------------------------------------------------------ */
-scene(82.7, 91.5, (root) => {
+scene(93.7, 102.5, (root) => {
   const centre = el('', root)
   centre.style.cssText = 'position:absolute;inset:0;'
 
