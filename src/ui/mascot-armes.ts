@@ -53,6 +53,41 @@ export interface Arme {
    * point qu'on pose au flanc du corps ; tout le reste suit.
    */
   prise: [number, number]
+  /** Le meme dessin abattu, obtenu par rotation. */
+  abattue: string[]
+  priseAbattue: [number, number]
+}
+
+/**
+ * Quart de tour vers la gauche.
+ *
+ * C'est la seule facon de dessiner l'arme abattue sans lui faire perdre un
+ * pixel : une rotation deplace la matiere, elle n'en enleve pas. Redessiner
+ * la lame a l'horizontale la ferait maigrir quelque part, et elle
+ * maigrirait sur l'element le plus contraste de l'image.
+ *
+ * Un pixel (x, y) d'un dessin large de `l` se retrouve en (y, l - 1 - x).
+ */
+function pivoter(art: string[]): string[] {
+  const h = art.length, l = art[0].length
+  const sortie: string[][] = Array.from({ length: l }, () => Array(h).fill('.'))
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < l; x++) {
+      if (art[y][x] === '.') continue
+      sortie[l - 1 - x][y] = art[y][x]
+    }
+  }
+  return sortie.map((ligne) => ligne.join(''))
+}
+
+/** La prise suit la meme rotation que le dessin qui la porte. */
+function prisePivotee(prise: [number, number], largeur: number): [number, number] {
+  return [prise[1], largeur - 1 - prise[0]]
+}
+
+/** Complete une arme de sa version abattue, calculee et non dessinee. */
+function armer(a: Omit<Arme, 'abattue' | 'priseAbattue'>): Arme {
+  return { ...a, abattue: pivoter(a.art), priseAbattue: prisePivotee(a.prise, a.art[0].length) }
 }
 
 /**
@@ -119,27 +154,27 @@ const BATON = [
 ]
 
 export const ARMES: Arme[] = [
-  {
+  armer({
     id: 'epee',
     nom: 'Epee',
     pitch: 'La lame double la hauteur de la silhouette et donne la direction du coup avant le corps.',
     art: EPEE,
     prise: [2, 9],
-  },
-  {
+  }),
+  armer({
     id: 'marteau',
     nom: 'Marteau',
     pitch: 'La masse est au bout du bras de levier : le meme deplacement se lit plus lourd.',
     art: MARTEAU,
     prise: [2, 10],
-  },
-  {
+  }),
+  armer({
     id: 'baton',
     nom: 'Baton',
     pitch: 'La gemme est le seul point clair : c\'est elle qu\'on suit, donc elle decrit le plus grand arc.',
     art: BATON,
     prise: [2, 9],
-  },
+  }),
 ]
 
 /**
@@ -150,10 +185,29 @@ export const ARMES: Arme[] = [
  */
 export const POSITIONS_ARME = {
   portee: [0, 0],
+  // Le retard : l'arme est encore a la hauteur de l'image precedente
+  // pendant que le corps a deja bouge. Sans ces deux positions, une arme de
+  // douze pixels de long portee pendant une marche est soudee au flanc et
+  // ne ballotte jamais.
+  retard: [0, -1],
+  retardBas: [0, 1],
   levee: [-1, -3],
   haute: [0, -6],
+  // Le contre-mouvement : l'arme descend avant de monter. L'accroupissement
+  // seul ne la deplacait pas d'un pixel, parce que le corps descendait de
+  // trois et que `levee` remontait de trois — les deux s'annulaient
+  // exactement, et la preparation ne se voyait pas.
+  contre: [-1, 2],
   frappe: [1, 4],
+  // La seule position qui change de dessin : l'arme abattue, tranchant ou
+  // masse vers l'exterieur. Verticale, la lame pointait vers le ciel
+  // pendant tout le coup — ca ne se lit pas comme un coup porte.
+  abattue: [5, 4],
+  rebond: [0, -1],
 } as const
+
+/** Les positions qui utilisent le dessin pivote. */
+const ABATTUES = new Set<string>(['abattue'])
 
 export type PositionArme = keyof typeof POSITIONS_ARME
 
@@ -176,11 +230,19 @@ export function mainDansLaToile(p: Pose): [number, number] {
   return [p.corps[0] - 2, p.corps[1] + 3]
 }
 
+/** Le dessin et sa prise pour une position donnee. */
+export function dessinDeLArme(arme: Arme, position: PositionArme): [string[], [number, number]] {
+  return ABATTUES.has(position)
+    ? [arme.abattue, arme.priseAbattue]
+    : [arme.art, arme.prise]
+}
+
 /** Coin haut-gauche du dessin de l'arme dans la toile, pour une position. */
 export function coinDeLArme(p: Pose, arme: Arme, position: PositionArme): [number, number] {
   const [mx, my] = mainDansLaToile(p)
   const [dx, dy] = POSITIONS_ARME[position]
-  return [mx + dx - arme.prise[0], my + dy - arme.prise[1]]
+  const [, prise] = dessinDeLArme(arme, position)
+  return [mx + dx - prise[0], my + dy - prise[1]]
 }
 
 /**
@@ -190,8 +252,9 @@ export function coinDeLArme(p: Pose, arme: Arme, position: PositionArme): [numbe
 export function imageDePoseArmee(p: Pose, arme: Arme, position: PositionArme): Bitmap {
   const bm = new Bitmap(TAILLE, TAILLE)
   const [ox, oy] = coinDeLArme(p, arme, position)
-  for (let y = 0; y < arme.art.length; y++) {
-    const ligne = arme.art[y]
+  const [art] = dessinDeLArme(arme, position)
+  for (let y = 0; y < art.length; y++) {
+    const ligne = art[y]
     for (let x = 0; x < ligne.length; x++) {
       const lettre = ligne[x]
       if (lettre === '.') continue
@@ -238,9 +301,21 @@ export interface ClipArme {
  * l'arme apres l'impact, et sans lui le retour au repos est une glissade.
  */
 const COUP: PositionArme[] = [
-  'levee', 'haute', 'haute', 'haute', 'portee',
-  'frappe', 'frappe', 'levee', 'portee', 'portee',
+  'contre', 'haute', 'haute', 'haute', 'portee',
+  'abattue', 'abattue', 'rebond', 'portee',
 ]
+
+/**
+ * Le ballant de l'arme portee, cycle par cycle.
+ *
+ * Une position par image, alignee sur le sens dans lequel le corps vient de
+ * bouger : quand il descend l'arme est encore haute, quand il monte elle
+ * est encore basse.
+ */
+const BALLANT: Record<string, PositionArme[]> = {
+  repos: ['portee', 'retard', 'portee', 'portee', 'portee', 'retardBas', 'portee', 'portee'],
+  marche: ['portee', 'retard', 'retardBas', 'portee', 'portee', 'retard', 'retardBas', 'portee'],
+}
 
 /**
  * Cycles d'une mascotte armee.
@@ -264,7 +339,10 @@ export function clipsArmes(
       id: `${id}-${arme.id}`,
       nom: `${c.nom} · ${arme.nom}`,
       ms: c.ms, loop: c.loop,
-      images: c.poses.map((pose) => ({ pose, position: 'portee' as PositionArme })),
+      images: c.poses.map((pose, i) => ({
+        pose,
+        position: BALLANT[id]?.[i] ?? ('portee' as PositionArme),
+      })),
     })
   }
 
@@ -281,6 +359,9 @@ export function clipsArmes(
         pose,
         position: COUP[Math.min(i, COUP.length - 1)],
       })),
+      // La table doit couvrir le cycle exactement : le `Math.min` protege
+      // du debordement, mais une entree de trop fait compter le tempo a
+      // faux a la lecture.
     })
   }
 

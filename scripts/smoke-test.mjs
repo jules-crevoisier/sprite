@@ -2025,6 +2025,11 @@ const armee = await page.evaluate(async () => {
     detachees: [], horsCadre: [], jumelles: [], armeInvisible: [], visibleMin: 999,
     positions: Object.keys(POSITIONS_ARME).length,
     massesArmes: ARMES.map((a) => masseDArme(a.art)),
+    // Le dessin abattu est une rotation du dessin porte : la masse doit
+    // etre identique au pixel pres, sans quoi la lame maigrit en tombant.
+    armesInegales: ARMES
+      .filter((a) => masseDArme(a.art) !== masseDArme(a.abattue))
+      .map((a) => `${a.id} ${masseDArme(a.art)} vs ${masseDArme(a.abattue)}`),
   }
 
   for (const arme of ARMES) {
@@ -2042,7 +2047,10 @@ const armee = await page.evaluate(async () => {
           if (x < x0) x0 = x; if (x > x1) x1 = x
           if (y < y0) y0 = y; if (y > y1) y1 = y
         }
-        if (y0 <= 0 || x0 < 0 || x1 >= TAILLE) bilan.horsCadre.push(`${clip.id}#${i + 1}`)
+        // Meme severite que pour le personnage nu : plus permissif sur les
+        // cotes, une arme pourrait un jour coller la colonne zero alors que
+        // le personnage ne le peut pas.
+        if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1} (${x0},${y0},${x1})`)
         // L'arme passe derriere le personnage. Si le corps la recouvre
         // entierement, elle a disparu sans que rien ne le signale : on
         // compte donc les pixels que l'image armee ajoute a l'image nue.
@@ -2073,8 +2081,9 @@ check('aucune image armee n\'en repete une autre', armee.jumelles.length === 0,
   armee.jumelles.join(', '))
 // Les positions sont des deplacements du meme dessin : la masse de l'arme
 // est constante par construction, et c'est ce que ce releve confirme.
-check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0),
-  `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions`)
+check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0) && armee.armesInegales.length === 0,
+  armee.armesInegales.join(', ')
+    || `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions, dessin abattu compris`)
 check('l\'arme reste visible derriere le personnage', armee.armeInvisible.length === 0,
   armee.armeInvisible.join(', ') || `${armee.visibleMin} px visibles au minimum`)
 

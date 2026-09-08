@@ -338,13 +338,13 @@ const REPOS: Reglage[] = [
  */
 const MARCHE: Reglage[] = [
   { corps: [-1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
-  { corps: [-1, 1], tete: [0, 1], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
+  { corps: [-1, 1], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
   { corps: [0, -1], tete: [-1, 0], gauche: [0, 0], droite: [1, -4], queue: 'basse' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, -1], queue: 'basmilieu' },
   { corps: [1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
-  { corps: [1, 1], tete: [0, 1], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [1, 1], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
   { corps: [0, -1], tete: [1, 0], gauche: [-1, -4], droite: [0, 0], queue: 'basse' },
-  { corps: [0, 0], gauche: [0, -1], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [0, 0], gauche: [-1, -1], droite: [0, 0], queue: 'basmilieu' },
 ]
 
 /**
@@ -366,11 +366,11 @@ const MARCHE: Reglage[] = [
  */
 const COURSE: Reglage[] = [
   { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [0, 1], gauche: [-1, -4], droite: [0, -2], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -6], droite: [0, -2], queue: 'basse' },
+  { corps: [-1, -2], tete: [0, 1], gauche: [-1, -4], droite: [0, -3], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -6], droite: [0, -3], queue: 'basse' },
   { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [0, 1], gauche: [0, -2], droite: [1, -4], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -2], droite: [0, -6], queue: 'basse' },
+  { corps: [1, -2], tete: [0, 1], gauche: [0, -3], droite: [1, -4], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -3], droite: [0, -6], queue: 'basse' },
 ]
 
 /**
@@ -399,7 +399,7 @@ const SAUT: Reglage[] = [
   { corps: [0, -1], corpsArt: 'etire', tete: [0, 1], queue: 'basse' },
   { corps: [0, -2], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
   { corps: [0, -3], corpsArt: 'etire', tete: [0, 0], gauche: [0, -6], droite: [0, -6], queue: 'basmilieu' },
-  { corps: [0, -2], corpsArt: 'etire', tete: [0, 0], gauche: [0, -3], droite: [0, -3], queue: 'milieu' },
+  { corps: [0, -2], corpsArt: 'etire', tete: [1, 0], gauche: [0, -3], droite: [0, -3], queue: 'milieu' },
   { corps: [0, 0], corpsArt: 'etire', gauche: [0, 0], droite: [0, 0], queue: 'haute' },
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [0, -1], tete: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basse' },
@@ -430,15 +430,21 @@ const SAUT: Reglage[] = [
  * depassement se fait en montant le corps entier et non la seule tete :
  * monter la tete seule ouvre une ligne vide entre elle et le torse, et le
  * personnage se coupe en deux.
+ *
+ * Le coup va quelque part. Les centres de torse font 10, 10, 9, 10, 11, 9,
+ * 8, 10, 10 : recul a l'armement, appui en avant, puis la frappe qui
+ * entraine le corps de trois colonnes. Sans composante horizontale, ce
+ * cycle etait un saut sur place — ses images de frappe etaient d'ailleurs
+ * celles du saut, au pixel pres.
  */
 const ATTAQUE: Reglage[] = [
-  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
+  { corps: [1, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
   { corps: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
-  { corps: [0, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
+  { corps: [-1, -3], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
   { corps: [0, -1], gauche: [-1, -3], droite: [1, -3], queue: 'basmilieu' },
-  { corps: [0, 1], gauche: [-1, -2], droite: [1, -2], queue: 'milieu' },
-  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'haute' },
-  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
+  { corps: [1, 1], gauche: [0, -2], droite: [1, -2], queue: 'milieu' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
+  { corps: [-1, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'basse' },
   { corps: [0, -1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]
@@ -463,7 +469,7 @@ const DEGATS: Reglage[] = [
   { corps: [-2, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', tete: [-1, 0], gauche: [-1, -2], droite: [-1, -2], queue: 'haute' },
   { corps: [-3, 2], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'fouet' },
   { corps: [-1, 1], teteArt: 'clin', tete: [-1, 1], gauche: [-2, -2], droite: [-2, 0], queue: 'basse' },
-  { corps: [2, 1], teteArt: 'miclos', gauche: [1, -2], droite: [1, -2], queue: 'basmilieu' },
+  { corps: [2, 1], teteArt: 'miclos', tete: [-2, 0], gauche: [1, -2], droite: [1, -2], queue: 'basmilieu' },
   { corps: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
 ]
 
