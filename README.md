@@ -323,6 +323,27 @@ docker build --build-arg VITE_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com -
 client Google…**, coller l'ID. Il est conservé dans le stockage local et
 prime sur celui du site.
 
+### Que personne n'ait à créer le sien
+
+C'est le cas normal : les visiteurs ne doivent voir qu'un bouton **Se
+connecter à Google**, jamais un formulaire d'identifiant. Il suffit que
+l'identifiant soit posé une fois, à la construction.
+
+`.github/workflows/deploy.yml` publie le site sur GitHub Pages et injecte
+l'identifiant depuis le secret `GOOGLE_CLIENT_ID` du dépôt
+(*Settings → Secrets and variables → Actions*). Le dialogue d'identifiant
+devient alors une porte de service : plus rien ne l'ouvre tout seul.
+
+Deux réglages, dans la console Google Cloud, décident qui peut se connecter :
+
+- **Origines JavaScript autorisées** : l'URL exacte de la page publiée,
+  `https://<compte>.github.io` — sans elle, Google refuse la connexion.
+- **Écran de consentement OAuth → Publier l'application**. Tant qu'il reste
+  *En test*, seuls les comptes ajoutés en utilisateurs de test peuvent se
+  connecter. `drive.file` est un droit *non sensible* : publier ne demande
+  aucune vérification Google, l'application passe en production tout de suite.
+  L'écran « application non vérifiée » disparaît par la même occasion.
+
 Si vous servez l'image Docker fournie, les en-têtes de sécurité autorisent
 déjà `accounts.google.com` (script et iframe de renouvellement) et
 `www.googleapis.com` (API Drive), et rien d'autre.

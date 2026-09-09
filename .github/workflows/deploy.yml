@@ -1,0 +1,54 @@
+# Publie PixelForge sur GitHub Pages a chaque poussee sur main.
+#
+# L'identifiant client OAuth est injecte ici, au moment de la construction :
+# c'est ce qui evite de demander a chaque visiteur d'en creer un. Un ID client
+# de type « Application Web » n'est pas un secret — il part dans chaque requete
+# et se lit dans le bundle. Ce qui protege le compte, c'est la liste des
+# origines autorisees declaree cote Google. Il passe quand meme par les
+# secrets du depot pour rester modifiable sans toucher au code.
+name: Deployer sur GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+        env:
+          # Vide tant que le secret n'existe pas : l'application se construit
+          # et fonctionne, seul Google Drive reste a configurer par visiteur.
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
