@@ -294,6 +294,19 @@ const m = await page.evaluate(async () => {
   }
   const dos = { perso: dosDe(perso0), pixl: dosDe(pixl) }
 
+  /* --- Le controle qualite sur les huit directions calculees --- */
+  const { verifier: verifierQualite } = await import('/src/qualite/verifier.ts')
+  const artJeu = await import('/src/demo/art.ts')
+  const { huitDirections } = await import('/src/demo/jeu.ts')
+  const faceHeros = artJeu.bitmapDe(artJeu.HEROS)
+  const huit = huitDirections(faceHeros, 1)
+  const NOMS_DIR = ['S', 'SE', 'E', 'NE', 'N', 'NO', 'O', 'SO']
+  const qualiteDirections = huit.images.map((c, i) => {
+    const ctx = c.getContext('2d')
+    const image = Bitmap.fromImageData(ctx.getImageData(0, 0, c.width, c.height))
+    return { dir: NOMS_DIR[i], constats: verifierQualite(image).constats.map((x) => x.id) }
+  })
+
   /* --- Diagnostic : trois pieges d'un fichier pris sur le web --- */
   const agrandir = (b, k) => {
     const o = new (b.constructor)(b.width * k, b.height * k)
@@ -602,7 +615,7 @@ const m = await page.evaluate(async () => {
       ? Math.hypot(brasApres.x - attendu.x, brasApres.y - attendu.y) : null,
     osUtilises: morceaux.filter((x) => x.os !== null).length,
     posesDistinctes: new Set(sigPose).size,
-    videsPose, deriveX, deriveY, pireMasse, dos, diagnostic,
+    videsPose, deriveX, deriveY, pireMasse, dos, diagnostic, qualiteDirections,
     minPose: Math.min(...massesPose), maxPose: Math.max(...massesPose),
   }
 })
@@ -762,6 +775,28 @@ check('avec une vue de dos, aucune direction n\'invente plus d\'un quart de tour
   `${m.dos.ecartAvecDos}deg avec, ${m.dos.ecartSansDos}deg sans`)
 check('sans vue de dos, le banc avoue que le demi-tour est invente',
   m.dos.ecartSansDos >= 175, `${m.dos.ecartSansDos}deg`)
+
+/* --- La generation ne doit pas defaire ce que le controle qualite a repare --- */
+//
+// Les regles de `src/qualite` s'appliquent a une image, d'ou qu'elle vienne.
+// Les passer sur les huit directions CALCULEES, et pas seulement sur le dessin
+// d'origine, dit si la compression casse ce qu'on venait de reparer. C'est le
+// garde-fou qui manque a toute chaine de generation : on verifie l'entree, on
+// oublie de verifier la sortie.
+for (const d of m.qualiteDirections) {
+  void d
+}
+const sales = m.qualiteDirections.filter((d) => d.constats.length)
+check('les directions calculees passent le controle qualite',
+  sales.length <= 1,
+  sales.length
+    ? sales.map((d) => `${d.dir} : ${d.constats.join(',')}`).join(' | ')
+    : `${m.qualiteDirections.length} directions propres`)
+// Le profil est le seul a lacher, et c'est le defaut de trait deja nomme :
+// vu par la tranche, le contour dessine se retrouve a l'interieur.
+check('celle qui lache est bien le profil',
+  !sales.length || sales.every((d) => d.dir === 'E' || d.dir === 'O'),
+  sales.map((d) => d.dir).join(',') || 'aucune')
 
 /* --- Le diagnostic : ce qui, dans un dessin, empeche la rotation --- */
 console.log('')

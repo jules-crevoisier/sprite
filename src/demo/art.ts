@@ -47,20 +47,58 @@ export function bitmapDe(d: Dessin): Bitmap {
 /* Le heros                                                            */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Palette du heros, revue sur constat du critique.
+ *
+ * Quatre defauts nommes, quatre corrections :
+ *
+ * - `m` etait declare et employe zero fois, et la rampe avait un trou de
+ *   cinquante-trois unites de luminance entre la chemise claire et la peau.
+ *   Le meme `m`, rechauffe, bouche le trou en servant d'ombre de peau : une
+ *   entree morte devient le volume du visage, a cout nul ;
+ * - `y` achetait deux pixels — les yeux — pour seize unites d'ecart avec le
+ *   contour. Personne ne distingue ces deux noirs a l'echelle trois : les
+ *   yeux sont passes en `o` et la case est rendue ;
+ * - le pantalon etait a #2f3a52, luminance 57. Le sol du donjon est a #3a3a4e,
+ *   luminance 59. Le personnage etait peint couleur du decor, et son quart
+ *   inferieur s'y dissolvait. Remonte a 82 ;
+ * - la chemise n'avait ni ombre ni cote sombre : `T` etait pose des DEUX cotes
+ *   du torse, c'est-a-dire une lumiere venue de partout, donc de nulle part.
+ *   `u` donne le cote a l'ombre, et la lumiere vient desormais du haut-gauche
+ *   partout — cheveux, visage, chemise, jambes.
+ */
 const PAL_HEROS: Palette = {
   o: '#1a1420',
   h: '#8a4b2a',
   H: '#b36a3c',
   s: '#e8b892',
-  y: '#2a2338',
+  m: '#c08a63',
   t: '#3f6fb5',
   T: '#5a90dd',
+  u: '#2c4f85',
   b: '#7a4a22',
-  p: '#2f3a52',
-  B: '#241b16',
-  m: '#c8a15a',
+  p: '#46536f',
+  P: '#5e6d8c',
+  B: '#3a2b22',
 }
 
+/**
+ * Le heros, redessine apres critique.
+ *
+ * Deux defauts de silhouette avaient ete mesures :
+ *
+ * - les bras etaient soudes au torse, sans un pixel de contour entre les deux.
+ *   Comprimees a soixante pour cent — ce que fait la generation des huit
+ *   directions — les trois lignes du torse devenaient pleines sur toute la
+ *   largeur : la silhouette lisait comme une cloche. Et les bras s'arretaient
+ *   trois lignes plus haut que le torse, ce qui en faisait des epaulettes.
+ *   Chaque bras est maintenant separe par un trait et descend jusqu'a la main ;
+ * - un unique pixel, la joue droite de la ligne des yeux, depassait d'une
+ *   colonne et imposait a lui seul la largeur treize.
+ *
+ * Les jambes gagnent une ligne : quatre lignes de pantalon au lieu de deux,
+ * sans quoi un cycle de marche n'a aucune amplitude.
+ */
 export const HEROS: Dessin = {
   largeur: 20,
   hauteur: 22,
@@ -69,23 +107,24 @@ export const HEROS: Dessin = {
     '.....oooooo.....',
     '....ohhhhhhho...',
     '...ohHHHHHHHho..',
-    '...ohsssssssho..',
-    '...ohsysssyssho.',
-    '...ohsssssssho..',
-    '....osssssso....',
+    '...ohssssssmho..',
+    '...ohsosssomho..',
+    '...ohssssssmho..',
+    '....osssssmo....',
     '.....oooooo.....',
-    '...ooTTTTTToo...',
-    '..osTtttttTtso..',
-    '..osTtttttTtso..',
-    '..osTtttttTtso..',
-    '...oTbbbbbbTo...',
-    '...oTtttttTo....',
-    '....otttttto....',
-    '....oppppppo....',
-    '....opp..ppo....',
-    '....opp..ppo....',
-    '...oBBo..oBBo...',
-    '...oBBo..oBBo...',
+    '..ooTTTTTTttoo..',
+    '..oToTttttuouo..',
+    '..oToTttttuouo..',
+    '..oToTttttuouo..',
+    '..osobbbbbbomo..',
+    '..osotttttuomo..',
+    '....otttttuo....',
+    '....oPpppppo....',
+    '....oPpooppo....',
+    '....oPpooppo....',
+    '....oPpooppo....',
+    '....oBBooBBo....',
+    '....oooooooo....',
   ],
 }
 
