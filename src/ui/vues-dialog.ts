@@ -7,7 +7,7 @@ import {
   type Direction, type Piece,
 } from '../smart/scene'
 import { piecesDeLaScene } from '../smart/rig-scene'
-import { sourcesFaceEtDos } from '../smart/vues'
+import { diagnostiquer, sourcesFaceEtDos } from '../smart/vues'
 import { bitmapToPngBlob, download, safeName } from '../export/files'
 import { el, clear, select, checkbox } from './dom'
 import { openModal, showToast } from './overlay'
@@ -40,19 +40,48 @@ const HAUTEURS: { value: string; label: string; elevation: number }[] = [
   { value: 'plongee', label: 'Vue de dessus (RPG)', elevation: 55 * DEG },
 ]
 
+/**
+ * D'ou le dessin est vu.
+ *
+ * C'est le reglage le plus important de cet ecran, et celui qu'on oublie : la
+ * rotation suppose un dessin de FACE. Un sprite de jeu de plateforme est vu de
+ * profil, un sprite de jeu vu de dessus est en trois-quarts plongeant. Les
+ * faire tourner comme s'ils etaient de face donne un resultat faux d'un quart
+ * de tour, sans que rien ne le dise.
+ */
+const VUES_SOURCE: { value: string; label: string; azimut: number; elevation: number }[] = [
+  { value: 'face', label: 'De face', azimut: 0, elevation: 0 },
+  { value: 'trois-quarts', label: 'De trois-quarts', azimut: 45 * DEG, elevation: 0 },
+  { value: 'profil', label: 'De profil', azimut: 90 * DEG, elevation: 0 },
+  { value: 'dos', label: 'De dos', azimut: 180 * DEG, elevation: 0 },
+  { value: 'plongee', label: 'En plongée (jeu vu de dessus)', azimut: 0, elevation: 40 * DEG },
+]
+
 /** Les pieces a rendre : les morceaux du squelette, ou le dessin entier. */
-function piecesDuDocument(ed: Editor, dosAuto: boolean): { pieces: Piece[]; relie: boolean } {
+function piecesDuDocument(
+  ed: Editor, dosAuto: boolean, vueSource: string,
+): { pieces: Piece[]; relie: boolean; plat: Bitmap } {
+  const src = VUES_SOURCE.find((v) => v.value === vueSource) ?? VUES_SOURCE[0]
+  const plat = compositeFrame(ed.sprite, ed.activeFrame)
   const relie = ed.sprite.rig.parts.length > 0 && ed.sprite.rig.bones.length > 0
   if (relie) {
     const pieces = piecesDeLaScene(ed.sprite.rig, { dosAuto })
-    if (pieces.length) return { pieces, relie: true }
+    // La direction declaree s'applique a toutes les sources d'origine : le
+    // dos devine, lui, reste a l'oppose.
+    for (const p of pieces) {
+      for (const s of p.sources) {
+        s.azimut += src.azimut
+        s.elevation += src.elevation
+      }
+    }
+    if (pieces.length) return { pieces, relie: true, plat }
   }
-  const plat = compositeFrame(ed.sprite, ed.activeFrame)
   const b = plat.trimBounds()
   const relief = { hauteur: hauteurSuggeree(plat), galbe: 0.5 }
   const sources = dosAuto
     ? sourcesFaceEtDos(plat, relief)
     : [{ azimut: 0, elevation: 0, bitmap: plat, champ: champAuto(plat, relief) }]
+  for (const s of sources) { s.azimut += src.azimut; s.elevation += src.elevation }
   return {
     pieces: [{
       nom: ed.sprite.name,
@@ -62,6 +91,7 @@ function piecesDuDocument(ed: Editor, dosAuto: boolean): { pieces: Piece[]; reli
       rotation: { lacet: 0, tangage: 0, roulis: 0 },
     }],
     relie: false,
+    plat,
   }
 }
 
@@ -77,15 +107,16 @@ export function vuesDialog(ed: Editor): void {
     nombre: 8,
     hauteur: 'face',
     dosAuto: true,
-    profil: 0,
+    vueSource: 'face',
   }
 
   const grille = el('div', { class: 'vues-grille' })
   const info = el('p', { class: 'form-note' })
+  const alertes = el('div', { class: 'vues-alertes' })
   let dernieres: Direction[] = []
 
   const rendre = (): void => {
-    const { pieces, relie } = piecesDuDocument(ed, etat.dosAuto)
+    const { pieces, relie, plat } = piecesDuDocument(ed, etat.dosAuto, etat.vueSource)
     const elevation = HAUTEURS.find((x) => x.value === etat.hauteur)?.elevation ?? 0
     dernieres = planchesDeDirections(pieces, etat.nombre, elevation, {
       largeur: ed.sprite.width,
@@ -120,6 +151,13 @@ export function vuesDialog(ed: Editor): void {
     info.textContent = `${etat.nombre} directions · ${relie ? 'découpé par le squelette' : 'dessin entier'}`
       + ` · profil à ${Math.round(profil * 100)}% de la face`
       + (etat.dosAuto ? ' · dos deviné' : ' · sans vue de dos')
+
+    // Ce qui, dans le dessin lui-meme, va gener la rotation. Dit avant, pas
+    // apres avoir passe une heure a se demander pourquoi c'est moche.
+    clear(alertes)
+    for (const mot of diagnostiquer(plat).avertissements) {
+      alertes.appendChild(el('p', { class: 'vues-alerte' }, mot))
+    }
   }
 
   const body = el('div', null,
@@ -128,8 +166,13 @@ export function vuesDialog(ed: Editor): void {
       + 'comprime et son relief fait glisser ses volumes. De dos, c\'est le dessin '
       + 'retourné dont les traits du visage ont été effacés — chaque vignette dit '
       + 'de combien elle devine.'),
+    alertes,
     grille,
     el('div', { class: 'form-grid' },
+      el('label', { title: 'La rotation part de la direction que vous déclarez ici' },
+        'Le dessin est vu'),
+      select(VUES_SOURCE.map((v) => ({ value: v.value, label: v.label })), 'face',
+        (v) => { etat.vueSource = v; rendre() }),
       el('label', null, 'Directions'),
       select([
         { value: '4', label: '4 — les quatre points cardinaux' },

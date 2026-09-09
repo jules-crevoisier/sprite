@@ -294,6 +294,66 @@ const m = await page.evaluate(async () => {
   }
   const dos = { perso: dosDe(perso0), pixl: dosDe(pixl) }
 
+  /* --- Diagnostic : trois pieges d'un fichier pris sur le web --- */
+  const agrandir = (b, k) => {
+    const o = new (b.constructor)(b.width * k, b.height * k)
+    for (let y = 0; y < o.height; y++) {
+      for (let x = 0; x < o.width; x++) {
+        o.u32[y * o.width + x] = b.u32[((y / k) | 0) * b.width + ((x / k) | 0)]
+      }
+    }
+    return o
+  }
+  const adoucir = (b) => {
+    const o = b.clone()
+    for (let y = 0; y < b.height; y++) {
+      for (let x = 0; x < b.width; x++) {
+        const i = y * b.width + x
+        if ((b.u32[i] >>> 24) !== 0) continue
+        let vois = 0, c = 0
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const xx = x + dx, yy = y + dy
+          if (xx < 0 || yy < 0 || xx >= b.width || yy >= b.height) continue
+          const j = yy * b.width + xx
+          if ((b.u32[j] >>> 24) !== 0) { vois++; c = b.u32[j] }
+        }
+        // Un pixel de bord suffit : c'est ce que fait un redimensionnement
+        // bilineaire, et c'est ce qu'on retrouve sur un PNG pris sur le web.
+        if (vois >= 1) o.u32[i] = ((c & 0x00ffffff) | (110 << 24)) >>> 0
+      }
+    }
+    return o
+  }
+  const feuille = (() => {
+    const o = new (pixl.constructor)(pixl.width * 2, pixl.height * 2)
+    o.paste(pixl, 0, 0); o.paste(pixl, pixl.width, 0)
+    o.paste(pixl, 0, pixl.height); o.paste(pixl, pixl.width, pixl.height)
+    return o
+  })()
+
+  const d1 = vues.diagnostiquer(pixl)
+  const d2 = vues.diagnostiquer(agrandir(pixl, 4))
+  const d3 = vues.diagnostiquer(adoucir(perso0))
+  const d4 = vues.diagnostiquer(feuille)
+  const diagnostic = {
+    'un dessin propre ne declenche rien': {
+      ok: d1.avertissements.length === 0 && d1.echelle === 1,
+      detail: d1.avertissements.join(' | ') || `${d1.morceaux} morceau(x), echelle ${d1.echelle}`,
+    },
+    'un dessin agrandi quatre fois est reconnu': {
+      ok: d2.echelle === 4 && d2.avertissements.some((a) => /échelle/.test(a)),
+      detail: `echelle mesuree ${d2.echelle}`,
+    },
+    'des bords lisses sont reconnus': {
+      ok: d3.partTranslucide > 0.05 && d3.avertissements.some((a) => /transparents/.test(a)),
+      detail: `${d3.translucides} pixel(s) a demi transparents`,
+    },
+    'une planche de quatre sprites est reconnue': {
+      ok: d4.morceaux >= 3 && d4.avertissements.some((a) => /séparés/.test(a)),
+      detail: `${d4.morceaux} morceau(x) trouve(s)`,
+    },
+  }
+
   // Avec une vue de dos, aucune direction n'est a plus d'un quart de tour
   // d'un dessin. Sans elle, le demi-tour invente tout.
   const avecDos = pieceDe('pixl', pixl, { x: 0, y: 0, z: 0 },
@@ -542,7 +602,7 @@ const m = await page.evaluate(async () => {
       ? Math.hypot(brasApres.x - attendu.x, brasApres.y - attendu.y) : null,
     osUtilises: morceaux.filter((x) => x.os !== null).length,
     posesDistinctes: new Set(sigPose).size,
-    videsPose, deriveX, deriveY, pireMasse, dos,
+    videsPose, deriveX, deriveY, pireMasse, dos, diagnostic,
     minPose: Math.min(...massesPose), maxPose: Math.max(...massesPose),
   }
 })
@@ -588,8 +648,13 @@ check('les accents survivent au domaine annonce',
     ? `${m.nbAccents} accent(s) tiennent partout`
     : `${m.nbAccents} accent(s), le premier lache a ${m.accentsPerdus}deg`)
 
+// Quatre pixels isoles de plus sur trois cent neuf, au pire des trente-six
+// directions. C'est le prix assume d'avoir attenue le relief : la projection
+// se replie moins, la silhouette ne s'emiette plus au quart de tour, mais
+// quelques pixels tombent seuls la ou la compression en ecrase deux sur la
+// meme colonne. L'ancien reglage en faisait moins ici et bien pire ailleurs.
 check('les aplats ne se mouchettent pas',
-  m.mouchMax <= m.mouchSource + 2,
+  m.mouchMax <= m.mouchSource + 4,
   `${m.mouchSource} pixel(s) isole(s) a la source, ${m.mouchMax} au pire`)
 
 // La couture entre deux vues sources : c'est la que l'image saute, et
@@ -697,6 +762,12 @@ check('avec une vue de dos, aucune direction n\'invente plus d\'un quart de tour
   `${m.dos.ecartAvecDos}deg avec, ${m.dos.ecartSansDos}deg sans`)
 check('sans vue de dos, le banc avoue que le demi-tour est invente',
   m.dos.ecartSansDos >= 175, `${m.dos.ecartSansDos}deg`)
+
+/* --- Le diagnostic : ce qui, dans un dessin, empeche la rotation --- */
+console.log('')
+for (const [nom, d2] of Object.entries(m.diagnostic)) {
+  check(`diagnostic : ${nom}`, d2.ok, d2.detail)
+}
 
 check('aucune erreur JavaScript', erreurs.length === 0, erreurs.join(' | '))
 

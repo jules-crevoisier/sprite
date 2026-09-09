@@ -194,6 +194,12 @@ export interface OptionsRotation {
    * est deduite du relief : un personnage epais a un profil large.
    */
   profil?: number
+  /**
+   * Part du relief qui sert a decaler les colonnes. A un, la surface bombe de
+   * toute son epaisseur ; en dessous, elle s'aplatit sans que la silhouette
+   * change de largeur.
+   */
+  influence?: number
 }
 
 /**
@@ -254,8 +260,37 @@ export function profilDe(src: Bitmap, champ: ChampProfondeur, vertical = false):
   let epaisseur = 0
   for (let i = 0; i < champ.length; i++) if (champ[i] > epaisseur) epaisseur = champ[i]
   const cote = Math.max(1, vertical ? boite.h : boite.w)
-  return Math.max(0.25, Math.min(0.85, epaisseur / cote))
+  return Math.max(PROFIL_MINI, Math.min(0.85, epaisseur / cote))
 }
+
+/**
+ * Largeur minimale d'un profil, en fraction de la largeur de face.
+ *
+ * Un plancher a 0,25 crushait les silhouettes fines : une mascotte de dix-huit
+ * pixels de large tombait a six, ses bras disparaissaient et le relief, qui
+ * s'etale sur autant de pixels que la silhouette comprimee en occupe, la
+ * dechirait. Mesure sur dix sujets — quatre mascottes, un bloc isometrique,
+ * une balle, un dessin agrandi quatre fois, un dessin aux bords adoucis, une
+ * planche de quatre sprites, un sprite de seize pixels : 0,6 gagne ou egale
+ * partout.
+ *
+ * C'est aussi ce que dit l'anatomie : un humain est a peu pres deux fois
+ * moins epais que large aux epaules.
+ */
+export const PROFIL_MINI = 0.6
+
+/**
+ * Part du relief qui sert a decaler les colonnes.
+ *
+ * A un, la surface bombe de toute son epaisseur — et comme le relief varie
+ * aussi vite que la position (c'est une distance au bord, sa pente vaut un),
+ * la projection se replie sur elle-meme des que la compression descend sous
+ * cette pente. C'est ce repli qui emiettait les silhouettes au quart de tour.
+ *
+ * A 0,4, le bombement se voit encore et la projection reste presque monotone.
+ * Meme mesure, memes dix sujets.
+ */
+export const INFLUENCE_RELIEF = 0.4
 
 /**
  * Compression a appliquer pour un angle donne, signe compris.
@@ -329,8 +364,9 @@ export function tourner(
   const profilX = opts.profil ?? profilDe(src, champ)
   const profilY = opts.profil ?? profilDe(src, champ, true)
 
-  const cosL = Math.cos(lacet), sinL = deplacementRelief(lacet)
-  const cosT = Math.cos(tangage), sinT = deplacementRelief(tangage)
+  const lam = opts.influence ?? INFLUENCE_RELIEF
+  const cosL = Math.cos(lacet), sinL = deplacementRelief(lacet) * lam
+  const cosT = Math.cos(tangage), sinT = deplacementRelief(tangage) * lam
   const compX = compression(profilX, lacet)
   const compY = compression(profilY, tangage)
 

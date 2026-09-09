@@ -1060,6 +1060,16 @@ input[type="range"]::-moz-range-thumb {
 }
 .form-subsection:first-child { margin-top: 0; }
 
+/* Ce que le dessin a de genant, dit avant le rendu et non apres. */
+.vues-alertes:empty { display: none; }
+.vues-alerte {
+  margin: 0 0 6px; padding: 7px 9px;
+  background: color-mix(in srgb, var(--warn, #e0a33e) 12%, transparent);
+  border-left: 2px solid var(--warn, #e0a33e);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 11px; line-height: 1.5; color: var(--text-dim);
+}
+
 /*
    Planche de directions : une vignette par direction, en grille qui s'adapte.
    Le fond sombre derriere chaque vignette evite qu'un personnage clair se

@@ -2,7 +2,7 @@ import { Bitmap } from '../core/bitmap'
 import { getA } from '../core/color'
 import {
   boucherLesPoches, compression, couverture, deplacementRelief, profilDe,
-  type Angles, type ChampProfondeur,
+  INFLUENCE_RELIEF, type Angles, type ChampProfondeur,
 } from './depth'
 
 /**
@@ -331,7 +331,11 @@ export function rendreScene(
       const ry = lx * sr + ly * cr
       const wx = piece.position.x + rx - ox
       const wy = piece.position.y + ry - oy
-      const wz = piece.position.z + d - piece.pivot.z - oz
+      // Seul le RELIEF est attenue : la profondeur de la piece, elle, est une
+      // vraie position dans le monde. C'est elle qui fait passer le bras
+      // eloigne derriere le torse, et l'amoindrir reviendrait a aplatir le
+      // personnage.
+      const wz = piece.position.z - piece.pivot.z - oz + d * INFLUENCE_RELIEF
 
       // Tour du compas, puis prise de hauteur : dans cet ordre, sinon l'axe
       // de rotation bascule avec la camera.

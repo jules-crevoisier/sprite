@@ -324,7 +324,7 @@ const mesures = await page.evaluate(async () => {
 
     rapport.push({
       nom, hauteur, masse0, trous0, identiquePixel,
-      pireEcart, masseMax, debordement,
+      pireEcart, masseMax, debordement, largeur: boite0.w,
       etrangeres: etrangeres.length,
       troublants: trous.length,
       sautMax, colonne, parLacet,
@@ -351,8 +351,11 @@ for (const r of mesures) {
   // largeur. Un quart de tour a un profil de 0,44 doit rendre environ 44% de
   // la matiere, plus ce que le relief etale. En exiger 90% obligeait a
   // peindre le dos, ce qui etait tout le probleme.
+  // La tolerance ne peut pas etre plus fine qu'un pixel de large : sur une
+  // lame de quatre pixels, une colonne pese vingt-cinq pour cent de la masse,
+  // et l'arrondi de la compression en emporte ou en rend une entiere.
   check(`${r.nom} : la masse suit la compression annoncee`,
-    r.pireEcart.marge >= -0.06,
+    r.pireEcart.marge >= -Math.max(0.06, 1 / r.largeur),
     `au pire ${(r.pireEcart.ratio * 100).toFixed(1)}% a ${r.pireEcart.deg}deg,`
     + ` la compression en prevoit ${(r.pireEcart.prevu * 100).toFixed(1)}%`)
   // Elle a le droit de gonfler — une tranche vient s'ajouter a la face — mais

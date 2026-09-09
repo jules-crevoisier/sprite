@@ -150,3 +150,124 @@ export function sourcesFaceEtDos(
     { azimut: Math.PI, elevation: 0, bitmap: dos, champ: champAuto(dos, profil) },
   ]
 }
+
+/* ------------------------------------------------------------------ */
+/* Diagnostic                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Ce qui, dans un dessin, empeche la rotation de bien se passer.
+ *
+ * La rotation suppose trois choses sans jamais les verifier : que l'image
+ * contient UN dessin, qu'il est a sa taille native, et que ses bords sont
+ * nets. Un fichier pris sur le web viole regulierement les trois — une
+ * planche de sprites, un dessin exporte a quatre fois sa taille, un PNG
+ * redimensionne dont les bords ont ete lisses. Dans ces cas-la le resultat
+ * est mauvais et rien ne disait pourquoi.
+ *
+ * On mesure donc, et on le dit. C'est moins spectaculaire qu'un algorithme
+ * qui devinerait tout seul, et c'est ce qui evite de perdre une heure a se
+ * demander pourquoi son personnage part en bouillie.
+ */
+export interface Diagnostic {
+  /** Nombre de dessins separes trouves dans l'image. */
+  morceaux: number
+  /** Echelle apparente : 4 si chaque pixel du dessin occupe un carre de 4x4. */
+  echelle: number
+  /** Pixels ni tout a fait opaques ni tout a fait transparents. */
+  translucides: number
+  /** Part du dessin que representent ces pixels-la. */
+  partTranslucide: number
+  /** Ce qu'il faudrait faire, en clair. Vide si tout va bien. */
+  avertissements: string[]
+}
+
+/** Groupes de pixels separes par du vide, en huit-connexite. */
+function compterLesMorceaux(src: Bitmap, minimum: number): number {
+  const { width: w, height: h } = src
+  const vus = new Uint8Array(w * h)
+  let morceaux = 0
+  for (let depart = 0; depart < w * h; depart++) {
+    if (vus[depart] || getA(src.u32[depart]) === 0) continue
+    let taille = 0
+    const pile = [depart]
+    vus[depart] = 1
+    while (pile.length) {
+      const i = pile.pop()!
+      taille++
+      const x = i % w, y = (i / w) | 0
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue
+          const j = yy * w + xx
+          if (vus[j] || getA(src.u32[j]) === 0) continue
+          vus[j] = 1
+          pile.push(j)
+        }
+      }
+    }
+    // Un pixel perdu n'est pas un dessin : on ne compte que ce qui pese.
+    if (taille >= minimum) morceaux++
+  }
+  return morceaux
+}
+
+/**
+ * Echelle apparente d'un dessin : la plus grande taille de carre uniforme.
+ *
+ * Un dessin exporte a quatre fois sa taille est constant sur chaque carre de
+ * quatre pixels de cote. On cherche donc le plus grand diviseur qui tienne,
+ * en partant du plus grand — un dessin natif rend 1.
+ */
+export function echelleApparente(src: Bitmap, max = 8): number {
+  const b = src.trimBounds()
+  if (!b.w || !b.h) return 1
+  for (let k = Math.min(max, b.w, b.h); k >= 2; k--) {
+    if (b.w % k !== 0 || b.h % k !== 0) continue
+    let uniforme = true
+    for (let by = 0; by < b.h && uniforme; by += k) {
+      for (let bx = 0; bx < b.w && uniforme; bx += k) {
+        const ref = src.u32[(b.y + by) * src.width + b.x + bx]
+        for (let y = 0; y < k && uniforme; y++) {
+          for (let x = 0; x < k; x++) {
+            if (src.u32[(b.y + by + y) * src.width + b.x + bx + x] !== ref) { uniforme = false; break }
+          }
+        }
+      }
+    }
+    if (uniforme) return k
+  }
+  return 1
+}
+
+export function diagnostiquer(src: Bitmap): Diagnostic {
+  let pleins = 0, translucides = 0
+  for (let i = 0; i < src.u32.length; i++) {
+    const a = getA(src.u32[i])
+    if (a === 0) continue
+    pleins++
+    if (a < 250) translucides++
+  }
+  const morceaux = compterLesMorceaux(src, Math.max(4, pleins * 0.02))
+  const echelle = echelleApparente(src)
+  const partTranslucide = pleins ? translucides / pleins : 0
+
+  const avertissements: string[] = []
+  if (morceaux >= 3) {
+    avertissements.push(`Cette image contient ${morceaux} dessins séparés. Ils tourneront `
+      + 'ensemble, comme un seul objet. Découpez-la d\'abord en frames : '
+      + 'Fichier ▸ Importer une image, avec une taille de frame.')
+  }
+  if (echelle >= 2) {
+    avertissements.push(`Ce dessin est à l'échelle ${echelle}× : chaque pixel y occupe un `
+      + `carré de ${echelle}. Ramenez-le à sa taille native (Sprite ▸ Redimensionner, `
+      + `÷${echelle}) avant de le faire tourner, sinon la grille se perd.`)
+  }
+  if (partTranslucide > 0.05) {
+    avertissements.push(`${translucides} pixels sont à demi transparents (${Math.round(partTranslucide * 100)}% `
+      + 'du dessin) : ce sont des bords lissés, souvent le signe d\'une image '
+      + 'redimensionnée. Ils épaissiront la silhouette au lieu de disparaître.')
+  }
+  return { morceaux, echelle, translucides, partTranslucide, avertissements }
+}
