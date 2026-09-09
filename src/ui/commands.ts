@@ -41,15 +41,15 @@ export function buildCommands(app: App): Command[] {
 
   add({
     id: 'file.new', label: 'Nouveau sprite…', group: 'Fichier', keys: 'Ctrl+N', icon: 'plus',
-    run: () => dlg.newSpriteDialog(ed),
+    run: () => { app.oublierDemo(); dlg.newSpriteDialog(ed) },
   })
 
   add({
     id: 'file.mascotte', label: 'Ouvrir la mascotte animee', group: 'Fichier', icon: 'film',
     run: async () => {
       const { spritePixl } = await import('./mascot-clips')
-      ed.loadSprite(spritePixl())
-      ed.toast('Pixl et ses six cycles — les tags sont deja poses', 'success')
+      app.ouvrirDemo('la mascotte', spritePixl())
+      ed.toast('Pixl et ses six cycles — « Quitter » en haut ramene votre document', 'success')
     },
   })
 
@@ -58,7 +58,7 @@ export function buildCommands(app: App): Command[] {
     run: async () => {
       const { spritePixlArme } = await import('./mascot-armes')
       const { CLIPS_PIXL } = await import('./mascot-clips')
-      ed.loadSprite(spritePixlArme(CLIPS_PIXL))
+      app.ouvrirDemo('la mascotte armee', spritePixlArme(CLIPS_PIXL))
       ed.toast('Trois armes sur deux calques — masquez « Arme » pour retrouver Pixl nu', 'success')
     },
   })
@@ -70,6 +70,7 @@ export function buildCommands(app: App): Command[] {
       if (!files.length) return
       try {
         const sprite = await deserializeSprite(await files[0].text())
+        app.oublierDemo()
         ed.loadSprite(sprite)
         showToast(`« ${sprite.name} » ouvert`, 'success')
       } catch (err) {

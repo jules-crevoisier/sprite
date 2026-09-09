@@ -24,7 +24,7 @@ function easingSvg(id: EasingId): string {
 }
 
 const COL_W = 44
-const NAME_W = 148
+const NAME_W = 178
 /** Hauteur d'une bande de tags, chevauchements empiles. */
 const TAG_H = 17
 
@@ -65,6 +65,8 @@ export class TimelinePanel {
    * elle est reposee par le rendu.
    */
   private imageTiree: number | null = null
+  /** Calque en cours de deplacement, meme raison que ci-dessus. */
+  private calqueTire: number | null = null
 
   constructor(editor: Editor, playback: Playback, container: HTMLElement) {
     this.ed = editor
@@ -243,6 +245,12 @@ export class TimelinePanel {
       iconButton(icon('settings', 14), 'Reglages de la pelure d\'oignon', (e) => this.onionMenu(e), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
       iconButton(icon('tag', 15), 'Nouveau tag d\'animation sur la selection', () => this.createTag(), { className: 'ghost sm icon-only', label: 'Tag' }),
+      el('div', { class: 'opt-sep' }),
+      // La pile de calques se pilote depuis la timeline, sans aller-retour
+      // avec le panneau de droite : c'est la que se lit une composition.
+      iconButton(icon('layers', 15), 'Nouveau calque', () => this.ajouterCalque(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('duplicate', 15), 'Dupliquer le calque', () => this.dupliquerCalque(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('trash', 15), 'Supprimer le calque', () => this.supprimerCalque(), { className: 'ghost sm icon-only' }),
       el('div', { class: 'spacer' }),
       el('div', { class: 'tl-fps' }, total),
     )
@@ -402,6 +410,127 @@ export class TimelinePanel {
         onClick: () => { o.tint = !o.tint; ed.events.emit('settings', undefined) },
       },
     ])
+  }
+
+  ajouterCalque(): void {
+    const ed = this.ed
+    ed.run('Nouveau calque', () => { ed.sprite.addLayer(undefined, ed.activeLayer + 1) })
+    ed.setActiveLayer(Math.min(ed.activeLayer + 1, ed.sprite.layers.length - 1))
+  }
+
+  dupliquerCalque(): void {
+    const ed = this.ed
+    const i = ed.activeLayer
+    ed.run('Dupliquer le calque', () => { ed.sprite.duplicateLayer(i) })
+    ed.setActiveLayer(Math.min(i + 1, ed.sprite.layers.length - 1))
+  }
+
+  supprimerCalque(): void {
+    const ed = this.ed
+    if (ed.sprite.layers.length <= 1) {
+      ed.toast('Impossible de supprimer le dernier calque', 'error')
+      return
+    }
+    const i = ed.activeLayer
+    ed.run('Supprimer le calque', () => { ed.sprite.layers.splice(i, 1) })
+    ed.setActiveLayer(Math.min(i, ed.sprite.layers.length - 1))
+  }
+
+  /** Renomme un calque depuis sa ligne, au double-clic sur son nom. */
+  private renommerCalque(index: number, champ: HTMLElement): void {
+    const ed = this.ed
+    const layer = ed.sprite.layers[index]
+    const input = el('input', { class: 'tl-rename', type: 'text', value: layer.name, spellcheck: false })
+    champ.replaceWith(input)
+    input.focus()
+    input.select()
+    let fini = false
+    const valider = (garder: boolean) => {
+      if (fini) return
+      fini = true
+      const nom = input.value.trim()
+      if (garder && nom && nom !== layer.name) {
+        ed.run('Renommer le calque', () => { layer.name = nom })
+      } else {
+        this.renderGrid()
+      }
+    }
+    input.addEventListener('blur', () => valider(true))
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); valider(true) }
+      else if (e.key === 'Escape') { e.preventDefault(); valider(false) }
+      e.stopPropagation()
+    })
+  }
+
+  /**
+   * Reordonne les calques en tirant leur ligne, de haut en bas.
+   *
+   * Les lignes sont affichees du calque du dessus vers celui du dessous ;
+   * l'index du modele va dans l'autre sens. Tout le geste passe par cette
+   * conversion, sinon la pile se retourne sous la souris.
+   */
+  private rendreCalqueDeplacable(cell: HTMLElement, index: number): void {
+    const ed = this.ed
+    cell.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      if ((e.target as Element).closest('button, input')) return
+      if (ed.sprite.layers.length < 2) return
+      const departY = e.clientY
+      const hautDeLigne = cell.getBoundingClientRect().top
+      let source = index
+      let bouge = false
+      const trait = el('div', { class: 'tl-insert-h', hidden: true })
+      this.scroll.appendChild(trait)
+
+      /** Rang d'affichage, 0 = ligne du haut. */
+      const rangAffiche = (i: number): number => ed.sprite.layers.length - 1 - i
+
+      const move = (ev: PointerEvent) => {
+        if (!bouge) {
+          if (Math.abs(ev.clientY - departY) < 15) return
+          bouge = true
+          this.calqueTire = source
+        }
+        const pas = Math.round((ev.clientY - departY) / 30)
+        const rang = Math.max(0, Math.min(ed.sprite.layers.length - 1, rangAffiche(index) + pas))
+        const cible = ed.sprite.layers.length - 1 - rang
+        trait.hidden = false
+        trait.style.top = `${hautDeLigne - this.scroll.getBoundingClientRect().top
+          + (rang - rangAffiche(index)) * 30}px`
+        if (cible === source) return
+        const [l] = ed.sprite.layers.splice(source, 1)
+        ed.sprite.layers.splice(cible, 0, l)
+        source = cible
+        this.calqueTire = cible
+        ed.activeLayer = cible
+        ed.events.emit('doc', undefined)
+      }
+
+      const up = () => {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+        window.removeEventListener('pointercancel', up)
+        trait.remove()
+        this.calqueTire = null
+        if (!bouge || source === index) { this.renderGrid(); return }
+        const de = index, vers = source
+        const bouger = (a: number, b: number) => {
+          const [l] = ed.sprite.layers.splice(a, 1)
+          ed.sprite.layers.splice(b, 0, l)
+        }
+        ed.pushCommand({
+          label: 'Deplacer un calque',
+          undo: () => { bouger(vers, de); ed.setActiveLayer(de) },
+          redo: () => { bouger(de, vers); ed.setActiveLayer(vers) },
+        })
+        ed.setActiveLayer(vers)
+      }
+
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', up)
+      window.addEventListener('pointercancel', up)
+    })
   }
 
   /**
@@ -564,9 +693,20 @@ export class TimelinePanel {
             ed.run(layer.locked ? 'Deverrouiller' : 'Verrouiller', () => { layer.locked = !layer.locked })
           },
         }),
-        el('span', { class: 'lname' }, layer.name),
+        el('span', {
+          class: 'lname',
+          title: `${layer.name} — double-clic pour renommer, glisser pour reordonner`,
+          ondblclick: (e: MouseEvent) => {
+            e.stopPropagation()
+            this.renommerCalque(li, e.currentTarget as HTMLElement)
+          },
+        }, layer.name),
+        // L'opacite du calque, lisible et reglable sans quitter la piste.
+        el('span', { class: 'tl-opacite' }, `${Math.round((layer.opacity / 255) * 100)}%`),
       )
       nameCell.dataset.layerRow = String(li)
+      if (this.calqueTire === li) nameCell.classList.add('dragging')
+      this.rendreCalqueDeplacable(nameCell, li)
       this.grid.appendChild(nameCell)
 
       for (let f = 0; f < ed.sprite.frameCount; f++) {

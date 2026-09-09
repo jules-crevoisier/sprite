@@ -2984,6 +2984,69 @@ const tireur = await page.evaluate(() => {
 })
 check('les numeros d\'image s\'annoncent comme deplacables', tireur)
 
+/* ------------------------------------------------------------------ */
+/* Sortie de demonstration et pile de calques                          */
+/* ------------------------------------------------------------------ */
+
+// Ouvrir la mascotte remplacait le projet en cours sans porte de sortie : il
+// fallait deviner que Ctrl+N ramenait un editeur vide, en perdant tout.
+// Les sections precedentes ont pu laisser un dialogue ouvert par-dessus.
+await page.keyboard.press('Escape')
+await sleep(300)
+await page.evaluate(() => { window.pixelforge.ed.sprite.name = 'mon-projet' })
+const avantDemo = await page.locator('.demo-retour').count()
+await page.evaluate(() => window.pixelforge.runCommand('file.mascotte'))
+await sleep(800)
+const pendantDemo = await page.locator('.demo-retour').count()
+const libelle = pendantDemo ? await page.locator('.demo-retour').textContent() : ''
+if (pendantDemo) await page.locator('.demo-retour').click()
+await sleep(500)
+const apresDemo = await page.evaluate(() => ({
+  nom: window.pixelforge.ed.sprite.name,
+  chip: document.querySelectorAll('.demo-retour').length,
+}))
+check('une demonstration s\'ouvre avec sa porte de sortie',
+  avantDemo === 0 && pendantDemo === 1 && /Quitter/.test(libelle), libelle.trim())
+check('quitter la demonstration repose le document d\'avant',
+  apresDemo.nom === 'mon-projet' && apresDemo.chip === 0, apresDemo.nom)
+
+// La pile de calques se pilote depuis la timeline : ajouter, renommer,
+// reordonner, sans aller-retour avec le panneau de droite.
+await page.evaluate(() => {
+  window.pixelforge.workspace.setTimelineVisible(true)
+  window.pixelforge.timeline.ajouterCalque()
+  window.pixelforge.timeline.ajouterCalque()
+})
+await sleep(400)
+const pistes = await page.evaluate(() => {
+  const lignes = [...document.querySelectorAll('.tl-layer-cell[data-layer-row]')]
+  return {
+    lignes: lignes.length,
+    boutons: lignes[0]?.querySelectorAll('.tl-mini').length ?? 0,
+    renommable: !!lignes[0]?.querySelector('.lname'),
+    // Affichees du calque du dessus vers celui du dessous, comme la pile.
+    ordre: lignes.map((l) => l.querySelector('.lname').textContent).join(','),
+    modele: [...window.pixelforge.ed.sprite.layers].reverse().map((l) => l.name).join(','),
+  }
+})
+check('chaque calque a sa piste, dans le sens de la pile',
+  pistes.lignes === 3 && pistes.boutons === 2 && pistes.renommable &&
+  pistes.ordre === pistes.modele, pistes.ordre)
+
+const pileDeplacee = await page.evaluate(() => {
+  const ed = window.pixelforge.ed
+  const avant = ed.sprite.layers.map((l) => l.name).join(',')
+  const [l] = ed.sprite.layers.splice(2, 1)
+  ed.sprite.layers.splice(0, 0, l)
+  const apres = ed.sprite.layers.map((l) => l.name).join(',')
+  const [r] = ed.sprite.layers.splice(0, 1)
+  ed.sprite.layers.splice(2, 0, r)
+  return { avant, apres, retour: ed.sprite.layers.map((l) => l.name).join(',') }
+})
+check('deplacer un calque le remet ailleurs sans en perdre',
+  pileDeplacee.avant !== pileDeplacee.apres && pileDeplacee.avant === pileDeplacee.retour,
+  pileDeplacee.apres)
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

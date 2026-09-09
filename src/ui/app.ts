@@ -48,6 +48,15 @@ export class App {
 
   exportRequest: ExportRequest = structuredClone(DEFAULT_EXPORT)
 
+  /**
+   * Document ouvert avant qu'une demonstration ne prenne sa place.
+   *
+   * Ouvrir la mascotte remplacait le projet en cours sans laisser de porte
+   * de sortie : on regardait ses six cycles et il fallait deviner que
+   * Ctrl+N ramenait un editeur vide — en perdant son travail au passage.
+   */
+  private avantDemo: { nom: string; sprite: Sprite } | null = null
+
   private commands: Command[] = []
   private commandMap = new Map<string, Command>()
   private lastAutosave = 0
@@ -288,6 +297,35 @@ export class App {
   }
 
   /** Lecons disponibles, construites a la demande. */
+  /** Nom de la demonstration affichee, ou null si c'est le projet de l'auteur. */
+  get demoOuverte(): string | null { return this.avantDemo?.nom ?? null }
+
+  /**
+   * Ouvre une demonstration en gardant de cote le document en cours. Le
+   * bouton de retour le repose tel quel : la visite ne coute rien.
+   */
+  ouvrirDemo(nom: string, sprite: Sprite): void {
+    // Deux demos d'affilee : c'est le vrai projet qu'il faut garder, pas la
+    // demo precedente.
+    const precedent = this.avantDemo?.sprite ?? this.ed.sprite
+    this.ed.loadSprite(sprite)
+    this.avantDemo = { nom, sprite: precedent }
+    this.renderTop()
+  }
+
+  /** Repose le document d'avant la demonstration. */
+  quitterDemo(): void {
+    const garde = this.avantDemo
+    if (!garde) return
+    this.avantDemo = null
+    this.ed.loadSprite(garde.sprite)
+    this.ed.toast(`Retour a « ${garde.sprite.name} »`, 'success')
+    this.renderTop()
+  }
+
+  /** Une demo cesse d'en etre une des qu'on ouvre ou cree autre chose. */
+  oublierDemo(): void { this.avantDemo = null; this.renderTop() }
+
   lessons(): Lesson[] { return buildLessons(this) }
 
   /**
