@@ -412,6 +412,12 @@ export function buildCommands(app: App): Command[] {
     run: () => rotationDialog(ed),
   })
   add({
+    id: 'help.demo', label: 'Jouer à la salle du gardien', group: 'Aide', icon: 'rig',
+    hint: () => 'Une salle de donjon faite entierement ici, dans un onglet',
+    run: () => { window.open('./demo.html', '_blank', 'noopener') },
+  })
+
+  add({
     id: 'sprite.vues', label: 'Toutes les directions…', group: 'Assisté', keys: 'Ctrl+Maj+U', icon: 'rig',
     hint: () => 'Le tour du personnage, dos compris, depuis un seul dessin',
     run: async () => {

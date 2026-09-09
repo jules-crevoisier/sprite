@@ -79,7 +79,7 @@ const MENUS: { label: string; items: string[] }[] = [
   },
   {
     label: 'Aide',
-    items: ['help.tutorials', '---', 'help.palette', 'help.shortcuts', 'help.about'],
+    items: ['help.tutorials', 'help.demo', '---', 'help.palette', 'help.shortcuts', 'help.about'],
   },
 ]
 
