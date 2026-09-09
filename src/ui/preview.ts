@@ -19,7 +19,7 @@ export class PreviewPanel {
       this.zoom = steps[(steps.indexOf(this.zoom) + 1) % steps.length]
       this.render()
     })
-    box.title = 'Cliquer pour changer l\'echelle de l\'apercu'
+    box.title = 'Cliquer pour changer l\'échelle de l\'aperçu'
     this.content = box
 
     editor.events.on('doc', () => this.render())

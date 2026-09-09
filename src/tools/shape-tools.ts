@@ -39,7 +39,7 @@ export const rectangleTool: Tool = {
   shortcut: 'U',
   icon: ICONS.rectangle,
   group: 'shape',
-  hint: 'Maj : carre. Alt : depuis le centre.',
+  hint: 'Maj : carré. Alt : depuis le centre.',
   options: ['brush', 'opacity', 'fillShapes', 'paintMode', 'dither'],
   down(ed) { ed.beginStroke('Rectangle') },
   move(ed, p) {
@@ -85,7 +85,7 @@ export const contourTool: Tool = {
   shortcut: 'Q',
   icon: ICONS.contour,
   group: 'shape',
-  hint: 'Trace libre referme automatiquement au relachement.',
+  hint: 'Tracé libre referme automatiquement au relachement.',
   options: ['brush', 'opacity', 'fillShapes', 'paintMode', 'dither'],
   down(ed, p) {
     if (!ed.beginStroke('Contour')) return

@@ -109,7 +109,7 @@ export function applyFollowThrough(
       for (let f = 0; f < poses.length; f++) {
         const cible = poses[f][bone.id]?.angle ?? 0
 
-        // Rotation du parent depuis l'image precedente. C'est le moteur du
+        // Rotation du parent depuis l'image précédente. C'est le moteur du
         // retard : l'os conserve son orientation, donc il semble tourner a
         // l'envers de ce que le corps vient de faire.
         const precedent = f === 0 ? (loop ? poses.length - 1 : 0) : f - 1

@@ -34,7 +34,7 @@ export class RigPanel {
     this.ed = editor
     this.content = this.body
     this.actions = [
-      iconButton(icon('group', 14), 'Modeles de squelette',
+      iconButton(icon('group', 14), 'Modèles de squelette',
         (e) => this.templateMenu(e.currentTarget as HTMLElement), { className: 'ghost sm icon-only' }),
       iconButton(icon('refresh', 14), 'Reinitialiser la pose', () => this.resetPose(), { className: 'ghost sm icon-only' }),
     ]
@@ -86,10 +86,10 @@ export class RigPanel {
           style: { width: '100%' },
           html: icon('group', 14),
           onclick: (e: MouseEvent) => this.templateMenu(e.currentTarget as HTMLElement),
-        }, el('span', null, 'Partir d\'un modele')),
+        }, el('span', null, 'Partir d\'un modèle')),
         el('p', { class: 'form-note', style: { marginTop: '8px' } },
-          'Ou tracez vous-meme : avec l\'outil Creer des os, glissez sur la toile. ',
-          'Repartir du bout d\'un os l\'enchaine au precedent.'),
+          'Ou tracez vous-même : avec l\'outil Créer des os, glissez sur la toile. ',
+          'Répartir du bout d\'un os l\'enchaine au précédent.'),
       )
       return
     }
@@ -106,7 +106,7 @@ export class RigPanel {
     }
 
     // --- liaison, un calque a la fois ---
-    this.body.appendChild(el('div', { class: 'form-section' }, 'Calques relies'))
+    this.body.appendChild(el('div', { class: 'form-section' }, 'Calques reliés'))
     this.body.appendChild(this.layerBindings())
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
       bound
@@ -143,10 +143,10 @@ export class RigPanel {
       style: { width: '100%', marginBottom: '6px' },
       onclick: () => {
         this.poseA = capturePose(this.rig)
-        showToast('Pose de depart memorisee', 'success')
+        showToast('Pose de depart mémorisée', 'success')
         this.render()
       },
-    }, this.poseA ? 'Pose de depart memorisee' : 'Memoriser la pose de depart'))
+    }, this.poseA ? 'Pose de depart mémorisée' : 'Mémoriser la pose de depart'))
     this.body.appendChild(el('div', { class: 'form-row' },
       count,
       el('button', {
@@ -159,7 +159,7 @@ export class RigPanel {
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
       'Memorisez une pose, deplacez le squelette, puis generez les frames. ',
       'La courbe de vitesse, qui repartit les images entre les deux poses, se ',
-      `regle dans le panneau d'animation — actuellement « ${EASINGS.find((e) => e.id === this.ed.easing)?.label}Â ».`))
+      `réglé dans le panneau d'animation — actuellement « ${EASINGS.find((e) => e.id === this.ed.easing)?.label}Â ».`))
 
     this.animationSection()
     this.followSection()
@@ -199,7 +199,7 @@ export class RigPanel {
     }
     this.body.appendChild(grid)
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
-      'Chaque cycle cherche les os par leur role — torse, tete, bras, jambes, ailes — ',
+      'Chaque cycle cherche les os par leur role — torse, tête, bras, jambes, ailes — ',
       'et produit ses frames avec un tag. Servez-vous-en comme base : la pose de ',
       'chaque frame reste modifiable.'))
   }
@@ -225,7 +225,7 @@ export class RigPanel {
           + 'quand le corps tourne, depassent a l\'arret, puis se stabilisent. '
           + 'Reglez la souplesse sur l\'os choisi.'
         : 'Aucun os souple. Choisissez un os et montez sa souplesse : une cape, '
-          + 'une queue ou une meche ne suivent pas le corps a l\'image pres.'))
+          + 'une queue ou une meche ne suivent pas le corps a l\'image près.'))
   }
 
   /** Ajoute le retard des os souples, si le reglage le demande. */
@@ -274,7 +274,7 @@ export class RigPanel {
 
   /**
    * Fait pivoter le personnage sur lui-meme. Le dessin n'a pas de profondeur :
-   * on l'ecrase horizontalement et on fait passer les membres d'un cote a
+   * on l'écrase horizontalement et on fait passer les membres d'un cote a
    * l'autre selon la profondeur de leur os. C'est une base a retoucher, pas
    * un profil fini.
    */
@@ -302,10 +302,10 @@ export class RigPanel {
       }, 'Tour complet'),
     ))
     this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
-      'Reglez la profondeur de chaque os (le champ « Devant / derriere » ',
-      'apparait sur l\'os choisi) : c\'est elle qui fait passer un bras derriere ',
-      'le corps. Le resultat est une base a reprendre, le dessin n\'ayant pas ',
-      'de vraie epaisseur.'))
+      'Reglez la profondeur de chaque os (le champ « Devant / derrière » ',
+      'apparait sur l\'os choisi) : c\'est elle qui fait passer un bras derrière ',
+      'le corps. Le résultat est une base a reprendre, le dessin n\'ayant pas ',
+      'de vraie épaisseur.'))
   }
 
   /** Axe de rotation : le milieu du squelette. */
@@ -329,7 +329,7 @@ export class RigPanel {
     const from = ed.activeFrame
     const avant = rig.turn
 
-    ed.run('Tour sur soi-meme', () => {
+    ed.run('Tour sur soi-même', () => {
       for (let i = 0; i < steps; i++) {
         const at = from + i
         if (i > 0) ed.sprite.duplicateFrame(from, at)
@@ -423,7 +423,7 @@ export class RigPanel {
       onchange: () => {
         const value = parentSelect.value === '' ? null : Number(parentSelect.value)
         if (!canParent(rig, bone.id, value)) {
-          showToast('Un os ne peut pas descendre de lui-meme', 'error')
+          showToast('Un os ne peut pas descendre de lui-même', 'error')
           parentSelect.value = String(bone.parent ?? '')
           return
         }
@@ -493,14 +493,14 @@ export class RigPanel {
       style: { paddingLeft: `${19 + depth * 13}px` },
     },
       el('label', null, 'role', this.roleSelect(bone)),
-      el('label', { title: 'Positif : devant le corps. Negatif : derriere. Sert au demi-tour.' },
+      el('label', { title: 'Positif : devant le corps. Negatif : derrière. Sert au demi-tour.' },
         'devant', numberInput(Math.round(bone.depth), (v) => {
           this.ed.run('Profondeur d\'un os', () => { bone.depth = v })
           refreshPose(this.ed)
         }, { min: -64, max: 64, width: '46px' })),
       el('label', {
-        title: 'Souplesse : au-dessus de zero, l\'os traine derriere le corps, '
-          + 'depasse a l\'arret puis se stabilise. Pour une cape, une queue, une meche.',
+        title: 'Souplesse : au-dessus de zero, l\'os traine derrière le corps, '
+          + 'dépasse a l\'arret puis se stabilise. Pour une cape, une queue, une meche.',
       }, 'souple', numberInput(Math.round(bone.softness * 100), (v) => {
         this.ed.run('Souplesse d\'un os', () => { bone.softness = Math.max(0, Math.min(100, v)) / 100 })
         this.render()
@@ -544,14 +544,14 @@ export class RigPanel {
   private templateMenu(anchor: HTMLElement): void {
     const ed = this.ed
     openMenu(anchor, [
-      { title: 'Modeles' },
+      { title: 'Modèles' },
       ...RIG_TEMPLATES.map((template) => ({
         label: template.label,
         hint: template.hint,
         icon: 'rig',
         onClick: () => {
           const cel = ed.peekCel()
-          ed.run(`Modele ${template.label}`, () => {
+          ed.run(`Modèle ${template.label}`, () => {
             applyTemplate(ed.sprite.rig, template, cel?.bitmap ?? null, ed.sprite)
           })
           rigState.selected = ed.sprite.rig.bones[0]?.id ?? null
@@ -621,7 +621,7 @@ export class RigPanel {
     ed.updateSettings({ tool: 'rig-pose' })
     // Le dessin reprend sa place : la carte des os ne reste pas sur l'ecran.
     ed.showWeights = false
-    showToast(`« ${layer.name} » relie — tirez le bout d\'un os`, 'success')
+    showToast(`« ${layer.name} » relié — tirez le bout d\'un os`, 'success')
     this.render()
   }
 
@@ -667,7 +667,7 @@ export class RigPanel {
       writePoseToFrame(ed, at)
     })
     ed.setActiveFrame(at)
-    showToast('Frame creee', 'success')
+    showToast('Frame créée', 'success')
   }
 
   /** Genere les frames entre la pose memorisee et la pose courante. */
@@ -680,7 +680,7 @@ export class RigPanel {
     const from = ed.activeFrame
 
     // La courbe de vitesse redistribue les images entre les deux poses : le
-    // depart et l'arrivee ne bougent pas, seule la maniere d'aller de l'une a
+    // depart et l'arrivee ne bougent pas, seule la manière d'aller de l'une a
     // l'autre change.
     const suite = this.withFollow(
       Array.from({ length: steps }, (_, i) => lerpPose(this.poseA!, poseB, ease(this.ed.easing, (i + 1) / steps))),
@@ -696,6 +696,6 @@ export class RigPanel {
       applyPose(rig, poseB)
     })
     ed.setActiveFrame(from + steps)
-    showToast(`${steps} frames generees`, 'success')
+    showToast(`${steps} frames générées`, 'success')
   }
 }

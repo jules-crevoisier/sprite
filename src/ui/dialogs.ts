@@ -20,7 +20,7 @@ const SIZE_PRESETS: [string, number, number][] = [
   ['Tuile 32', 32, 32],
   ['Perso 32', 32, 48],
   ['Perso 64', 64, 64],
-  ['Icone 128', 128, 128],
+  ['Icône 128', 128, 128],
   ['Game Boy', 160, 144],
   ['NES', 256, 240],
   ['Bandeau', 320, 180],
@@ -66,7 +66,7 @@ export function newSpriteDialog(ed: Editor): void {
     actions: [
       { label: 'Annuler' },
       {
-        label: 'Creer',
+        label: 'Créer',
         primary: true,
         onClick: () => {
           const w = Math.max(1, Math.min(4096, Number(width.value) || 32))
@@ -75,7 +75,7 @@ export function newSpriteDialog(ed: Editor): void {
           sprite.name = name.value.trim() || 'sans-titre'
           sprite.grid = { x: 0, y: 0, w: Math.min(16, w), h: Math.min(16, h) }
           ed.loadSprite(sprite)
-          showToast(`Sprite ${w}×${h} cree`, 'success')
+          showToast(`Sprite ${w}×${h} créé`, 'success')
         },
       },
     ],
@@ -166,7 +166,7 @@ export function scaleSpriteDialog(ed: Editor): void {
     el('label', null, ''), checkbox('Conserver les proportions', keepRatio, (v) => { keepRatio = v }),
     el('label', null, ''), checkbox('Interpolation lissee (non pixel art)', smooth, (v) => { smooth = v }),
     el('p', { class: 'form-note full' },
-      'Par defaut l\'agrandissement se fait au plus proche voisin : les pixels restent nets.'),
+      'Par défaut l\'agrandissement se fait au plus proche voisin : les pixels restent nets.'),
   )
 
   openModal({
@@ -200,11 +200,11 @@ export function gridDialog(ed: Editor): void {
   const body = el('div', { class: 'form-grid' },
     el('div', { class: 'form-section full' }, 'Grille'),
     el('label', null, 'Taille'), el('div', { class: 'form-row' }, w, el('span', null, '×'), h),
-    el('label', null, 'Decalage'), el('div', { class: 'form-row' }, x, el('span', null, ','), y),
+    el('label', null, 'Décalage'), el('div', { class: 'form-row' }, x, el('span', null, ','), y),
     el('div', { class: 'form-section full' }, 'Pivot du sprite'),
     el('label', null, 'X / Y'), el('div', { class: 'form-row' }, px, py),
     el('p', { class: 'form-note full' },
-      'Le pivot est exporte tel quel vers Unity (spritePivot) et sert de reference pour Godot. 0,0 = coin bas-gauche, 0.5,0.5 = centre.'),
+      'Le pivot est exporte tel quel vers Unity (spritePivot) et sert de référence pour Godot. 0,0 = coin bas-gauche, 0.5,0.5 = centre.'),
   )
 
   openModal({
@@ -245,13 +245,13 @@ export function outlineDialog(ed: Editor): void {
   let useSecondary = false
 
   const body = el('div', { class: 'form-grid' },
-    el('label', null, 'Epaisseur'), slider(1, 8, thickness, 1, (v) => { thickness = v }, (v) => `${v} px`),
+    el('label', null, 'Épaisseur'), slider(1, 8, thickness, 1, (v) => { thickness = v }, (v) => `${v} px`),
     el('label', null, 'Couleur'), checkbox('Utiliser la couleur secondaire', useSecondary, (v) => { useSecondary = v }),
     el('label', null, 'Angles'), checkbox('Inclure les diagonales', diagonal, (v) => { diagonal = v }),
     el('label', null, 'Portee'), select([
       { value: 'cel', label: 'Case active' },
       { value: 'layer', label: 'Calque entier' },
-      { value: 'frame', label: 'Frame entiere' },
+      { value: 'frame', label: 'Frame entière' },
       { value: 'sprite', label: 'Tout le sprite' },
     ], scope, (v) => { scope = v as ops.Scope }),
   )
@@ -287,7 +287,7 @@ export async function importImageDialog(ed: Editor, asLayer: boolean): Promise<v
       ed.sprite.layers.push(layer)
     })
     ed.setActiveLayer(ed.sprite.layers.length - 1)
-    showToast('Image importee comme calque', 'success')
+    showToast('Image importée comme calque', 'success')
     return
   }
 
@@ -302,7 +302,7 @@ export async function importImageDialog(ed: Editor, asLayer: boolean): Promise<v
   const body = el('div', null,
     el('p', { class: 'form-note' }, `Image source : ${img.naturalWidth} × ${img.naturalHeight} px`),
     el('div', { class: 'form-grid', style: { marginTop: '12px' } },
-      el('label', null, 'Decouper'), el('label', { class: 'check' }, slice, el('span', null, 'La planche contient plusieurs frames')),
+      el('label', null, 'Découper'), el('label', { class: 'check' }, slice, el('span', null, 'La planche contient plusieurs frames')),
       el('label', null, 'Taille des frames'), el('div', { class: 'form-row' }, fw, el('span', null, '×'), fh),
       el('label', null, 'Espacement'), el('div', { class: 'form-row' }, padding, el('span', { class: 'form-note' }, 'entre frames'), margin, el('span', { class: 'form-note' }, 'marge')),
       el('label', null, ''), checkbox('Ignorer les frames vides', skipEmpty, (v) => { skipEmpty = v }),
@@ -329,7 +329,7 @@ export async function importImageDialog(ed: Editor, asLayer: boolean): Promise<v
             buildPalette,
           })
           ed.loadSprite(sprite)
-          showToast(`${sprite.frameCount} frame(s) importee(s)`, 'success')
+          showToast(`${sprite.frameCount} frame(s) importée(s)`, 'success')
         },
       },
     ],
@@ -369,13 +369,13 @@ export function exportDialog(ed: Editor, request: ExportRequest): void {
     const bytes = result.bitmap.width * result.bitmap.height * 4
     stats.textContent =
       `Planche ${result.bitmap.width} × ${result.bitmap.height} px · ${result.frames.length} frame(s) · ` +
-      `${result.tags.length} tag(s) · ~${(bytes / 1024).toFixed(0)} Ko en memoire`
+      `${result.tags.length} tag(s) · ~${(bytes / 1024).toFixed(0)} Ko en mémoire`
   }
 
   const targets: { id: ExportRequest['target']; icon: string; label: string; note: string }[] = [
-    { id: 'generic', icon: 'sheet', label: 'Generique', note: 'PNG + JSON Aseprite (Phaser, Pixi, LibGDX, Defold…)' },
-    { id: 'unity', icon: 'unity', label: 'Unity', note: 'PNG + .meta decoupe + AnimationClip par tag' },
-    { id: 'godot', icon: 'godot', label: 'Godot 4', note: 'PNG + SpriteFrames .tres pret pour AnimatedSprite2D' },
+    { id: 'generic', icon: 'sheet', label: 'Générique', note: 'PNG + JSON Aseprite (Phaser, Pixi, LibGDX, Defold…)' },
+    { id: 'unity', icon: 'unity', label: 'Unity', note: 'PNG + .meta découpe + AnimationClip par tag' },
+    { id: 'godot', icon: 'godot', label: 'Godot 4', note: 'PNG + SpriteFrames .très pret pour AnimatedSprite2D' },
   ]
 
   const cards = el('div', { class: 'target-cards' })
@@ -407,7 +407,7 @@ export function exportDialog(ed: Editor, request: ExportRequest): void {
       )
     }
     grid.append(
-      el('label', null, 'Echelle'),
+      el('label', null, 'Échelle'),
       select([1, 2, 3, 4, 6, 8].map((n) => ({ value: String(n), label: `×${n}` })), String(req.scale),
         (v) => { req.scale = Number(v); refresh() }),
       el('label', null, 'Espacement'),
@@ -429,7 +429,7 @@ export function exportDialog(ed: Editor, request: ExportRequest): void {
       el('div', { class: 'form-row' },
         checkbox('Rogner les frames', s.trim, (v) => { s.trim = v; refresh() }),
         checkbox('Puissance de 2', s.powerOfTwo, (v) => { s.powerOfTwo = v; refresh() }),
-        checkbox('Carree', s.forceSquare, (v) => { s.forceSquare = v; refresh() }),
+        checkbox('Carrée', s.forceSquare, (v) => { s.forceSquare = v; refresh() }),
       ),
       el('label', null, ''),
       checkbox('Un jeu de frames par calque', s.splitLayers, (v) => { s.splitLayers = v; refresh() }),
@@ -447,19 +447,19 @@ export function exportDialog(ed: Editor, request: ExportRequest): void {
           refresh()
         }))
       }
-      nodes.push(el('div', { class: 'form-section' }, 'Animations exportees'), tagRow)
+      nodes.push(el('div', { class: 'form-section' }, 'Animations exportées'), tagRow)
     }
 
     if (req.target === 'unity') {
       nodes.push(el('div', { class: 'form-section' }, 'Unity'),
         el('div', { class: 'form-grid' },
-          el('label', null, 'Pixels par unite'),
+          el('label', null, 'Pixels par unité'),
           numberInput(req.unity.pixelsPerUnit ?? 16, (v) => { req.unity.pixelsPerUnit = Math.max(1, v) }, { min: 1, max: 512 }),
           el('label', null, ''),
-          checkbox('Generer un AnimationClip par tag', req.unity.generateAnimations ?? true,
+          checkbox('Générer un AnimationClip par tag', req.unity.generateAnimations ?? true,
             (v) => { req.unity.generateAnimations = v }),
           el('p', { class: 'form-note full' },
-            'Le fichier .meta accompagne le PNG : deposez les deux ensemble dans Assets pour retrouver le decoupage, le pivot et le filtrage Point.'),
+            'Le fichier .meta accompagne le PNG : deposez les deux ensemble dans Assets pour retrouver le découpage, le pivot et le filtrage Point.'),
         ))
     } else if (req.target === 'godot') {
       const path = el('input', { type: 'text', value: req.godotResPath, placeholder: `res://${ed.sprite.name}.png` })
@@ -469,7 +469,7 @@ export function exportDialog(ed: Editor, request: ExportRequest): void {
           el('label', null, 'Chemin de la texture'), path,
           el('label', null, ''), checkbox('Ajouter une ressource TileSet', req.godotTileSet, (v) => { req.godotTileSet = v }),
           el('p', { class: 'form-note full' },
-            'Le .tres reference la texture par ce chemin. Pensez a passer le filtre d\'import sur Nearest cote Godot.'),
+            'Le .très référence la texture par ce chemin. Pensez a passer le filtre d\'import sur Nearest cote Godot.'),
         ))
     } else {
       nodes.push(el('div', { class: 'form-section' }, 'Metadonnees'),
@@ -511,7 +511,7 @@ export function exportDialog(ed: Editor, request: ExportRequest): void {
         },
       },
       {
-        label: 'Telecharger le pack (.zip)',
+        label: 'Télécharger le pack (.zip)',
         primary: true,
         onClick: () => {
           Object.assign(request, req)
@@ -524,7 +524,7 @@ export function exportDialog(ed: Editor, request: ExportRequest): void {
   })
 }
 
-/** Contenu SVG d'une icone, inline dans les cartes de cible d'export. */
+/** Contenu SVG d'une icône, inline dans les cartes de cible d'export. */
 function iconBody(name: string): string {
   return ICONS[name] ?? ''
 }
@@ -611,13 +611,13 @@ export function sliceDialog(ed: Editor, slice: Slice, isNew: boolean): void {
     el('label', null, 'Position'), el('div', { class: 'form-row' }, bx, by),
     el('label', null, 'Taille'), el('div', { class: 'form-row' }, bw, bh),
     el('div', { class: 'form-section full' }, 'Pivot'),
-    el('label', null, 'Definir'), el('label', { class: 'check' }, hasPivot, el('span', null, 'Point de pivot relatif a la zone')),
+    el('label', null, 'Définir'), el('label', { class: 'check' }, hasPivot, el('span', null, 'Point de pivot relatif a la zone')),
     el('label', null, 'X / Y'), el('div', { class: 'form-row' }, pxi, pyi),
-    el('div', { class: 'form-section full' }, 'Decoupe 9-slice'),
-    el('label', null, 'Definir'), el('label', { class: 'check' }, hasCenter, el('span', null, 'Zone centrale etirable')),
+    el('div', { class: 'form-section full' }, 'Découpe 9-slice'),
+    el('label', null, 'Définir'), el('label', { class: 'check' }, hasCenter, el('span', null, 'Zone centrale etirable')),
     el('label', null, 'Zone centrale'), el('div', { class: 'form-row' }, cx, cy, cw, ch),
     el('p', { class: 'form-note full' },
-      'La zone centrale devient la propriete Border du sprite a l\'export Unity : les bords gardent leur taille quand l\'element est etire.'),
+      'La zone centrale devient la propriété Border du sprite a l\'export Unity : les bords gardent leur taille quand l\'élément est etire.'),
   )
 
   openModal({
@@ -627,7 +627,7 @@ export function sliceDialog(ed: Editor, slice: Slice, isNew: boolean): void {
     actions: [
       { label: 'Annuler' },
       {
-        label: isNew ? 'Creer' : 'Enregistrer',
+        label: isNew ? 'Créer' : 'Enregistrer',
         primary: true,
         onClick: () => {
           const patch: Slice = {
@@ -666,8 +666,8 @@ export function slicesDialog(ed: Editor): void {
     body.replaceChildren()
     if (!ed.sprite.slices.length) {
       body.appendChild(videAvecPixl('Aucune zone', 'repos',
-        'Selectionnez une region puis « Nouvelle zone depuis la selection » '
-        + 'pour definir un pivot ou une decoupe 9-slice.'))
+        'Selectionnez une region puis « Nouvelle zone depuis la sélection » '
+        + 'pour définir un pivot ou une découpe 9-slice.'))
       return
     }
     for (const slice of ed.sprite.slices) {

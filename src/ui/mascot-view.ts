@@ -123,7 +123,7 @@ export interface OptionsVue {
  * Pixl posee dans la page.
  *
  * Le canvas fait 32 pixels de cote et c'est le CSS qui l'agrandit d'un
- * facteur entier : c'est la meme convention que l'apercu et les vignettes
+ * facteur entier : c'est la même convention que l'apercu et les vignettes
  * de la timeline, et c'est ce qui garde le bord des pixels net.
  */
 export class VuePixl {
@@ -206,7 +206,7 @@ export class VuePixl {
     this.ctx.clearRect(0, 0, TAILLE, TAILLE)
     this.ctx.drawImage(img, 0, 0)
     this.index = k
-    // Lisible depuis l'exterieur : c'est ce qui permet de verifier qu'une
+    // Lisible depuis l'extérieur : c'est ce qui permet de verifier qu'une
     // mascotte s'anime vraiment, et qu'elle ne s'anime pas quand on l'a
     // priee de rester tranquille.
     this.node.dataset.image = String(k)
@@ -237,7 +237,7 @@ function faviconPixl(): string {
   return c.toDataURL('image/png')
 }
 
-/** Pose l'icone d'onglet ; l'icone du HTML n'est qu'un pis-aller au demarrage. */
+/** Pose l'icône d'onglet ; l'icône du HTML n'est qu'un pis-aller au demarrage. */
 export function poserFavicon(): void {
   const lien = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
     ?? document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }))

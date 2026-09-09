@@ -14,10 +14,10 @@ export type VariantStrategy =
 
 export const STRATEGIES: { id: VariantStrategy; label: string; hint: string }[] = [
   { id: 'hue', label: 'Tour du cercle', hint: 'Teintes reparties, variantes bien distinctes' },
-  { id: 'analogous', label: 'Teintes voisines', hint: 'Variation discrete, meme ambiance' },
-  { id: 'complementary', label: 'Complementaire', hint: 'Autour de la teinte opposee' },
+  { id: 'analogous', label: 'Teintes voisines', hint: 'Variation discrete, même ambiance' },
+  { id: 'complementary', label: 'Complementaire', hint: 'Autour de la teinte opposée' },
   { id: 'palette', label: 'Depuis la palette', hint: 'Reste strictement dans la palette du sprite' },
-  { id: 'value', label: 'Clair / sombre', hint: 'Meme teinte, luminosite decalee' },
+  { id: 'value', label: 'Clair / sombre', hint: 'Même teinte, luminosite decalee' },
 ]
 
 /** Une variante : la table de remplacement des couleurs d'une rampe. */

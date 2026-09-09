@@ -192,7 +192,7 @@ export class TimelinePanel {
     const ed = this.ed
     const t = this.toolbar
 
-    const play = iconButton(icon('play', 15), 'Lecture (Entree)', () => this.playback.toggle(),
+    const play = iconButton(icon('play', 15), 'Lecture (Entrée)', () => this.playback.toggle(),
       { className: 'sm icon-only' })
     const tagOnly = iconButton(icon('loop', 15), 'Limiter la lecture au tag courant', () => {
       ed.playTagOnly = !ed.playTagOnly
@@ -217,18 +217,18 @@ export class TimelinePanel {
       },
     }, ...EASINGS.map((e) => el('option', { value: e.id, title: e.hint }, e.label)))
     const retimer = iconButton(icon('sliders', 14),
-      'Repartir les durees du tag courant selon la courbe',
+      'Répartir les durées du tag courant selon la courbe',
       () => this.retimeWithCurve(), { className: 'ghost sm icon-only' })
 
     const duration = numberInput(100, (v) => this.setDuration(Math.max(1, v)), { min: 1, max: 60000, width: '62px' })
-    const toutes = iconButton(icon('film', 14), 'Appliquer cette duree a toutes les frames',
+    const toutes = iconButton(icon('film', 14), 'Appliquer cette durée a toutes les frames',
       () => this.setDurationForAll(Math.max(1, Number(duration.value) || 100)),
       { className: 'ghost sm icon-only' })
     const fps = el('span', { style: { color: 'var(--text-faint)' } })
     const total = el('span')
 
     t.append(
-      iconButton(icon('prev', 15), 'Frame precedente (,)', () => ed.setActiveFrame(ed.activeFrame - 1), { className: 'ghost sm icon-only' }),
+      iconButton(icon('prev', 15), 'Frame précédente (,)', () => ed.setActiveFrame(ed.activeFrame - 1), { className: 'ghost sm icon-only' }),
       play,
       iconButton(icon('next', 15), 'Frame suivante (.)', () => ed.setActiveFrame(ed.activeFrame + 1), { className: 'ghost sm icon-only' }),
       tagOnly,
@@ -237,14 +237,14 @@ export class TimelinePanel {
       iconButton(icon('frame-empty', 15), 'Nouvelle frame vide (Alt+Maj+N)', () => this.addEmptyFrame(), { className: 'ghost sm icon-only' }),
       iconButton(icon('trash', 15), 'Supprimer la frame', () => this.deleteFrame(), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
-      el('div', { class: 'tl-fps' }, el('span', null, 'Duree'), duration, el('span', null, 'ms'), fps, toutes),
+      el('div', { class: 'tl-fps' }, el('span', null, 'Durée'), duration, el('span', null, 'ms'), fps, toutes),
       el('div', { class: 'opt-sep' }),
       el('div', { class: 'tl-fps' }, el('span', null, 'Courbe'), courbe, trace, retimer),
       el('div', { class: 'opt-sep' }),
       onion,
-      iconButton(icon('settings', 14), 'Reglages de la pelure d\'oignon', (e) => this.onionMenu(e), { className: 'ghost sm icon-only' }),
+      iconButton(icon('settings', 14), 'Réglages de la pelure d\'oignon', (e) => this.onionMenu(e), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
-      iconButton(icon('tag', 15), 'Nouveau tag d\'animation sur la selection', () => this.createTag(), { className: 'ghost sm icon-only', label: 'Tag' }),
+      iconButton(icon('tag', 15), 'Nouveau tag d\'animation sur la sélection', () => this.createTag(), { className: 'ghost sm', label: 'Tag' }),
       el('div', { class: 'opt-sep' }),
       // La pile de calques se pilote depuis la timeline, sans aller-retour
       // avec le panneau de droite : c'est la que se lit une composition.
@@ -270,7 +270,7 @@ export class TimelinePanel {
     const ed = this.ed
     const duration = ed.sprite.frameDurations[ed.activeFrame] ?? 100
 
-    // L'icone n'est remplacee qu'au changement d'etat : la reecrire a chaque
+    // L'icône n'est remplacee qu'au changement d'etat : la reecrire a chaque
     // frame detacherait le dessin sous le curseur dix fois par seconde.
     if (bar.play.dataset.state !== String(ed.playing)) {
       bar.play.dataset.state = String(ed.playing)
@@ -295,7 +295,7 @@ export class TimelinePanel {
 
   private tagTitle(tag: Tag): string {
     return `${tag.name} — frames ${tag.from + 1} a ${tag.to + 1} (${tag.direction})`
-      + ' · glisser pour deplacer, les bords pour rallonger'
+      + ' · glisser pour déplacer, les bords pour rallonger'
   }
 
   /**
@@ -374,7 +374,7 @@ export class TimelinePanel {
         if (!bouge) { ed.setActiveFrame(tag.from); return }
         const from1 = tag.from, to1 = tag.to
         ed.pushCommand({
-          label: kind === 'move' ? 'Deplacer un tag' : 'Etendue d\'un tag',
+          label: kind === 'move' ? 'Déplacer un tag' : 'Étendue d\'un tag',
           undo: () => { tag.from = from0; tag.to = to0; ed.events.emit('doc', undefined) },
           redo: () => { tag.from = from1; tag.to = to1; ed.events.emit('doc', undefined) },
         })
@@ -391,7 +391,7 @@ export class TimelinePanel {
     const ed = this.ed
     const o = ed.onion
     openMenu(e.currentTarget as HTMLElement, [
-      { title: 'Frames precedentes' },
+      { title: 'Frames précédentes' },
       ...[0, 1, 2, 3].map((n) => ({
         label: `${n}`,
         checked: o.prev === n,
@@ -467,7 +467,7 @@ export class TimelinePanel {
    * Reordonne les calques en tirant leur ligne, de haut en bas.
    *
    * Les lignes sont affichees du calque du dessus vers celui du dessous ;
-   * l'index du modele va dans l'autre sens. Tout le geste passe par cette
+   * l'index du modèle va dans l'autre sens. Tout le geste passe par cette
    * conversion, sinon la pile se retourne sous la souris.
    */
   private rendreCalqueDeplacable(cell: HTMLElement, index: number): void {
@@ -520,7 +520,7 @@ export class TimelinePanel {
           ed.sprite.layers.splice(b, 0, l)
         }
         ed.pushCommand({
-          label: 'Deplacer un calque',
+          label: 'Déplacer un calque',
           undo: () => { bouger(vers, de); ed.setActiveLayer(de) },
           redo: () => { bouger(de, vers); ed.setActiveLayer(vers) },
         })
@@ -588,7 +588,7 @@ export class TimelinePanel {
         if (!bouge || source === index) { this.renderGrid(); return }
         const de = index, vers = source
         ed.pushCommand({
-          label: 'Deplacer une image',
+          label: 'Déplacer une image',
           undo: () => { ed.sprite.moveFrame(vers, de); ed.setActiveFrame(de) },
           redo: () => { ed.sprite.moveFrame(de, vers); ed.setActiveFrame(vers) },
         })
@@ -695,7 +695,7 @@ export class TimelinePanel {
         }),
         el('span', {
           class: 'lname',
-          title: `${layer.name} — double-clic pour renommer, glisser pour reordonner`,
+          title: `${layer.name} — double-clic pour renommer, glisser pour réordonner`,
           ondblclick: (e: MouseEvent) => {
             e.stopPropagation()
             this.renommerCalque(li, e.currentTarget as HTMLElement)
@@ -771,7 +771,7 @@ export class TimelinePanel {
 
   deleteFrame(): void {
     const ed = this.ed
-    if (ed.frameCount <= 1) { ed.toast('Impossible de supprimer la derniere frame', 'error'); return }
+    if (ed.frameCount <= 1) { ed.toast('Impossible de supprimer la dernière frame', 'error'); return }
     const frames = [...ed.frameSelection].sort((a, b) => b - a)
     ed.run('Supprimer la frame', () => {
       for (const f of frames) if (ed.sprite.frameCount > 1) ed.sprite.removeFrame(f)
@@ -809,7 +809,7 @@ export class TimelinePanel {
     // ou se raccourcirait a chaque application.
     const inverses = parts.map((p) => 1 / p)
     const sommeInv = inverses.reduce((a, b) => a + b, 0)
-    ed.run('Repartir les durees', () => {
+    ed.run('Répartir les durées', () => {
       for (let i = 0; i < n; i++) {
         ed.sprite.frameDurations[from + i] = Math.max(10, Math.round(total * inverses[i] / sommeInv))
       }
@@ -822,7 +822,7 @@ export class TimelinePanel {
   /** Une seule cadence pour toute l'animation : le cas le plus courant. */
   private setDurationForAll(ms: number): void {
     const ed = this.ed
-    ed.run('Duree de toutes les frames', () => {
+    ed.run('Durée de toutes les frames', () => {
       for (let f = 0; f < ed.frameCount; f++) ed.sprite.frameDurations[f] = ms
     })
     showToast(`${ms} ms sur les ${ed.frameCount} frames — ${Math.round(1000 / ms)} fps`, 'success')
@@ -831,7 +831,7 @@ export class TimelinePanel {
   private setDuration(ms: number): void {
     const ed = this.ed
     const frames = ed.frameSelection.size > 1 ? [...ed.frameSelection] : [ed.activeFrame]
-    ed.run('Duree de frame', () => {
+    ed.run('Durée de frame', () => {
       for (const f of frames) ed.sprite.frameDurations[f] = ms
     })
   }
@@ -853,27 +853,27 @@ export class TimelinePanel {
       { label: 'Supprimer', icon: 'trash', onClick: () => this.deleteFrame() },
       { separator: true },
       {
-        label: 'Deplacer a gauche',
+        label: 'Déplacer a gauche',
         disabled: ed.activeFrame === 0,
         onClick: () => {
           const f = ed.activeFrame
-          ed.run('Deplacer la frame', () => ed.sprite.moveFrame(f, f - 1))
+          ed.run('Déplacer la frame', () => ed.sprite.moveFrame(f, f - 1))
           ed.setActiveFrame(f - 1)
         },
       },
       {
-        label: 'Deplacer a droite',
+        label: 'Déplacer a droite',
         disabled: ed.activeFrame >= ed.frameCount - 1,
         onClick: () => {
           const f = ed.activeFrame
-          ed.run('Deplacer la frame', () => ed.sprite.moveFrame(f, f + 1))
+          ed.run('Déplacer la frame', () => ed.sprite.moveFrame(f, f + 1))
           ed.setActiveFrame(f + 1)
         },
       },
       { separator: true },
-      { label: 'Creer un tag ici', icon: 'tag', onClick: () => this.createTag() },
+      { label: 'Créer un tag ici', icon: 'tag', onClick: () => this.createTag() },
       {
-        label: 'Appliquer cette duree partout',
+        label: 'Appliquer cette durée partout',
         onClick: () => this.setAllDurations(ed.sprite.frameDurations[ed.activeFrame]),
       },
     ])
@@ -900,15 +900,15 @@ export class TimelinePanel {
       },
       { separator: true },
       {
-        label: 'Opacite de la case…',
+        label: 'Opacité de la case…',
         onClick: async () => {
           const cel = layer.cels[frame]
           if (!cel) return
-          const value = await promptDialog('Opacite de la case', 'Valeur 0-255', String(cel.opacity))
+          const value = await promptDialog('Opacité de la case', 'Valeur 0-255', String(cel.opacity))
           if (value === null) return
           const n = Math.max(0, Math.min(255, Number(value)))
           if (Number.isNaN(n)) return
-          ed.run('Opacite de la case', () => { cel.opacity = n })
+          ed.run('Opacité de la case', () => { cel.opacity = n })
         },
       },
     ])
@@ -939,7 +939,7 @@ export class TimelinePanel {
     openMenu(e.currentTarget as HTMLElement, [
       { label: 'Modifier le tag…', icon: 'tag', onClick: () => this.editTag(tag, false) },
       {
-        label: 'Selectionner ses frames',
+        label: 'Sélectionner ses frames',
         onClick: () => {
           ed.frameSelection = new Set()
           for (let f = tag.from; f <= tag.to; f++) ed.frameSelection.add(f)
@@ -966,7 +966,7 @@ export class TimelinePanel {
     const direction = el('select', null,
       ...([
         ['forward', 'Avant'],
-        ['reverse', 'Arriere'],
+        ['reverse', 'Arrière'],
         ['pingpong', 'Aller-retour'],
         ['pingpong-reverse', 'Retour-aller'],
       ] as const).map(([value, label]) =>
@@ -981,10 +981,10 @@ export class TimelinePanel {
       el('label', null, 'De la frame'), from,
       el('label', null, 'A la frame'), to,
       el('label', null, 'Sens'), direction,
-      el('label', null, 'Repetitions'), el('div', { class: 'form-row' }, repeat, el('span', { class: 'form-note' }, '0 = boucle infinie')),
+      el('label', null, 'Répétitions'), el('div', { class: 'form-row' }, repeat, el('span', { class: 'form-note' }, '0 = boucle infinie')),
       el('label', null, 'Couleur'), color,
       el('p', { class: 'form-note full' },
-        'Le nom du tag devient le nom de l\'animation a l\'export : clip Unity, animation SpriteFrames Godot, entree frameTags du JSON.'),
+        'Le nom du tag devient le nom de l\'animation a l\'export : clip Unity, animation SpriteFrames Godot, entrée frameTags du JSON.'),
     )
 
     openModal({
@@ -994,7 +994,7 @@ export class TimelinePanel {
       actions: [
         { label: 'Annuler' },
         {
-          label: isNew ? 'Creer' : 'Enregistrer',
+          label: isNew ? 'Créer' : 'Enregistrer',
           primary: true,
           onClick: () => {
             const a = Math.max(0, Math.min(ed.frameCount - 1, Number(from.value) - 1))

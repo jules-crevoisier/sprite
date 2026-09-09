@@ -61,7 +61,7 @@ export class LayersPanel {
         if (this.dragIndex === null || this.dragIndex === index) return
         const from = this.dragIndex
         this.dragIndex = null
-        ed.run('Reordonner les calques', () => {
+        ed.run('Réordonner les calques', () => {
           const [moved] = ed.sprite.layers.splice(from, 1)
           ed.sprite.layers.splice(index, 0, moved)
         })
@@ -118,7 +118,7 @@ export class LayersPanel {
     if (!layer) return
     this.footer.append(
       el('div', { class: 'opt', style: { marginBottom: '5px' } },
-        el('label', { style: { width: '52px' } }, 'Opacite'),
+        el('label', { style: { width: '52px' } }, 'Opacité'),
         slider(0, 255, layer.opacity, 1,
           (v) => {
             layer.opacity = v
@@ -174,9 +174,9 @@ export class LayersPanel {
       const ligne = el('div', { class: `fx-row ${fx.enabled ? '' : 'off'}` },
         el('button', {
           class: `mini ${fx.enabled ? 'on' : ''}`,
-          title: fx.enabled ? 'Desactiver' : 'Activer',
+          title: fx.enabled ? 'Désactiver' : 'Activer',
           html: icon(fx.enabled ? 'eye' : 'eye-off', 13),
-          onclick: () => ed.run(fx.enabled ? 'Desactiver l\'effet' : 'Activer l\'effet',
+          onclick: () => ed.run(fx.enabled ? 'Désactiver l\'effet' : 'Activer l\'effet',
             () => { fx.enabled = !fx.enabled }),
         }),
         el('span', {
@@ -216,7 +216,7 @@ export class LayersPanel {
     const corps = el('div', { class: 'fx-body' })
 
     // Un geste de curseur donne une seule entree d'historique : on retient
-    // l'etat d'avant au premier mouvement, on la publie au relachement.
+    // l'état d'avant au premier mouvement, on la publie au relachement.
     const vivant = (): void => {
       this.ouvrirGeste()
       ed.history.touch()
@@ -228,17 +228,17 @@ export class LayersPanel {
       el('div', { class: 'fx-field' }, el('label', null, label), ...contenu)
 
     if (champs.has('color')) corps.appendChild(rangee(
-      fx.kind === 'biseau' ? 'Lumiere' : fx.kind === 'degrade' ? 'Depart' : 'Couleur',
+      fx.kind === 'biseau' ? 'Lumière' : fx.kind === 'degrade' ? 'Depart' : 'Couleur',
       this.champCouleur(fx.color, (c) => { fx.color = c; vivant() }, () => fige('Couleur de l\'effet')),
     ))
     if (champs.has('color2')) corps.appendChild(rangee(
       fx.kind === 'biseau' ? 'Ombre' : 'Arrivee',
       this.champCouleur(fx.color2, (c) => { fx.color2 = c; vivant() }, () => fige('Couleur de l\'effet')),
     ))
-    if (champs.has('opacity')) corps.appendChild(rangee('Opacite',
+    if (champs.has('opacity')) corps.appendChild(rangee('Opacité',
       slider(0, 100, Math.round(fx.opacity * 100), 1,
         (v) => { fx.opacity = v / 100; vivant() }, (v) => `${v}%`,
-        () => fige('Opacite de l\'effet'))))
+        () => fige('Opacité de l\'effet'))))
     if (champs.has('angle')) corps.appendChild(rangee('Angle',
       slider(0, 350, fx.angle, 10, (v) => { fx.angle = v; vivant() }, (v) => `${v}°`,
         () => fige('Angle de l\'effet'))))
@@ -251,10 +251,10 @@ export class LayersPanel {
     if (champs.has('inset')) corps.appendChild(rangee('Retrait',
       slider(0, 6, fx.inset, 1, (v) => { fx.inset = v; vivant() }, (v) => `${v} px`,
         () => fige('Retrait de l\'effet'))))
-    if (champs.has('size')) corps.appendChild(rangee(fx.kind === 'contour' ? 'Epaisseur' : 'Etendue',
+    if (champs.has('size')) corps.appendChild(rangee(fx.kind === 'contour' ? 'Épaisseur' : 'Étendue',
       slider(fx.kind === 'contour' ? 1 : 0, 16, fx.size, 1,
         (v) => { fx.size = v; vivant() }, (v) => `${v} px`,
-        () => fige('Etendue de l\'effet'))))
+        () => fige('Étendue de l\'effet'))))
     if (champs.has('position')) corps.appendChild(rangee('Cote',
       segmented<StrokeSide>([
         { value: 'dehors', label: 'Dehors' },
@@ -264,8 +264,8 @@ export class LayersPanel {
     if (champs.has('falloff')) corps.appendChild(rangee('Bord',
       segmented<Falloff>([
         { value: 'net', label: 'Net', title: 'Une seule couleur, bord franc' },
-        { value: 'paliers', label: 'Paliers', title: 'Quelques niveaux d\'opacite' },
-        { value: 'tramage', label: 'Trame', title: 'Motif regulier : le degrade sans nouvelles couleurs' },
+        { value: 'paliers', label: 'Paliers', title: 'Quelques niveaux d\'opacité' },
+        { value: 'tramage', label: 'Trame', title: 'Motif régulier : le degrade sans nouvelles couleurs' },
       ], fx.falloff, (v) => ed.run('Bord de l\'effet', () => { fx.falloff = v }))))
     if (champs.has('steps') && fx.falloff === 'paliers') corps.appendChild(rangee('Paliers',
       slider(1, 6, fx.steps, 1, (v) => { fx.steps = v; vivant() }, undefined,
@@ -419,10 +419,10 @@ export class LayersPanel {
       },
       { separator: true },
       {
-        label: 'Calque de reference',
+        label: 'Calque de référence',
         checked: layer.reference,
         title: undefined,
-        onClick: () => ed.run('Calque de reference', () => { layer.reference = !layer.reference }),
+        onClick: () => ed.run('Calque de référence', () => { layer.reference = !layer.reference }),
       },
       { label: 'Supprimer', icon: 'trash', onClick: () => this.remove() },
     ])

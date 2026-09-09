@@ -23,12 +23,12 @@ function strokePreview(ed: Editor): { node: HTMLElement; redraw: () => void } {
   const node = el('div', { class: 'opt' }, canvas)
   if (!ctx) return { node, redraw: () => {} }
 
-  // Redessine au lieu d'etre reconstruit : l'apercu doit suivre le curseur
+  // Redessine au lieu d'être reconstruit : l'apercu doit suivre le curseur
   // pendant qu'on le tire, sans que la barre entiere soit refaite.
   const redraw = (): void => {
     const s = ed.settings
     const offsets = brushOffsets(s.brushSize, s.brushShape)
-    canvas.title = `Trait reel : ${offsets.length / 2} pixel(s) par pointe`
+    canvas.title = `Trait réel : ${offsets.length / 2} pixel(s) par pointe`
       + (s.ditherPattern === 'none' ? '' : ', tramage applique')
     ctx.clearRect(0, 0, W, H)
 
@@ -80,7 +80,7 @@ const etats = new WeakMap<HTMLElement, EtatBarre>()
 
 const SHAPES: { value: BrushShape; icon: string; title: string }[] = [
   { value: 'circle', icon: '<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="currentColor"/></svg>', title: 'Ronde' },
-  { value: 'square', icon: '<svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" fill="currentColor"/></svg>', title: 'Carree' },
+  { value: 'square', icon: '<svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" fill="currentColor"/></svg>', title: 'Carrée' },
   { value: 'diamond', icon: '<svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2l5 5-5 5-5-5z" fill="currentColor"/></svg>', title: 'Losange' },
   { value: 'h-line', icon: '<svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="6" width="12" height="2" fill="currentColor"/></svg>', title: 'Ligne horizontale' },
   { value: 'v-line', icon: '<svg width="14" height="14" viewBox="0 0 14 14"><rect x="6" y="1" width="2" height="12" fill="currentColor"/></svg>', title: 'Ligne verticale' },
@@ -88,11 +88,11 @@ const SHAPES: { value: BrushShape; icon: string; title: string }[] = [
 
 const PAINT_MODES: { value: PaintMode; label: string }[] = [
   { value: 'normal', label: 'Normal' },
-  { value: 'behind', label: 'Derriere' },
+  { value: 'behind', label: 'Derrière' },
   { value: 'lock-alpha', label: 'Alpha verrouille' },
 ]
 
-/** Barre contextuelle : n'affiche que les reglages utiles a l'outil actif. */
+/** Barre contextuelle : n'affiche que les réglages utiles a l'outil actif. */
 export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: () => void): void {
   let etat = etats.get(container)
   if (!etat) {
@@ -185,7 +185,7 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
 
   if (opts.has('opacity')) {
     add(el('div', { class: 'opt' },
-      el('label', null, 'Opacite'),
+      el('label', null, 'Opacité'),
       slider(1, 255, s.opacity, 1, (v) => ed.updateSettings({ opacity: v }),
         (v) => `${Math.round((v / 255) * 100)}%`),
     ))
@@ -256,7 +256,7 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
 
   if (opts.has('strength')) {
     add(el('div', { class: 'opt' },
-      el('label', null, 'Intensite'),
+      el('label', null, 'Intensité'),
       slider(0.02, 0.6, s.strength, 0.01, (v) => ed.updateSettings({ strength: v }),
         (v) => `${Math.round(v * 100)}%`),
     ))
@@ -273,7 +273,7 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
   add(el('div', { class: 'opt-sep' }))
   const symBtn = (axis: 'x' | 'y', label: string) => el('button', {
     class: `btn sm ${ed.symmetry[axis] ? 'active' : ''}`,
-    title: `Symetrie ${label}`,
+    title: `Symétrie ${label}`,
     onclick: () => { ed.symmetry[axis] = !ed.symmetry[axis]; ed.events.emit('settings', undefined); refresh() },
     html: icon('symmetry', 14),
   }, el('span', null, label))
@@ -281,7 +281,7 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
 
   add(el('div', { class: 'opt' }, el('button', {
     class: `btn sm ${ed.tiledDrawing ? 'active' : ''}`,
-    title: 'Dessin en mode tuile : le trait se replie sur les bords opposes',
+    title: 'Dessin en mode tuile : le trait se replie sur les bords opposés',
     onclick: () => { ed.tiledDrawing = !ed.tiledDrawing; ed.events.emit('settings', undefined); refresh() },
     html: icon('grid', 14),
   }, el('span', null, 'Tuile'))))

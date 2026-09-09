@@ -356,11 +356,11 @@ let structureBefore: ReturnType<typeof snapshotStructure> | null = null
 
 export const rigBoneTool: Tool = {
   id: 'rig-bone',
-  name: 'Creer des os',
+  name: 'Créer des os',
   shortcut: 'K',
   icon: ICONS.bone,
   group: 'rig',
-  hint: 'Glisser pour poser un os. Repartir du bout d\'un os l\'enchaine. Alt : deplacer une extremite.',
+  hint: 'Glisser pour poser un os. Répartir du bout d\'un os l\'enchaine. Alt : déplacer une extremite.',
   options: [],
   cursor: 'crosshair',
 
@@ -406,7 +406,7 @@ export const rigBoneTool: Tool = {
       // Les poids referencent les os par index : une nouvelle liaison s'impose.
       unbind(ed.sprite.rig)
     }
-    pushRigCommand(ed, drag.kind === 'create' ? 'Nouvel os' : 'Deplacer un os')
+    pushRigCommand(ed, drag.kind === 'create' ? 'Nouvel os' : 'Déplacer un os')
     ed.events.emit('doc', undefined)
   },
 
@@ -456,7 +456,7 @@ export const rigPoseTool: Tool = {
   group: 'rig',
   hint: 'Tirer le bout d\'un os le fait pivoter, les enfants suivent. '
     + 'Une articulation reste attachee : la tirer fait pivoter l\'os porteur. '
-    + 'Seule la racine du squelette se deplace librement.',
+    + 'Seule la racine du squelette se déplace librement.',
   options: [],
   cursor: 'grab',
 
@@ -566,11 +566,11 @@ function paintWeights(ed: Editor, p: PointerInfo): void {
 
 export const rigWeightTool: Tool = {
   id: 'rig-weight',
-  name: 'Ponderer',
+  name: 'Pondérer',
   shortcut: 'N',
   icon: ICONS.brush,
   group: 'rig',
-  hint: 'Peint l\'influence de l\'os selectionne. Alt ou clic droit : detacher les pixels.',
+  hint: 'Peint l\'influence de l\'os sélectionné. Alt ou clic droit : detacher les pixels.',
   options: ['weightBrush'],
   cursor: 'crosshair',
 
@@ -578,7 +578,7 @@ export const rigWeightTool: Tool = {
     syncRestFromCanvas(ed)
     const part = activePart(ed)
     if (!part) { ed.toast('Liez d\'abord ce calque au squelette', 'error'); return }
-    if (rigState.selected === null) { ed.toast('Choisissez un os a ponderer', 'error'); return }
+    if (rigState.selected === null) { ed.toast('Choisissez un os a pondérer', 'error'); return }
     weightBefore = new Uint8Array(part.weights)
     weightPart = part
     paintWeights(ed, p)
@@ -597,7 +597,7 @@ export const rigWeightTool: Tool = {
     for (let i = 0; i < before.length; i++) if (before[i] !== after[i]) { same = false; break }
     if (same) return
     ed.pushCommand({
-      label: 'Ponderation',
+      label: 'Pondération',
       undo: () => { part.weights.set(before); touchPart(part); refreshPose(ed) },
       redo: () => { part.weights.set(after); touchPart(part); refreshPose(ed) },
     })

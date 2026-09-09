@@ -45,7 +45,7 @@ export function clear(node: Element): void {
 
 export function qs<T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T {
   const found = root.querySelector<T>(selector)
-  if (!found) throw new Error(`Element introuvable : ${selector}`)
+  if (!found) throw new Error(`Élément introuvable : ${selector}`)
   return found
 }
 

@@ -58,7 +58,7 @@ export interface OptionsPieces {
  *
  * On garde la taille d'origine plutot que de recadrer : les coordonnees du
  * morceau restent celles du dessin, donc le pivot de l'os s'y lit directement
- * et aucun decalage n'a a etre reporte. Le cout d'une bitmap pleine par os
+ * et aucun decalage n'a a être reporte. Le cout d'une bitmap pleine par os
  * est negligeable devant la lisibilite gagnee.
  */
 function morceauDe(source: Bitmap, poids: Uint8Array, os: number | null): Bitmap | null {

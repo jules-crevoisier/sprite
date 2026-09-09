@@ -89,7 +89,7 @@ export class Palette {
     return lines.join('\n') + '\n'
   }
 
-  static fromGPL(text: string, name = 'Importee'): Palette {
+  static fromGPL(text: string, name = 'Importée'): Palette {
     const colors: RGBA[] = []
     for (const line of text.split(/\r?\n/)) {
       const t = line.trim()
@@ -105,7 +105,7 @@ export class Palette {
     return this.colors.map((c) => toHex(c).slice(1).toUpperCase()).join('\n') + '\n'
   }
 
-  static fromHEXFile(text: string, name = 'Importee'): Palette {
+  static fromHEXFile(text: string, name = 'Importée'): Palette {
     const colors = text
       .split(/\r?\n/)
       .map((l) => l.trim())

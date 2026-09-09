@@ -112,7 +112,7 @@ export function scaleSprite(ed: Editor, w: number, h: number, smooth: boolean): 
 export function cropToSelection(ed: Editor): boolean {
   if (!ed.selection.active) return false
   const box = ed.selection.bounds()
-  ed.run('Rogner sur la selection', () => {
+  ed.run('Rogner sur la sélection', () => {
     ed.sprite.resizeCanvas(box.w, box.h, -box.x, -box.y)
   })
   ed.syncSelectionSize()
@@ -210,7 +210,7 @@ export function selectAll(ed: Editor): void {
   ed.beginSelectionChange()
   ed.selection.selectAll()
   ed.events.emit('selection', undefined)
-  ed.commitSelectionChange('Tout selectionner')
+  ed.commitSelectionChange('Tout sélectionner')
 }
 
 export function deselect(ed: Editor): void {
@@ -218,7 +218,7 @@ export function deselect(ed: Editor): void {
   ed.beginSelectionChange()
   ed.selection.clear()
   ed.events.emit('selection', undefined)
-  ed.commitSelectionChange('Deselectionner')
+  ed.commitSelectionChange('Désélectionner')
 }
 
 export function invertSelection(ed: Editor): void {
@@ -226,7 +226,7 @@ export function invertSelection(ed: Editor): void {
   if (!ed.selection.active) ed.selection.selectAll()
   else ed.selection.invert()
   ed.events.emit('selection', undefined)
-  ed.commitSelectionChange('Inverser la selection')
+  ed.commitSelectionChange('Inverser la sélection')
 }
 
 export function growSelection(ed: Editor, amount: number): void {
@@ -234,7 +234,7 @@ export function growSelection(ed: Editor, amount: number): void {
   ed.beginSelectionChange()
   ed.selection.grow(amount)
   ed.events.emit('selection', undefined)
-  ed.commitSelectionChange(amount > 0 ? 'Dilater la selection' : 'Contracter la selection')
+  ed.commitSelectionChange(amount > 0 ? 'Dilater la sélection' : 'Contracter la sélection')
 }
 
 /** Selectionne tous les pixels opaques de la case active. */
@@ -245,7 +245,7 @@ export function selectOpaque(ed: Editor): void {
   for (let i = 0; i < cel.bitmap.u32.length; i++) mask[i] = getA(cel.bitmap.u32[i]) > 0 ? 255 : 0
   ed.beginSelectionChange()
   ed.setSelectionMask(mask)
-  ed.commitSelectionChange('Selectionner le contenu')
+  ed.commitSelectionChange('Sélectionner le contenu')
 }
 
 /* ------------------------------------------------------------------ */

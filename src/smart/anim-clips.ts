@@ -78,7 +78,7 @@ const keys = (values: number[]) => (t: number): number => {
 /**
  * Balancement d'une cuisse sur un cycle de marche, le contact en t = 0.
  *
- * Les huit valeurs sont choisies pour que l'ecart d'une image a la suivante
+ * Les huit valeurs sont choisies pour que l'écart d'une image a la suivante
  * reste du meme ordre sur tout le tour, le passage de la derniere a la
  * premiere compris. Une suite qui ralentit fort juste avant le contact fait
  * marquer un temps a chaque tour, puis repartir d'un coup : c'est ce qui se
@@ -99,7 +99,7 @@ export const ANIM_CLIPS: AnimClip[] = [
   {
     id: 'idle',
     label: 'Repos',
-    hint: 'Souffle lent : le corps s\'affaisse, les epaules et la tete suivent',
+    hint: 'Souffle lent : le corps s\'affaisse, les épaules et la tête suivent',
     needs: ['torso'],
     // Six images plutot que quatre : le mouvement ne vaut que deux pixels, et
     // sur quatre images il se lisait comme un clignotement entre deux poses.
@@ -124,7 +124,7 @@ export const ANIM_CLIPS: AnimClip[] = [
   {
     id: 'walk',
     label: 'Marche',
-    hint: 'Appui regulier, jambe libre qui plie le genou pour passer le pied',
+    hint: 'Appui régulier, jambe libre qui plie le genou pour passer le pied',
     needs: ['legL', 'legR'],
     frames: 8, ms: 110, loop: true,
     channels: {
@@ -266,7 +266,7 @@ export const ANIM_CLIPS: AnimClip[] = [
   },
   {
     id: 'wag',
-    label: 'Queue et tete',
+    label: 'Queue et tête',
     hint: 'Balancement doux, pour un animal ou un decor vivant',
     needs: [],
     frames: 6, ms: 130, loop: true,

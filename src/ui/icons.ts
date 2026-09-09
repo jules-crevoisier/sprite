@@ -1,5 +1,5 @@
 /**
- * Jeu d'icones de l'interface, base sur Lucide.
+ * Jeu d'icônes de l'interface, base sur Lucide.
  *
  * La bibliotheque est empaquetee avec l'application : la politique de
  * securite de la version deployee interdit tout script ou style externe,

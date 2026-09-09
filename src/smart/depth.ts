@@ -5,7 +5,7 @@ import { getA } from '../core/color'
  * Profondeur par pixel, et rotation d'un dessin autour des trois axes.
  *
  * Le squelette sait deja tourner le personnage, mais avec une seule
- * profondeur par os : le corps s'ecrase, les membres passent d'un cote a
+ * profondeur par os : le corps s'écrase, les membres passent d'un cote a
  * l'autre, et c'est tout. Un dessin plat qui pivote reste un dessin plat qui
  * pivote — le nez ne sort pas du visage, l'epaule ne passe pas devant le
  * torse, et un trois-quarts demande d'etre redessine a la main.
@@ -14,7 +14,7 @@ import { getA } from '../core/color'
  * image et devient un volume : le dessin est la tranche du milieu, et le
  * relief dit de combien la matiere deborde de part et d'autre. Tourner
  * revient alors a faire tourner un nuage de points et a le reprojeter, ce qui
- * produit les occultations justes sans qu'aucun modele 3D n'existe.
+ * produit les occultations justes sans qu'aucun modèle 3D n'existe.
  *
  * Le volume est plein, et symetrique autour du plan du dessin. Une coque —
  * la seule surface avant — parait d'abord suffire, puisque c'est tout ce
@@ -31,7 +31,7 @@ import { getA } from '../core/color'
  *   attend d'une forme dessinee, et cela se retouche au pinceau.
  * - Rien ne s'evapore et rien n'enfle. La matiere est parcourue tranche par
  *   tranche, d'un pixel de profondeur chacune : deux tranches voisines ne
- *   peuvent pas s'ecarter de plus d'un pixel a l'ecran, donc la projection
+ *   peuvent pas s'écarter de plus d'un pixel a l'ecran, donc la projection
  *   ne laisse pas de vide, et chaque tranche ne pose qu'un pixel, donc elle
  *   n'en invente pas. Le banc mesure la masse a chaque degre.
  */
@@ -297,7 +297,7 @@ export function tourner(
  * Boucher et mesurer parlent maintenant de la meme chose.
  *
  * Un vrai creux du dessin — l'espace entre deux jambes, l'oeil d'un anneau —
- * touche l'exterieur par construction et n'a donc jamais ses quatre voisins
+ * touche l'extérieur par construction et n'a donc jamais ses quatre voisins
  * pleins.
  */
 function boucherLesTrous(img: Bitmap, zbuf: Float32Array): void {

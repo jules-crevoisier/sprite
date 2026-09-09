@@ -175,7 +175,7 @@ export function keyLabel(commandId: string): string | undefined {
         case 'shift': return 'Maj'
         case 'delete': return 'Suppr'
         case 'backspace': return 'Retour'
-        case 'enter': return 'Entree'
+        case 'enter': return 'Entrée'
         case 'home': return 'Origine'
         case 'end': return 'Fin'
         case 'pageup': return 'Page↑'

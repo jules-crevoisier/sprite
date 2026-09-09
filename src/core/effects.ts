@@ -87,42 +87,42 @@ export const EFFECT_KINDS: EffectKindInfo[] = [
   {
     id: 'ombre-portee',
     label: 'Ombre portee',
-    hint: 'Une copie sombre de la silhouette, decalee derriere le dessin',
+    hint: 'Une copie sombre de la silhouette, decalee derrière le dessin',
     fields: ['color', 'opacity', 'angle', 'distance', 'spread', 'size', 'falloff', 'steps', 'blend'],
     defaults: { color: NOIR, opacity: 0.55, angle: 315, distance: 2, spread: 0, size: 1, falloff: 'tramage' },
   },
   {
     id: 'ombre-interne',
     label: 'Ombre interne',
-    hint: 'Assombrit l\'interieur du cote oppose a la lumiere : donne du creux',
+    hint: 'Assombrit l\'intérieur du cote opposé a la lumière : donne du creux',
     fields: ['color', 'opacity', 'angle', 'distance', 'inset', 'size', 'falloff', 'steps', 'blend'],
     defaults: { color: NOIR, opacity: 0.6, angle: 315, distance: 1, size: 3, falloff: 'paliers', steps: 2 },
   },
   {
     id: 'lueur-externe',
     label: 'Lueur externe',
-    hint: 'Un halo autour de la silhouette, sans decalage',
+    hint: 'Un halo autour de la silhouette, sans décalage',
     fields: ['color', 'opacity', 'spread', 'size', 'falloff', 'steps', 'blend'],
     defaults: { color: rgba(120, 190, 255, 255), opacity: 0.7, distance: 0, spread: 1, size: 3, falloff: 'tramage', blend: 'screen' },
   },
   {
     id: 'lueur-interne',
     label: 'Lueur interne',
-    hint: 'Eclaire le bord interieur sur tout le pourtour',
+    hint: 'Eclaire le bord intérieur sur tout le pourtour',
     fields: ['color', 'opacity', 'inset', 'size', 'falloff', 'steps', 'blend'],
     defaults: { color: BLANC, opacity: 0.45, distance: 0, inset: 0, size: 2, falloff: 'paliers', steps: 2, blend: 'screen' },
   },
   {
     id: 'contour',
     label: 'Contour',
-    hint: 'Un liseré d\'epaisseur reglable, dehors, dedans ou a cheval',
+    hint: 'Un liseré d\'épaisseur reglable, dehors, dedans ou a cheval',
     fields: ['color', 'opacity', 'size', 'position', 'blend'],
     defaults: { color: NOIR, opacity: 1, size: 1, position: 'dehors', falloff: 'net' },
   },
   {
     id: 'biseau',
     label: 'Biseau',
-    hint: 'Lumiere sur un bord, ombre sur le bord oppose : le dessin prend du relief',
+    hint: 'Lumière sur un bord, ombre sur le bord opposé : le dessin prend du relief',
     fields: ['color', 'color2', 'opacity', 'angle', 'inset', 'size', 'falloff', 'steps'],
     defaults: {
       color: rgba(255, 236, 198, 255), color2: rgba(22, 16, 42, 255),
@@ -132,7 +132,7 @@ export const EFFECT_KINDS: EffectKindInfo[] = [
   {
     id: 'teinte',
     label: 'Teinte',
-    hint: 'Recouvre le dessin d\'une couleur : silhouettes, degats, equipes',
+    hint: 'Recouvre le dessin d\'une couleur : silhouettes, dégâts, equipes',
     fields: ['color', 'opacity', 'blend'],
     defaults: { color: rgba(255, 80, 80, 255), opacity: 0.6 },
   },
@@ -351,7 +351,7 @@ function halo(src: Bitmap, e: LayerEffect, decalage: { dx: number; dy: number })
 
 /**
  * Un halo a l'interieur de la silhouette, mesure depuis le vide decale.
- * C'est la meme construction que l'ombre portee, vue de l'interieur : le
+ * C'est la même construction que l'ombre portee, vue de l'interieur : le
  * cote oppose a la lumiere s'assombrit parce que le vide s'en est rapproche.
  */
 function haloInterne(src: Bitmap, e: LayerEffect, decalage: { dx: number; dy: number }, couleur: RGBA): Bitmap {
@@ -370,7 +370,7 @@ function haloInterne(src: Bitmap, e: LayerEffect, decalage: { dx: number; dy: nu
       if (d < 0) continue
       const a = attenuation(d, e.spread, e.size, e.falloff, e.steps, x, y)
       if (a <= 0) continue
-      // L'effet ne peut pas etre plus opaque que le pixel qu'il recouvre.
+      // L'effet ne peut pas être plus opaque que le pixel qu'il recouvre.
       const couverture = getA(src.u32[i]) / 255
       out.u32[i] = rgba(r, g, b, Math.round(a * e.opacity * couverture * 255))
     }

@@ -4,7 +4,7 @@
  * Une interpolation lineaire donne un mouvement de machine : la meme distance
  * a chaque image, du depart a l'arrivee. Le metier repartit autrement — un
  * geste demarre lentement et se termine vite, un objet lourd depasse sa cible
- * avant de revenir. C'est cette repartition, et non le nombre d'images, qui
+ * avant de revenir. C'est cette répartition, et non le nombre d'images, qui
  * donne du poids.
  *
  * Chaque courbe transforme une progression de 0 a 1 en une autre progression.
@@ -39,13 +39,13 @@ export const EASINGS: Easing[] = [
   {
     id: 'linear',
     label: 'Lineaire',
-    hint: 'Meme distance a chaque image — utile pour une machine ou un defilement',
+    hint: 'Même distance a chaque image — utile pour une machine ou un defilement',
     fn: (t) => t,
   },
   {
     id: 'ease-in',
     label: 'Depart doux',
-    hint: 'Demarre lentement et accelere : une masse qui se met en marche',
+    hint: 'Démarré lentement et accelere : une masse qui se met en marche',
     fn: (t) => t * t,
   },
   {
@@ -57,7 +57,7 @@ export const EASINGS: Easing[] = [
   {
     id: 'ease-in-out',
     label: 'Doux aux deux bouts',
-    hint: 'Ralenti au depart et a l\'arrivee : le reglage le plus courant',
+    hint: 'Ralenti au depart et a l\'arrivee : le réglage le plus courant',
     fn: (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t)),
   },
   {
@@ -69,7 +69,7 @@ export const EASINGS: Easing[] = [
   {
     id: 'slow-end',
     label: 'Amorti',
-    hint: 'Arrivee tres progressive, pour un objet lourd qui se pose',
+    hint: 'Arrivee très progressive, pour un objet lourd qui se pose',
     fn: (t) => 1 - (1 - t) ** 3,
   },
   {
@@ -80,8 +80,8 @@ export const EASINGS: Easing[] = [
   },
   {
     id: 'overshoot',
-    label: 'Depassement',
-    hint: 'Depasse la cible puis revient : donne du ressort a une pose',
+    label: 'Dépassement',
+    hint: 'Dépasse la cible puis revient : donne du ressort a une pose',
     fn: (t) => { const c = 1.70158; const u = t - 1; return 1 + u * u * ((c + 1) * u + c) },
   },
   {

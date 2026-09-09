@@ -403,7 +403,7 @@ const m = await page.evaluate(async () => {
 
   // La profondeur d'un os est ce qui fait passer un bras DEVANT le torse.
   // A quatre-vingt-dix degres d'azimut, la profondeur devient l'abscisse a
-  // l'ecran : un os pose a +6 doit se retrouver six pixels plus loin qu'un
+  // l'écran : un os pose a +6 doit se retrouver six pixels plus loin qu'un
   // os laisse dans le plan. Si le pont ignore `bone.depth`, les deux se
   // superposent et les membres traversent le corps au quart de tour.
   const profil = { azimut: Math.PI / 2, elevation: 0, zoom: 1 }
@@ -484,9 +484,9 @@ check('la vue de face rend le dessin intact', m.identique)
 
 // Le « 2:1 » est une pente, pas un angle : un pas vers l'est descend d'un
 // pixel pour deux vers la droite. Une elevation mal recopiee se voit ici.
-check('l\'isometrique 2:1 a exactement la pente 1/2',
+check('l\'isométrique 2:1 a exactement la pente 1/2',
   Math.abs(m.pente2x1 - 0.5) < 1e-9, `pente ${m.pente2x1.toFixed(6)}`)
-check('l\'isometrique vraie raccourcit les trois axes pareil',
+check('l\'isométrique vraie raccourcit les trois axes pareil',
   Math.abs(m.penteVraie - 1 / Math.sqrt(3)) < 1e-9, `pente ${m.penteVraie.toFixed(6)}`)
 
 check('le tour du compas se referme', m.boucle === m.masse0Rendue,
@@ -532,7 +532,7 @@ check('les aplats ne se mouchettent pas',
 // apparence des deux cotes ; a la bascule, l'un est rendu tourne de +45
 // degres et l'autre de -45, et le saut est la consequence honnete d'une
 // donnee contradictoire, pas un defaut du rendu.
-check('le saut de bascule ne depasse pas l\'ecart entre les deux dessins',
+check('le saut de bascule ne dépasse pas l\'écart entre les deux dessins',
   m.coutureMax <= m.ecartSources * 1.1 + 0.02,
   `saut ${Math.round(m.coutureMax * 100)}%, les dessins different de `
   + `${Math.round(m.ecartSources * 100)}%`)
@@ -541,7 +541,7 @@ check('aucune silhouette percee', m.trous === 0, `${m.trous} direction(s)`)
 // L'occultation est ce qui distingue une composition d'un empilement : sans
 // tampon partage, la piece dessinee en dernier gagne toujours, meme quand
 // elle est derriere.
-check('la piece de devant cache celle de derriere',
+check('la piece de devant cache celle de derrière',
   m.occ.faceRouge > 0 && m.occ.faceBleu === 0,
   `${m.occ.faceRouge} rouge, ${m.occ.faceBleu} bleu`)
 check('au demi-tour, l\'ordre s\'inverse tout seul',
@@ -553,7 +553,7 @@ check('l\'ordre d\'appel des pieces ne change rien', m.ordreIndifferent)
 // dessin de face, le dos est a 180 degres — entierement devine. Avec quatre
 // vues, plus rien n'est a plus de 45 degres d'un dessin reel.
 check('avec un seul dessin, le banc avoue qu\'il invente le dos',
-  m.ecartUne > 170, `jusqu'a ${Math.round(m.ecartUne)}deg d'ecart`)
+  m.ecartUne > 170, `jusqu'a ${Math.round(m.ecartUne)}deg d'écart`)
 check('avec quatre vues, aucune direction n\'invente plus de 45 degres',
   m.ecartQuatre <= 45.001, `au pire ${Math.round(m.ecartQuatre)}deg`)
 
@@ -567,7 +567,7 @@ check('les directions portent les noms qu\'un moteur attend',
 // Un pixel attribue a aucun os disparaitrait du rendu ; un pixel compte deux
 // fois clignoterait selon l'ordre du tampon. Les deux se voient a peine sur
 // une image fixe et sautent aux yeux en mouvement.
-check('le decoupage par os ne perd ni ne duplique aucun pixel',
+check('le découpage par os ne perd ni ne duplique aucun pixel',
   m.bilan.morceaux === m.bilan.origine && m.bilan.doublons === 0,
   `${m.bilan.origine} pixels -> ${m.bilan.morceaux}, ${m.bilan.doublons} doublon(s), `
   + `${m.osUtilises} os porteurs`)
@@ -580,12 +580,12 @@ check('la pose de repos rendue de face redonne le dessin', m.reposIdentique)
 // bras doit atterrir la ou la geometrie le dit, pas ailleurs. Une rotation
 // autour du mauvais axe deplace autant de pixels et passerait tous les
 // comptages ; ici elle rate la cible de plusieurs pixels.
-check('le bras pose atterrit ou la geometrie le dit',
+check('le bras pose atterrit ou la géométrie le dit',
   m.ecartPose !== null && m.ecartPose <= 1.5,
   m.attendu && m.brasApres
     ? `attendu (${m.attendu.x.toFixed(1)}, ${m.attendu.y.toFixed(1)}), `
       + `obtenu (${m.brasApres.x.toFixed(1)}, ${m.brasApres.y.toFixed(1)}) — `
-      + `${m.ecartPose.toFixed(2)} px d'ecart`
+      + `${m.ecartPose.toFixed(2)} px d'écart`
     : 'morceau introuvable')
 check('la profondeur d\'un os le place vraiment devant le corps',
   m.xSansProfondeur !== null && m.xAvecProfondeur !== null
@@ -597,7 +597,7 @@ check('poser un os change vraiment le rendu', m.bougePose > 20,
   `${m.bougePose} pixels differents`)
 // Le personnage doit tourner sur lui-meme. Sans pivot, la camera le fait
 // orbiter autour du coin du cadre : il en sort.
-check('le personnage tourne sur lui-meme et reste dans son cadre',
+check('le personnage tourne sur lui-même et reste dans son cadre',
   m.videsPose === 0 && m.deriveX <= 4 && m.deriveY <= 4,
   `${m.videsPose} direction(s) vide(s), derive ${m.deriveX.toFixed(1)} x ${m.deriveY.toFixed(1)} px`)
 check('une pose se rend sous huit directions distinctes',
@@ -612,5 +612,5 @@ await browser.close()
 serveur.kill()
 
 const rates = bilan.filter((c) => !c.ok)
-console.log(`\n${bilan.length - rates.length}/${bilan.length} verifications reussies`)
+console.log(`\n${bilan.length - rates.length}/${bilan.length} vérifications réussies`)
 process.exit(rates.length ? 1 : 0)

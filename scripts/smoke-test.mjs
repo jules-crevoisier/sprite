@@ -96,7 +96,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 await page.goto(URL, { waitUntil: 'networkidle' })
 await sleep(400)
 
-check('l\'application demarre', await page.evaluate(() => !!window.pixelforge))
+check('l\'application démarré', await page.evaluate(() => !!window.pixelforge))
 
 // La visite guidee est proposee au premier lancement : on la refuse pour
 // retrouver un editeur vierge.
@@ -160,7 +160,7 @@ const undoOk = await page.evaluate(() => {
   ed.redo()
   return undone === 0 && count() === before
 })
-check('annuler puis retablir restaure le trait', undoOk)
+check('annuler puis rétablir restauré le trait', undoOk)
 
 /* --- moteur d'export --- */
 const report = await page.evaluate(async () => {
@@ -259,8 +259,8 @@ for (const [layout, ok] of Object.entries(report.layouts)) {
 check('les pixels de la planche correspondent aux frames', report.sheetPixels)
 check('l\'extrusion duplique les bords', report.extrude)
 check('le JSON Aseprite est complet', report.json)
-check('le .meta Unity decoupe et inverse Y', report.unity)
-check('les AnimationClip Unity sont generes', report.unityClips)
+check('le .meta Unity découpe et inverse Y', report.unity)
+check('les AnimationClip Unity sont générés', report.unityClips)
 check('la ressource SpriteFrames Godot est coherente', report.godot)
 check('le GIF est decode par le navigateur', report.gif)
 check('l\'archive ZIP a une signature valide', report.zip)
@@ -440,7 +440,7 @@ const perso = await page.evaluate(async () => {
   return out
 })
 
-check('le personnage lie chaque membre a son os',
+check('le personnage lié chaque membre a son os',
   Object.entries(perso).filter(([k]) => k !== 'tousLies' && k !== 'fentes').every(([, v]) => v),
   JSON.stringify(perso))
 check('aucun pixel du personnage ne reste sans os', perso.tousLies)
@@ -497,27 +497,27 @@ check('le mode squelette change la barre d\'outils',
 check('le mode squelette change les panneaux',
   modes.squelette.panneaux.includes('rig') && !modes.dessin.panneaux.includes('rig'),
   modes.squelette.panneaux.join(', '))
-check('le pinceau de ponderation repeint l\'influence', modes.ponderationChange)
-check('la ponderation est annulable', modes.ponderationAnnulee)
+check('le pinceau de pondération repeint l\'influence', modes.ponderationChange)
+check('la pondération est annulable', modes.ponderationAnnulee)
 
-check('les modeles de squelette tiennent dans le dessin', guided.modeles)
-check('les modeles enchainent bien les os', guided.enfants)
+check('les modèles de squelette tiennent dans le dessin', guided.modeles)
+check('les modèles enchainent bien les os', guided.enfants)
 // Un nombre fige ici casserait le test a chaque lecon ajoutee : ce qui
 // compte est qu'il y en ait, et qu'aucune ne soit vide.
-check('les lecons sont disponibles', guided.lecons >= 5 && guided.leconsVides === 0,
-  `${guided.lecons} lecons` + (guided.leconsVides ? `, ${guided.leconsVides} vide(s)` : ''))
+check('les leçons sont disponibles', guided.lecons >= 5 && guided.leconsVides === 0,
+  `${guided.lecons} leçons` + (guided.leconsVides ? `, ${guided.leconsVides} vide(s)` : ''))
 check('la carte du tutoriel s\'affiche', guided.carte)
-check('la lecon exige de vrais gestes', guided.gestesExiges >= 4, `${guided.gestesExiges} etapes sans bouton de secours`)
+check('la leçon exige de vrais gestes', guided.gestesExiges >= 4, `${guided.gestesExiges} étapes sans bouton de secours`)
 const dernierePas = guided.avance[guided.avance.length - 1] ?? ''
 const [fait, total] = dernierePas.split('/')
-check('la lecon se deroule jusqu\'au bout sur de vrais gestes',
+check('la leçon se deroule jusqu\'au bout sur de vrais gestes',
   guided.rigLie && guided.rigPose && (fait === total || dernierePas === 'terminee') && guided.avance.length >= 8,
   guided.avance.join(' -> '))
 // La fin de lecon est le seul moment ou la personne a fini quelque chose :
 // elle merite un ecran, pas un message qui passe.
-check('la lecon se termine par une fete', /Lecon terminee/.test(guided.feteTexte),
+check('la leçon se terminé par une fête', /Leçon terminée/.test(guided.feteTexte),
   guided.feteTexte.slice(0, 70))
-check('la mascotte fete la fin de la lecon', guided.fetePixl === 'attaque' || guided.fetePixl === 'repos',
+check('la mascotte fête la fin de la leçon', guided.fetePixl === 'attaque' || guided.fetePixl === 'repos',
   guided.fetePixl || 'aucune mascotte')
 check('le bouton Continuer referme la carte', guided.carteFermee)
 
@@ -539,7 +539,7 @@ const habillage = await page.evaluate(async () => {
   })
 
   // Le menu des modeles ne doit pas s'etaler par-dessus le panneau.
-  document.querySelector('.panel[data-panel="rig"] .panel-head button[title="Modeles de squelette"]').click()
+  document.querySelector('.panel[data-panel="rig"] .panel-head button[title="Modèles de squelette"]').click()
   await new Promise((r) => setTimeout(r, 150))
   const menu = document.querySelector('.dropdown')
   const largeurMenu = menu ? menu.getBoundingClientRect().width : 9999
@@ -570,9 +570,9 @@ const etroit = await page.evaluate(() => {
 })
 await page.setViewportSize({ width: 1440, height: 900 })
 await sleep(250)
-check('la bascule de mode survit a une fenetre etroite',
+check('la bascule de mode survit a une fenêtre étroite',
   etroit.entiers && etroit.dansLaBarre, `${etroit.largeur} px a 1024`)
-check('le menu des modeles reste etroit', habillage.largeurMenu <= 322, `${Math.round(habillage.largeurMenu)} px`)
+check('le menu des modèles reste étroit', habillage.largeurMenu <= 322, `${Math.round(habillage.largeurMenu)} px`)
 check('les champs des lignes d\'os recoivent le clic', habillage.champsAtteignables)
 
 /* --- la barre d'animation reste cliquable pendant la lecture --- */
@@ -598,7 +598,7 @@ const barre = await page.evaluate(async () => {
   const cliquable = atteignable === lecture || lecture.contains(atteignable)
   const gene = atteignable
     ? `${atteignable.tagName}.${String(atteignable.getAttribute?.('class') ?? '')}`
-    : `aucun element a ${Math.round(pause.x)},${Math.round(pause.y)}`
+    : `aucun élément a ${Math.round(pause.x)},${Math.round(pause.y)}`
   // L'icone doit avoir bascule sur Pause pendant la lecture.
   const iconePause = lecture.innerHTML.length > 0 && lecture.dataset.state === 'true'
   app.playback.toggle()
@@ -783,12 +783,12 @@ const tags = await page.evaluate(async () => {
   await new Promise((r) => setTimeout(r, 200))
   return { depart, deplace, etire, borne, bandes: hauts.size, frames: ed.frameCount, annule: etat() }
 })
-check('un tag se deplace a la souris', tags.deplace === 'idle:2-5 attaque:2-6', tags.deplace)
+check('un tag se déplace a la souris', tags.deplace === 'idle:2-5 attaque:2-6', tags.deplace)
 check('un tag s\'etire par son bord', tags.etire === 'idle:2-6 attaque:2-6', tags.etire)
 check('un tag ne sort pas de l\'animation',
   tags.borne === 'idle:2-6 attaque:5-9', `${tags.borne} sur ${tags.frames} frames`)
 check('les tags qui se chevauchent s\'empilent', tags.bandes === 2, `${tags.bandes} bande(s)`)
-check('deplacer un tag est annulable', tags.annule === tags.depart, tags.annule)
+check('déplacer un tag est annulable', tags.annule === tags.depart, tags.annule)
 
 /* --- une seule cadence pour toute l'animation --- */
 const cadence = await page.evaluate(async () => {
@@ -800,7 +800,7 @@ const cadence = await page.evaluate(async () => {
   champ.value = '120'
   champ.dispatchEvent(new Event('change', { bubbles: true }))
   await new Promise((r) => setTimeout(r, 150))
-  const bouton = document.querySelector('.tl-toolbar button[title^="Appliquer cette duree"]')
+  const bouton = document.querySelector('.tl-toolbar button[title^="Appliquer cette durée"]')
   bouton?.click()
   await new Promise((r) => setTimeout(r, 200))
   const toutes = ed.sprite.frameDurations.every((d) => d === 120)
@@ -809,7 +809,7 @@ const cadence = await page.evaluate(async () => {
   const apres = ed.sprite.frameDurations.filter((d) => d === 120).length
   return { bouton: !!bouton, toutes, apres, total: ed.frameCount }
 })
-check('un bouton applique la duree a toutes les frames',
+check('un bouton applique la durée a toutes les frames',
   cadence.bouton && cadence.toutes, cadence.bouton ? 'appliquee' : 'bouton absent')
 check('l\'application a toutes les frames est annulable',
   cadence.apres < cadence.total, `${cadence.apres}/${cadence.total} encore a 120 ms`)
@@ -827,10 +827,10 @@ const multi = await page.evaluate(async () => {
   app.setMode('rig')
   ed.run('modele', () => applyTemplate(ed.sprite.rig, RIG_TEMPLATES[0], ed.sprite.layers[0].cels[0].bitmap, ed.sprite))
 
-  // L'epee est posee dans la main gauche, reperee par l'os plutot que par des
+  // L'épée est posee dans la main gauche, reperee par l'os plutot que par des
   // coordonnees en dur : le personnage peut etre redessine sans casser le test.
   const main = ed.sprite.rig.bones.find((b) => b.role === 'forearmL')
-  const arme = new Layer('Epee', ed.frameCount)
+  const arme = new Layer('Épée', ed.frameCount)
   arme.cels[0] = ed.sprite.makeCel()
   const mx = Math.round(main.ex)
   for (let y = Math.round(main.ey) - 12; y <= Math.round(main.ey) + 2; y++) {
@@ -854,9 +854,9 @@ const multi = await page.evaluate(async () => {
   const apres = { corps: premier(0), epee: premier(1) }
   return { calques: ed.sprite.rig.parts.length, avant, apres }
 })
-check('un squelette peut piloter plusieurs calques', multi.calques === 2, `${multi.calques} calques relies`)
+check('un squelette peut piloter plusieurs calques', multi.calques === 2, `${multi.calques} calques reliés`)
 check('un calque annexe suit l\'os qui le porte',
-  multi.avant.epee !== multi.apres.epee, `epee ${multi.avant.epee} -> ${multi.apres.epee}`)
+  multi.avant.epee !== multi.apres.epee, `épée ${multi.avant.epee} -> ${multi.apres.epee}`)
 
 /* --- les modeles marquent le role de chaque os --- */
 const roles = await page.evaluate(async () => {
@@ -875,7 +875,7 @@ const roles = await page.evaluate(async () => {
   }
   return out
 })
-check('chaque modele marque le role de ses os',
+check('chaque modèle marque le role de ses os',
   Object.values(roles).every((r) => r.sansRole === 0),
   Object.entries(roles).map(([k, v]) => `${k}:${v.sansRole}`).join(' '))
 check('un humanoide sait marcher et courir',
@@ -982,7 +982,7 @@ const apercus = await page.evaluate(async () => {
   ed.setPrimary(fromHex('#e8ebf2'))
   ed.setSecondary(fromHex('#3d60cf'))
 
-  // L'apercu doit dessiner le trait tel qu'il sortira : c'est la seule facon
+  // L'aperçu doit dessiner le trait tel qu'il sortira : c'est la seule facon
   // de voir que la forme et le tramage n'agissent pas sur la meme chose.
   const rendu = async (reglages) => {
     ed.updateSettings(reglages)
@@ -1018,9 +1018,9 @@ check('la barre d\'options dessine le trait tel qu\'il sortira', apercus.present
 check('changer de forme change le trait', apercus.formesDistinctes === 3,
   `${apercus.formesDistinctes} traits distincts sur 3 formes`)
 check('le tramage change le trait sans changer sa forme', apercus.trameChange)
-check('la barre oppose la forme et le tramage en clair',
+check('la barre opposé la forme et le tramage en clair',
   apercus.noteAvecSecondaire && apercus.noteSansSecondaire)
-check('le mode d\'emploi de l\'outil est passe dans la barre d\'etat',
+check('le mode d\'emploi de l\'outil est passe dans la barre d\'état',
   apercus.hintHorsBarre && apercus.hintDansStatut)
 
 /* --- retoucher la palette recolore le sprite --- */
@@ -1046,7 +1046,7 @@ const palette = await page.evaluate(async () => {
   const rouge = fromHex('#c93b5d')
   const compte = (c) => { let n = 0; for (const v of ed.peekCel().bitmap.u32) if (v === c) n++; return n }
   const index = ed.sprite.palette.colors.indexOf(bleu)
-  if (index < 0) return { erreur: 'couleur de reference absente' }
+  if (index < 0) return { erreur: 'couleur de référence absente' }
   const avant = compte(bleu)
 
   document.querySelector('button[title^="Retoucher la palette"]').click()
@@ -1076,8 +1076,8 @@ check('le mode retouche de palette s\'active', palette.actif && palette.marquee,
 check('changer une couleur de palette recolore le sprite',
   palette.recolore.bleu === 0 && palette.recolore.rouge === palette.avant,
   `${palette.avant} px repeints`)
-check('la palette elle-meme retient la nouvelle couleur', palette.enPalette)
-check('la retouche ne laisse qu\'une entree dans l\'historique',
+check('la palette elle-même retient la nouvelle couleur', palette.enPalette)
+check('la retouche ne laisse qu\'une entrée dans l\'historique',
   palette.etiquette === 'Retoucher la palette', String(palette.etiquette))
 check('annuler rend au sprite et a la palette leur couleur',
   palette.annule.bleu === palette.avant && palette.annule.rouge === 0 && palette.annule.palette)
@@ -1199,7 +1199,7 @@ const portee = await page.evaluate(async () => {
   }
 })
 check('un os de bras ne remonte pas voler la tempe', portee.brasSousLEpaule)
-check('la tete et le torse ne se disputent pas le cou', portee.teteAuDessusDuTorse)
+check('la tête et le torse ne se disputent pas le cou', portee.teteAuDessusDuTorse)
 
 /* --- les cycles doivent tourner sans a-coup --- */
 const boucles = await page.evaluate(async () => {
@@ -1259,8 +1259,8 @@ const courbes = await page.evaluate(async () => {
 check('les courbes de vitesse respectent depart et arrivee',
   courbes.bornes && courbes.lineaireDroite, `${courbes.nombre} courbes`)
 check('les courbes ne se ressemblent pas', courbes.distinctes >= 7, `${courbes.distinctes} profils distincts`)
-check('anticipation et depassement sortent du cadre', courbes.anticipe && courbes.depasse)
-check('la courbe peut etre tracee', courbes.trace)
+check('anticipation et dépassement sortent du cadre', courbes.anticipe && courbes.depasse)
+check('la courbe peut être tracée', courbes.trace)
 
 /* --- suivi et inertie --- */
 const suivi = await page.evaluate(async () => {
@@ -1313,9 +1313,9 @@ const suivi = await page.evaluate(async () => {
   }
 })
 check('un os souple est reconnu', suivi.detecte)
-check('un os souple traine derriere le corps', suivi.traine)
-check('il depasse puis se stabilise', suivi.depasse && suivi.seStabilise)
-check('un os rigide ne recoit aucun retard', suivi.rigideImmobile)
+check('un os souple traine derrière le corps', suivi.traine)
+check('il dépasse puis se stabilise', suivi.depasse && suivi.seStabilise)
+check('un os rigide ne reçoit aucun retard', suivi.rigideImmobile)
 check('le suivi se raccorde sur un cycle', suivi.boucleTient)
 
 /* --- les articulations restent solidaires --- */
@@ -1356,7 +1356,7 @@ const attaches = await page.evaluate(async () => {
   }
 })
 check('tirer une articulation ne detache pas le membre',
-  attaches.cuisseNonDeplacee, 'la cuisse n\'a pas ete translatee')
+  attaches.cuisseNonDeplacee, 'la cuisse n\'a pas été translatee')
 check('c\'est l\'os porteur qui pivote', attaches.torsePivote)
 
 /* --- amplitude reelle des cycles : au-dessus du pixel --- */
@@ -1400,7 +1400,7 @@ check('le repos bouge assez pour se voir',
 check('la marche et la course rebondissent',
   amplitudes.walk.vertical >= 2 && amplitudes.run.vertical >= 2,
   `marche ${amplitudes.walk.vertical} px, course ${amplitudes.run.vertical} px`)
-check('le passage de la derniere image a la premiere ne coupe pas',
+check('le passage de la dernière image a la première ne coupé pas',
   Object.values(amplitudes).every((v) => v.raccord >= 0.55),
   Object.entries(amplitudes).map(([k, v]) => `${k}:${v.raccord}`).join(' '))
 
@@ -1452,12 +1452,12 @@ const ombrage = await page.evaluate(async () => {
     etrangeresLissage,
   }
 })
-check('une rampe va de l\'ombre a la lumiere', ombrage.croissante, `${ombrage.tons} tons`)
-check('une rampe decale la teinte, pas seulement la luminosite',
-  ombrage.ecartTeinte >= 20, `${ombrage.ecartTeinte}° d\'ecart`)
+check('une rampe va de l\'ombre a la lumière', ombrage.croissante, `${ombrage.tons} tons`)
+check('une rampe décale la teinte, pas seulement la luminosite',
+  ombrage.ecartTeinte >= 20, `${ombrage.ecartTeinte}° d\'écart`)
 check('l\'ombrage automatique repeint le dessin',
   ombrage.ombres > 40 && ombrage.matieres >= 2,
-  `${ombrage.ombres} pixels sur ${ombrage.matieres} matieres`)
+  `${ombrage.ombres} pixels sur ${ombrage.matieres} matières`)
 check('l\'ombrage n\'introduit aucune couleur etrangere', ombrage.etrangeres === 0,
   `${ombrage.etrangeres} couleurs inventees`)
 check('l\'ombrage ne change pas la silhouette', ombrage.silhouette)
@@ -1473,7 +1473,7 @@ const courbeUI = await page.evaluate(async () => {
   const barre = document.querySelector('.tl-toolbar')
   const select = barre?.querySelector('select')
   const trace = barre?.querySelector('.easing-preview svg')
-  const bouton = barre?.querySelector('button[title^="Repartir les durees"]')
+  const bouton = barre?.querySelector('button[title^="Répartir les durées"]')
   const dansLeRig = !!document.querySelector('.panel[data-panel="rig"] .easing-preview')
 
   // Le reglage doit etre partage : le squelette s'en sert aussi.
@@ -1505,7 +1505,7 @@ const courbeUI = await page.evaluate(async () => {
 check('la courbe de vitesse est dans le panneau d\'animation',
   courbeUI.dansLaTimeline && !courbeUI.dansLeRig)
 check('la courbe est partagee avec le squelette', courbeUI.partage)
-check('la courbe peut repartir les durees des frames',
+check('la courbe peut répartir les durées des frames',
   courbeUI.variees && courbeUI.totalConserve)
 
 /* --- toute commande doit etre atteignable depuis les menus --- */
@@ -1534,7 +1534,7 @@ const menus = await page.evaluate(async () => {
 })
 check('chaque commande figure dans un menu',
   menus.absentes.length === 0,
-  menus.absentes.length ? menus.absentes.join(', ') : `${menus.entrees} entrees sur ${menus.menus} menus`)
+  menus.absentes.length ? menus.absentes.join(', ') : `${menus.entrees} entrées sur ${menus.menus} menus`)
 
 /* --- un raccourci affiche doit exister pour de vrai --- */
 const raccourcis = await page.evaluate(async () => {
@@ -1558,15 +1558,15 @@ const couverture = await page.evaluate(async () => {
   const app = window.pixelforge
   const lecons = app.lessons()
   const texte = lecons.flatMap((l) => l.steps.map((s) => s.text)).join(' ').toLowerCase()
-  // Une fonction qu'aucune lecon ne nomme n'a aucune chance d'etre trouvee.
+  // Une fonction qu'aucune leçon ne nomme n'a aucune chance d'etre trouvee.
   const sujets = {
     rampe: 'rampe de couleurs',
     ombrage: 'ombrage automatique',
     courbe: 'courbe de vitesse',
     cycles: 'animations toutes faites',
     souplesse: 'souplesse',
-    calques: 'calques relies',
-    tags: 'glissez-le pour le deplacer',
+    calques: 'calques reliés',
+    tags: 'glissez-le pour le déplacer',
     pinceau: 'forme du pinceau',
     tramage: 'tramage',
     effets: 'effets de calque',
@@ -1578,10 +1578,10 @@ const couverture = await page.evaluate(async () => {
     absents,
   }
 })
-check('les lecons nomment les fonctions avancees',
+check('les leçons nomment les fonctions avancees',
   couverture.absents.length === 0,
   couverture.absents.length ? `non couvert : ${couverture.absents.join(', ')}`
-    : `${couverture.etapes} etapes sur ${couverture.lecons} lecons`)
+    : `${couverture.etapes} étapes sur ${couverture.lecons} leçons`)
 
 /* --- le tutoriel doit faire faire, pas laisser cliquer --- */
 const exigence = await page.evaluate(async () => {
@@ -1596,10 +1596,10 @@ const exigence = await page.evaluate(async () => {
     montrerSansGeste: etapes.filter((s) => s.auto && !s.done).length,
   }
 })
-check('la plupart des etapes attendent un vrai geste',
+check('la plupart des étapes attendent un vrai geste',
   exigence.verifiees / exigence.total >= 0.8,
-  `${exigence.verifiees}/${exigence.total} etapes verifiees`)
-check('aucun bouton ne fait l\'etape a la place de l\'utilisateur',
+  `${exigence.verifiees}/${exigence.total} étapes verifiees`)
+check('aucun bouton ne fait l\'étape a la place de l\'utilisateur',
   exigence.montrerSansGeste === 0, `${exigence.montrerSansGeste} raccourcis`)
 
 const blocage = await page.evaluate(async () => {
@@ -1627,7 +1627,7 @@ const blocage = await page.evaluate(async () => {
   app.tutorial.stop()
   return { avant, apres, apresGeste, libelle: libelle.trim(), inerte }
 })
-check('le bouton n\'ouvre pas une etape en attente',
+check('le bouton n\'ouvre pas une étape en attente',
   blocage.inerte && blocage.apres === blocage.avant,
   `bouton « ${blocage.libelle} », ${blocage.avant} -> ${blocage.apres}`)
 check('le geste accompli fait avancer',
@@ -1698,7 +1698,7 @@ const effets = await page.evaluate(async () => {
 check('chaque effet modifie le rendu', effets.morts.length === 0,
   `${effets.types} types` + (effets.morts.length ? ` — sans effet : ${effets.morts.join(', ')}` : ''))
 check('les effets ne touchent pas les pixels du calque', effets.intact)
-check('le cache rend la meme image que le calcul direct', effets.memeRendu)
+check('le cache rend la même image que le calcul direct', effets.memeRendu)
 check('une ombre tramee n\'ajoute qu\'une couleur', effets.ajoutees <= 1,
   `${effets.ajoutees} couleur(s) ajoutee(s)`)
 check('les effets survivent a l\'aller-retour projet', effets.conserves)
@@ -1736,7 +1736,7 @@ const survie = await page.evaluate((sel) => {
   return { pendant, apercu: !!document.querySelector('#optionsbar canvas.stroke') }
 }, curseurTaille)
 check('le curseur survit a un changement pendant le geste', survie.pendant)
-check('l\'apercu du trait reste affiche', survie.apercu)
+check('l\'aperçu du trait reste affiche', survie.apercu)
 
 // Et un vrai glisser doit atteindre la valeur visee, pas le premier cran.
 await marquerTaille()
@@ -1750,7 +1750,7 @@ for (let i = 1; i <= 12; i++) {
 await page.mouse.up()
 await sleep(150)
 const tiree = await page.evaluate(() => window.pixelforge.ed.settings.brushSize)
-check('le curseur de taille se tire jusqu\'au bout', tiree > 40, `${tiree} px apres un glisser`)
+check('le curseur de taille se tire jusqu\'au bout', tiree > 40, `${tiree} px après un glisser`)
 
 // Alt sur la molette regle la taille ; le pincement d'un pave tactile,
 // qui arrive avec ctrlKey, doit continuer a zoomer.
@@ -1797,10 +1797,10 @@ for (const [cmd, nom] of [['sprite.shade', 'ombrage'], ['sprite.detail', 'detail
   await page.keyboard.press('Escape')
   await sleep(300)
 }
-check('les apercus des dialogues se zooment', zoomables.every((a) => a.zoomable && a.zoom),
+check('les aperçus des dialogues se zooment', zoomables.every((a) => a.zoomable && a.zoom),
   zoomables.map((a) => `${a.nom}:${a.zoomable ? (a.zoom ? 'ok' : 'fige') : 'absent'}`).join(' '))
-check('les apercus se deplacent en les tirant', zoomables.every((a) => a.deplace))
-check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
+check('les aperçus se deplacent en les tirant', zoomables.every((a) => a.deplace))
+check('le double-clic rajuste l\'aperçu', zoomables.every((a) => a.ajuste))
 
 /* --- mascotte et ses cycles --- */
 const mascotte = await page.evaluate(async () => {
@@ -1810,7 +1810,7 @@ const mascotte = await page.evaluate(async () => {
   /**
    * Nombre de morceaux separes dans une image. Au-dela d'un, quelque chose
    * s'est detache du personnage — une tete qui flotte, une queue decrochee.
-   * C'est le defaut qu'on remarque avant tous les autres.
+   * C'est le défaut qu'on remarque avant tous les autres.
    */
   const morceaux = (bm) => {
     const vu = new Uint8Array(bm.length)
@@ -1897,7 +1897,7 @@ const mascotte = await page.evaluate(async () => {
     // La queue disparait sous le torse sans que rien ne le signale : sa
     // surface visible se mesure en la sortant du cadre et en comparant.
     // Ce qui se voit n'est pas l'ecart sur tout le cycle — les cinq dessins
-    // de queue n'ont deja pas la meme taille — mais le saut d'une image a
+    // de queue n'ont déjà pas la même taille — mais le saut d'une image a
     // la suivante. La queue du saut perdait un quart de sa surface sur une
     // seule image, pile a l'atterrissage : c'est un clignotement.
     const queues = clip.poses.map((p, i) => {
@@ -2005,21 +2005,21 @@ check('la mascotte a ses six cycles', mascotte.cycles === 6 && mascotte.tags ===
 check('chaque tag couvre des frames existantes', mascotte.tagsCouvrent && mascotte.frames === mascotte.images)
 check('aucun morceau ne se detache du personnage', mascotte.detachees.length === 0,
   mascotte.detachees.join(', '))
-check('aucune image n\'en repete une autre', mascotte.jumelles.length === 0,
+check('aucune image n\'en répété une autre', mascotte.jumelles.length === 0,
   mascotte.jumelles.join(', '))
 check('aucune patte ne deborde du torse', mascotte.debords === 0, `${mascotte.debords} pixels`)
 check('rien ne sort du cadre', mascotte.horsCadre.length === 0, mascotte.horsCadre.join(', '))
 // Deux mesures differentes, et il faut les deux : la premiere dit que le
 // personnage garde sa matiere, la seconde combien il s'en cache lui-meme.
-check('les variantes d\'une piece pesent le meme poids',
+check('les variantes d\'une piece pesent le même poids',
   mascotte.variantes.every((v) => v.egales),
   mascotte.variantes.map((v) => `${v.nom} ${v.masses.join('/')}`).join(' · '))
 // Ce qui reste vient des cinq dessins de queue, qui ne sont pas des
 // variantes d'une meme forme mais cinq positions differentes.
-check('la matiere posee ne varie pas', mascotte.masseDessineeMax < 0.02,
+check('la matière posee ne varie pas', mascotte.masseDessineeMax < 0.02,
   `${(mascotte.masseDessineeMax * 100).toFixed(1)}% au pire`)
 // La matiere posee est verifiee juste au-dessus et ne bouge pas. Ce qui
-// reste ici est de l'occlusion : le personnage se cache lui-meme. Ce n'est
+// reste ici est de l'occlusion : le personnage se cache lui-même. Ce n'est
 // un defaut que si ca change d'un coup, donc on borne le saut entre deux
 // images voisines et non l'ecart sur le cycle entier — un accroupissement
 // se cache legitimement plus qu'une detente.
@@ -2165,7 +2165,7 @@ check('l\'arme reste accrochee au personnage', armee.detachees.length === 0,
   armee.detachees.join(', ') || 'aucun morceau detache')
 check('rien ne sort du cadre, arme comprise', armee.horsCadre.length === 0,
   armee.horsCadre.join(', '))
-check('aucune image armee n\'en repete une autre', armee.jumelles.length === 0,
+check('aucune image armee n\'en répété une autre', armee.jumelles.length === 0,
   armee.jumelles.join(', '))
 // Les positions sont des deplacements du meme dessin : la masse de l'arme
 // est constante par construction, et c'est ce que ce releve confirme.
@@ -2174,7 +2174,7 @@ check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0) && armee.a
     || `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions, dessin d'impact compris`)
 check('l\'arme change toujours la silhouette', armee.armeInvisible.length === 0,
   armee.armeInvisible.join(', ') || `${armee.visibleMin} px ajoutes au contour au minimum`)
-check('l\'arme brandie depasse au-dessus de la tete', armee.armesBasses.length === 0,
+check('l\'arme brandie dépasse au-dessus de la tête', armee.armesBasses.length === 0,
   armee.armesBasses.join(', ') || `${armee.gainHauteurMin} px au-dessus au plus juste`)
 
 /* --- Pixl dans l'application --- */
@@ -2211,8 +2211,8 @@ check('l\'onglet porte le nom du document', identite.titre.startsWith(await page
   identite.titre)
 check('la marque est la mascotte', identite.marque === 1)
 check('les mascottes gardent leur taille native', identite.natif)
-check('les mascottes sont mises a l\'echelle par des entiers',
-  identite.fractionnaires === 0, `${identite.fractionnaires} echelle(s) fractionnaire(s)`)
+check('les mascottes sont mises a l\'échelle par des entiers',
+  identite.fractionnaires === 0, `${identite.fractionnaires} échelle(s) fractionnaire(s)`)
 
 // La marque est en permanence sous les yeux : elle doit rester immobile
 // tant qu'on ne s'en occupe pas, et repondre au survol.
@@ -2230,12 +2230,12 @@ check('la marque ne s\'anime pas toute seule', repos1 === '0' && repos2 === '0',
   `${repos1} puis ${repos2}`)
 check('la marque s\'anime au survol', survol !== repos2, `image ${survol} au survol`)
 
-/* --- l'etat vide d'une recherche sans resultat --- */
+/* --- l'état vide d'une recherche sans resultat --- */
 await page.keyboard.press('Control+k')
 await sleep(300)
 await page.keyboard.type('zzzzqqq')
 await sleep(300)
-check('une recherche sans resultat montre la mascotte',
+check('une recherche sans résultat montre la mascotte',
   await page.locator('.cmdk-list .pixl-vide canvas.pixl').count() === 1)
 await page.keyboard.press('Escape')
 await sleep(300)
@@ -2296,7 +2296,7 @@ for (let i = 0; i < 8; i++) {
 const vus = releves.filter(Boolean)
 const avance = vus.length > 1 && vus[vus.length - 1].x > vus[0].x
 const imagesVues = new Set(vus.map((r) => r.image))
-check('la mascotte traverse l\'ecran', avance,
+check('la mascotte traverse l\'écran', avance,
   vus.length ? `de ${Math.round(vus[0].x)} a ${Math.round(vus[vus.length - 1].x)} px` : 'traversee perdue')
 check('la traversee ne prend pas la souris', traversee?.transparente ?? false)
 check('la traversee change d\'image en chemin', imagesVues.size > 1,
@@ -2333,8 +2333,8 @@ await pageCalme.locator('.brand-mark').hover()
 await sleep(1200)
 const calme2 = await pageCalme.evaluate(() =>
   [...document.querySelectorAll('canvas.pixl')].map((c) => c.dataset.image))
-check('mouvement reduit : les mascottes sont presentes', calme1.length > 0, `${calme1.length} mascotte(s)`)
-check('mouvement reduit : aucune mascotte ne s\'anime',
+check('mouvement réduit : les mascottes sont presentes', calme1.length > 0, `${calme1.length} mascotte(s)`)
+check('mouvement réduit : aucune mascotte ne s\'anime',
   calme1.every((i) => i === '0') && calme2.every((i) => i === '0'),
   `${calme1.join(',')} puis ${calme2.join(',')}`)
 
@@ -2350,13 +2350,13 @@ const eggCalme = await pageCalme.evaluate(() => ({
   traversee: !!document.querySelector('.pixl-traversee'),
   planche: !!document.querySelector('.pixl-planche'),
 }))
-check('mouvement reduit : l\'easter egg saute la course', !eggCalme.traversee && eggCalme.planche)
+check('mouvement réduit : l\'easter egg saute la course', !eggCalme.traversee && eggCalme.planche)
 await pageCalme.close()
 
 /* --- la mascotte accompagne la lecon --- */
 await page.evaluate(() => window.pixelforge.runCommand('help.tutorials'))
 await sleep(400)
-check('la mascotte guide le choix d\'une lecon',
+check('la mascotte guide le choix d\'une leçon',
   await page.locator('.pixl-guide canvas.pixl').count() === 1)
 await page.locator('.modal .layer-row').first().click()
 await sleep(400)
@@ -2367,7 +2367,7 @@ if (await page.locator('.modal-foot .btn.primary').count()) {
   await sleep(600)
 }
 const compagne = page.locator('.tutor-card canvas.pixl')
-check('la mascotte accompagne la lecon', await compagne.count() === 1)
+check('la mascotte accompagne la leçon', await compagne.count() === 1)
 // La premiere etape attend un changement de zoom. La reaction ne dure que
 // le temps d'un saut : on la guette au lieu de la mesurer une seule fois.
 await page.evaluate(() => window.pixelforge.runCommand('view.zoom-in'))
@@ -2376,7 +2376,7 @@ for (let i = 0; i < 25; i++) {
   reactions.add(await compagne.getAttribute('data-pixl'))
   await sleep(60)
 }
-check('la mascotte reagit a la reussite d\'une etape', reactions.has('saut'),
+check('la mascotte reagit a la reussite d\'une étape', reactions.has('saut'),
   [...reactions].join(' → '))
 await page.evaluate(() => window.pixelforge.tutorial.stop())
 await sleep(200)
@@ -2398,14 +2398,14 @@ check('chaque cycle est joignable par son identifiant', cyclesNommables.length =
 /* Commandes qui repondent au clic, et reperes d'historique honnetes    */
 /* ------------------------------------------------------------------ */
 
-// La barre d'options se reconstruit a chaque reglage. Armee sur n'importe
+// La barre d'options se reconstruit a chaque réglage. Armee sur n'importe
 // quel appui, cette reconstruction partait au `pointerup` — donc avant que le
 // navigateur n'emette le `click`, qu'il n'emet pas sur un noeud detache :
 // tous ses boutons etaient morts sans qu'aucune erreur ne le signale.
 await page.evaluate(() => { window.pixelforge.setTool('pencil') })
 await sleep(250)
 const formeAvant = await page.evaluate(() => window.pixelforge.ed.settings.brushShape)
-const boutonForme = page.locator('#optionsbar .seg button[title="Carree"]')
+const boutonForme = page.locator('#optionsbar .seg button[title="Carrée"]')
 if (await boutonForme.count()) await boutonForme.first().click()
 await sleep(250)
 const formeApres = await page.evaluate(() => window.pixelforge.ed.settings.brushShape)
@@ -2450,9 +2450,9 @@ check('l\'annulation fait bouger une valeur observable',
   `position ${reperes.pousse.position} -> ${reperes.annule.position}, depth inchange`)
 
 // Aucune etape ne doit surveiller `depth` pour detecter une annulation, ni
-// comparer a une valeur figee ce qui devrait l'etre a l'etat d'avant.
+// comparer a une valeur figee ce qui devrait l'être a l'etat d'avant.
 const source = await (await fetch(`${URL}src/ui/lessons.ts`)).text()
-check('aucune lecon ne guette une annulation sur la taille de la pile',
+check('aucune leçon ne guette une annulation sur la taille de la pile',
   !/history\.depth\s*<[^=]/.test(source),
   (source.match(/.*history\.depth\s*<[^=].*/) ?? ['aucune'])[0].trim())
 
@@ -2481,7 +2481,7 @@ const etapesSansGeste = await page.evaluate(() => {
   }
   return fautifs
 })
-check('aucune etape de tutoriel ne se valide sans rien faire',
+check('aucune étape de tutoriel ne se valide sans rien faire',
   etapesSansGeste.length === 0, etapesSansGeste.join(', ') || 'toutes attendent un geste')
 
 // Une consigne qui dit « dessinez » doit eclairer la toile. Celle des bases
@@ -2500,7 +2500,7 @@ const ciblesDeDessin = await page.evaluate(() => {
   }
   return mauvais
 })
-check('une etape « dessinez » eclaire la toile et pas autre chose',
+check('une étape « dessinez » eclaire la toile et pas autre chose',
   ciblesDeDessin.length === 0, ciblesDeDessin.join(', ') || 'toutes visent la toile')
 
 /* ------------------------------------------------------------------ */
@@ -2569,7 +2569,7 @@ const reordre = await page.evaluate(() => {
   ed.sprite.moveFrame(3, 0)
   return { avant, apres, retour: noms() }
 })
-check('deplacer une image la remet ailleurs sans en perdre',
+check('déplacer une image la remet ailleurs sans en perdre',
   reordre.avant !== reordre.apres && reordre.avant === reordre.retour,
   `${reordre.avant.split(',').length} cases conservees`)
 
@@ -2577,7 +2577,7 @@ const tireur = await page.evaluate(() => {
   const cell = document.querySelector('.tl-head-cell[data-frame="2"]')
   return !!cell && getComputedStyle(cell).cursor === 'grab'
 })
-check('les numeros d\'image s\'annoncent comme deplacables', tireur)
+check('les numéros d\'image s\'annoncent comme deplacables', tireur)
 
 /* ------------------------------------------------------------------ */
 /* Sortie de demonstration et pile de calques                          */
@@ -2638,7 +2638,7 @@ const pileDeplacee = await page.evaluate(() => {
   ed.sprite.layers.splice(2, 0, r)
   return { avant, apres, retour: ed.sprite.layers.map((l) => l.name).join(',') }
 })
-check('deplacer un calque le remet ailleurs sans en perdre',
+check('déplacer un calque le remet ailleurs sans en perdre',
   pileDeplacee.avant !== pileDeplacee.apres && pileDeplacee.avant === pileDeplacee.retour,
   pileDeplacee.apres)
 
@@ -2682,7 +2682,7 @@ if (await boutonPoser.count()) await boutonPoser.click()
 await sleep(600)
 const apresRotation = await page.evaluate(() => window.pixelforge.ed.frameCount)
 
-check('la rotation 3D s\'ouvre avec ses cinq reglages',
+check('la rotation 3D s\'ouvre avec ses cinq réglages',
   dialogueRotation.titre === 'Tourner en 3D' && dialogueRotation.curseurs === 5,
   `${dialogueRotation.titre} / ${dialogueRotation.curseurs} curseurs`)
 check('tourner change le dessin sans le vider',
@@ -2778,7 +2778,7 @@ check('un projet trop gros pour l\'ancien rangement passe dans la bibliotheque',
   bibli.memesPixels && bibli.memeNom,
   `${Math.round(bibli.octets / 1024)} Ko`
   + (bibli.tenaitEnLocalStorage ? '' : ' — localStorage l\'aurait refuse'))
-check('deux projets coexistent au lieu de s\'ecraser',
+check('deux projets coexistent au lieu de s\'écraser',
   bibli.ajoutes === 2 && bibli.noms === 'gros-projet,petit-projet', bibli.noms)
 check('chaque projet porte sa vignette', bibli.vignette)
 check('dupliquer puis supprimer laisse la liste comme avant',
@@ -2845,7 +2845,7 @@ const apresOuverture = await page.evaluate(async () => {
     apres: (await (await import('/src/io/library.ts')).listerProjets()).length,
   }
 })
-check('enregistrer un projet ouvert le met a jour au lieu d\'en creer un',
+check('enregistrer un projet ouvert le met a jour au lieu d\'en créer un',
   apresOuverture.rattache && apresOuverture.apres === apresOuverture.avant,
   `${apresOuverture.avant} -> ${apresOuverture.apres} projet(s)`)
 
@@ -2862,9 +2862,68 @@ const disque = await page.evaluate(async () => {
   if (sauve) window.showSaveFilePicker = sauve
   return { vrai, sansApi, rendNull }
 })
-check('l\'ecriture disque se detecte et se replie proprement',
+check('l\'ecriture disque se détecte et se replie proprement',
   disque.sansApi === false && disque.rendNull,
-  disque.vrai ? 'API presente dans ce navigateur' : 'API absente, repli teste')
+  disque.vrai ? 'API présente dans ce navigateur' : 'API absente, repli teste')
+
+/* ------------------------------------------------------------------ */
+/* Orthographe des libelles                                            */
+/* ------------------------------------------------------------------ */
+
+// Un editeur francais dont l'interface annonce « Apercu », « Duree » et
+// « Reglages » se lit comme un portage bacle, quoi qu'il sache faire. Le
+// defaut etait d'autant plus visible que la typographie fine, elle, etait
+// soignee : guillemets francais, signe multiplie, tirets cadratins. Quelqu'un
+// avait fait les guillemets et laisse tomber les accents.
+//
+// Ce garde-fou relit le texte reellement affiche par l'application, menus
+// deroulants compris, et refuse une liste de mots qu'aucun libelle francais
+// ne peut porter sans accent.
+const SANS_ACCENT = [
+  // Ces graphies-la sont interdites a l'ecran. La liste est volontairement
+  // ecrite sans accents : c'est exactement ce qu'elle traque, et une passe
+  // d'accentuation automatique ne doit jamais la « corriger ».
+  'Apercu', 'Duree', 'Opacite', 'Reglage', 'Reglages', 'Creer', 'Echelle',
+  'Deselectionner', 'Precedent', 'Precedente', 'Fenetre', 'Arriere', 'Derriere',
+  'etape', 'etapes', 'assiste', 'Degats', 'Telecharger', 'Selection',
+  'Elevation', 'Lumiere', 'Edition', 'Detail', 'Icone', 'Entree', 'Interieur',
+  'Repetition', 'Numero', 'Systeme', 'Parametre', 'Symetrie', 'Isometrique',
+  'Modele', 'Element', 'Premiere', 'Derniere', 'Lecon', 'Apres', 'Carree',
+]
+const fautes = await page.evaluate(async (mots) => {
+  const vus = new Set()
+  const lire = (el) => {
+    for (const n of el.querySelectorAll('*')) {
+      for (const t of [n.textContent, n.title, n.getAttribute?.('aria-label'),
+        n.getAttribute?.('placeholder')]) {
+        if (t && t.length < 400) vus.add(t)
+      }
+    }
+  }
+  lire(document.body)
+  // Les menus ne sont pas dans le DOM tant qu'on ne les ouvre pas : on lit
+  // donc les commandes a la source, ce qui couvre aussi la palette Ctrl+K.
+  for (const c of window.pixelforge.commandes()) {
+    vus.add(c.label)
+    if (c.group) vus.add(c.group)
+    const h = c.hint?.()
+    if (h) vus.add(h)
+  }
+  for (const l of window.pixelforge.lessons()) {
+    vus.add(l.title)
+    vus.add(l.hint)
+    for (const e of l.steps) vus.add(e.text)
+  }
+  const trouves = []
+  for (const t of vus) {
+    for (const m of mots) {
+      if (new RegExp(`\\b${m}\\b`).test(t)) trouves.push(`${m} → « ${t.slice(0, 60)} »`)
+    }
+  }
+  return [...new Set(trouves)]
+}, SANS_ACCENT)
+check('aucun libelle francais ne perd ses accents', fautes.length === 0,
+  fautes.slice(0, 6).join(' | ') || `${SANS_ACCENT.length} mots surveilles`)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
@@ -2872,5 +2931,5 @@ await browser.close()
 server.kill()
 
 const failed = checks.filter((c) => !c.ok)
-console.log(`\n${checks.length - failed.length}/${checks.length} verifications reussies`)
+console.log(`\n${checks.length - failed.length}/${checks.length} vérifications réussies`)
 process.exit(failed.length ? 1 : 0)

@@ -123,7 +123,7 @@ export class App {
   /** Panneaux rangeables dans les docks lateraux. */
   private panelDefs(): PanelDef[] {
     return [
-      { id: 'preview', title: 'Apercu', icon: 'film', content: this.preview.content },
+      { id: 'preview', title: 'Aperçu', icon: 'film', content: this.preview.content },
       {
         id: 'layers', title: 'Calques', icon: 'layers',
         content: this.layersPanel.content, actions: this.layersPanel.actions,
@@ -178,7 +178,7 @@ export class App {
     if (this.ed.tiledDrawing) hud.appendChild(el('span', { class: 'chip' }, 'mode tuile'))
     if (this.ed.symmetry.x || this.ed.symmetry.y) {
       hud.appendChild(el('span', { class: 'chip' },
-        `symetrie ${this.ed.symmetry.x ? 'X' : ''}${this.ed.symmetry.y ? 'Y' : ''}`))
+        `symétrie ${this.ed.symmetry.x ? 'X' : ''}${this.ed.symmetry.y ? 'Y' : ''}`))
     }
     if (this.ed.onion.enabled) hud.appendChild(el('span', { class: 'chip' }, 'pelure d\'oignon'))
     if (this.ed.layer?.locked) hud.appendChild(el('span', { class: 'chip', style: { color: 'var(--warn)' } }, 'calque verrouille'))
@@ -245,7 +245,7 @@ export class App {
       }
       if (!file.type.startsWith('image/')) return
       ed.loadSprite(spriteFromImage(await loadImageBitmap(file), file.name.replace(/\.[^.]+$/, '')))
-      showToast('Image importee', 'success')
+      showToast('Image importée', 'success')
     })
 
     // Le vrai filet, c'est celui-ci et non `beforeunload` : une ecriture
@@ -305,6 +305,9 @@ export class App {
 
   command(id: string): Command | undefined { return this.commandMap.get(id) }
 
+  /** Toutes les commandes, pour les bancs et la palette. */
+  commandes(): readonly Command[] { return this.commands }
+
   runCommand(id: string): void {
     const cmd = this.commandMap.get(id)
     if (!cmd) return
@@ -331,7 +334,7 @@ export class App {
   /**
    * Ecrit le document dans la bibliotheque, en creant son entree au besoin.
    *
-   * L'echec est rendu au lieu d'etre avale : l'ancienne sauvegarde renvoyait
+   * L'échec est rendu au lieu d'etre avale : l'ancienne sauvegarde renvoyait
    * `false` quand le quota explosait et personne ne le voyait jamais.
    */
   async enregistrerDansBibliotheque(): Promise<boolean> {
@@ -384,7 +387,7 @@ export class App {
     this.renderTop()
   }
 
-  /** Une demo cesse d'en etre une des qu'on ouvre ou cree autre chose. */
+  /** Une demo cesse d'en être une des qu'on ouvre ou cree autre chose. */
   oublierDemo(): void { this.avantDemo = null; this.renderTop() }
 
   lessons(): Lesson[] { return buildLessons(this) }
@@ -433,12 +436,12 @@ export class App {
     if (!sprite) return false
     this.ed.loadSprite(sprite)
     this.projetId = dernier.id
-    showToast('Travail restaure', 'success')
+    showToast('Travail restauré', 'success')
     return true
   }
 
   showAbout(): void {
-    // Elle se presente en s'animant : dire « editeur d'animation » et le
+    // Elle se presente en s'animant : dire « éditeur d'animation » et le
     // montrer dans la meme boite vaut mieux que de l'ecrire deux fois.
     const vue = new VuePixl({ echelle: 3, clip: 'repos', titre: 'Cliquez : Pixl passe au cycle suivant' })
     const cycles: ClipId[] = ['repos', 'marche', 'course', 'saut', 'attaque', 'degats']
@@ -454,7 +457,7 @@ export class App {
       el('div', { class: 'pixl-carte' }, scene,
         el('div', null,
           el('p', { class: 'form-note', style: { margin: '0 0 6px', fontSize: '13px', lineHeight: '1.65' } },
-            'PixelForge est un editeur de sprites et d\'animation pixel art qui tourne entierement dans le navigateur. ',
+            'PixelForge est un éditeur de sprites et d\'animation pixel art qui tourne entièrement dans le navigateur. ',
             'Rien n\'est envoye sur un serveur : le document vit dans l\'onglet et la sauvegarde automatique reste locale.'),
           legende,
         ),
@@ -464,7 +467,7 @@ export class App {
         el('li', null, 'Tags d\'animation exportes en clips Unity et en SpriteFrames Godot.'),
         el('li', null, 'Planches avec extrusion, marge et contrainte puissance de deux.'),
         el('li', null, 'JSON au format Aseprite, lu par Phaser, PixiJS, LibGDX, Defold.'),
-        el('li', null, 'Mode tuile seamless, symetrie, pelure d\'oignon, tramage.'),
+        el('li', null, 'Mode tuile seamless, symétrie, pelure d\'oignon, tramage.'),
       ),
       el('div', { class: 'form-section' }, 'Pour commencer'),
       el('p', { class: 'form-note' },

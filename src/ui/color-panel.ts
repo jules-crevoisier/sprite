@@ -193,7 +193,7 @@ export class ColorPanel {
     this.editToggle.classList.toggle('active', this.paletteMode)
     showToast(this.paletteMode
       ? 'Retouche de palette : choisissez une pastille, le sprite suit'
-      : 'Retouche de palette terminee', this.paletteMode ? 'info' : 'success')
+      : 'Retouche de palette terminée', this.paletteMode ? 'info' : 'success')
     this.renderPalette()
   }
 
@@ -223,7 +223,7 @@ export class ColorPanel {
     this.ed.setPrimary(origine)
     showToast(total
       ? `${total} pixels suivront cette couleur`
-      : 'Cette couleur n\'est pas utilisee dans le dessin', total ? 'info' : 'info')
+      : 'Cette couleur n\'est pas utilisée dans le dessin', total ? 'info' : 'info')
     this.renderPalette()
   }
 
@@ -241,7 +241,7 @@ export class ColorPanel {
     this.suppress = false
     this.ed.events.emit('doc', undefined)
 
-    // Le geste entier ne laisse qu'une entree dans l'historique : on attend
+    // Le geste entier ne laisse qu'une entrée dans l'historique : on attend
     // que le selecteur se calme avant de la deposer.
     window.clearTimeout(edit.minuteur)
     edit.minuteur = window.setTimeout(() => this.endPaletteEdit(), 600)
@@ -279,7 +279,7 @@ export class ColorPanel {
     this.paint()
   }
 
-  /** Recharge l'etat depuis l'editeur (changement externe de couleur). */
+  /** Recharge l'état depuis l'editeur (changement externe de couleur). */
   private syncFromEditor(): void {
     if (this.suppress) { this.paint(); return }
     const c = this.currentColor()
@@ -477,7 +477,7 @@ export class ColorPanel {
       if (!palette.size) { showToast('Palette illisible', 'error'); return }
       this.ed.run('Importer la palette', () => { this.ed.sprite.palette = palette })
       this.renderPalette()
-      showToast(`${palette.size} couleurs importees`, 'success')
+      showToast(`${palette.size} couleurs importées`, 'success')
     })
     input.click()
   }

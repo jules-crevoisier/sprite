@@ -75,7 +75,7 @@ export class Sprite {
   tags: Tag[] = []
   slices: Slice[] = []
   palette: Palette
-  /** Grille d'aide, aussi utilisee comme taille de tuile par defaut a l'export. */
+  /** Grille d'aide, aussi utilisée comme taille de tuile par défaut a l'export. */
   grid = { x: 0, y: 0, w: 16, h: 16 }
   /** Origine du sprite, exportee vers Unity/Godot comme pivot par defaut. */
   pivot = { x: 0.5, y: 0.5 }

@@ -76,12 +76,12 @@ export interface Arme {
    * Le dessin de l'impact : l'arme abattue en diagonale, tranchant vers le
    * bas et vers l'exterieur.
    *
-   * Il a d'abord ete obtenu par rotation d'un quart de tour, ce qui
+   * Il a d'abord été obtenu par rotation d'un quart de tour, ce qui
    * garantissait l'egalite des masses sans rien dessiner. Mais une
    * rotation met la prise a l'oppose du tranchant : pour sortir la lame du
    * corps il fallait enfoncer la poignee dans le personnage, et les deux
    * pixels de patte finissaient dessines ENTRE ses pieds. La moitie de
-   * l'arme passait derriere les pattes, et l'image la plus importante du
+   * l'arme passait derrière les pattes, et l'image la plus importante du
    * cycle montrait une planche posee par terre.
    *
    * Le dessin est donc fait a la main, et l'egalite des masses est exigee
@@ -165,7 +165,7 @@ const BATON = [
 ]
 
 /**
- * L'epee abattue : la lame descend en diagonale vers l'exterieur, la
+ * L'épée abattue : la lame descend en diagonale vers l'exterieur, la
  * poignee reste sous la patte. Vingt-six pixels, comme le dessin porte.
  */
 const EPEE_IMPACT = [
@@ -214,7 +214,7 @@ const BATON_IMPACT = [
 export const ARMES: Arme[] = [
   ({
     id: 'epee',
-    nom: 'Epee',
+    nom: 'Épée',
     pitch: 'Celle qui deborde le plus au moment du coup : sept colonnes hors du corps, contre six et trois.',
     art: EPEE,
     prise: [3, 9],
@@ -226,7 +226,7 @@ export const ARMES: Arme[] = [
   ({
     id: 'marteau',
     nom: 'Marteau',
-    pitch: 'La masse est au bout du bras de levier : le meme deplacement se lit plus lourd.',
+    pitch: 'La masse est au bout du bras de levier : le même déplacement se lit plus lourd.',
     art: MARTEAU,
     prise: [2, 12],
     montee: [[0, -3], [0, -5], [0, -6]],
@@ -305,7 +305,7 @@ const IMPACTS = new Set<string>(['impact', 'retombee'])
  * silhouette : l'arme brandie n'ajoutait plus que quatre a cinq pixels au
  * contour du personnage, et effacait une dizaine de pixels de son trait
  * noir. En aplat, le personnage n'etait plus arme au moment meme ou il
- * frappe. Sortir l'arme du corps regle les deux d'un coup ; passer devant
+ * frappe. Sortir l'arme du corps réglé les deux d'un coup ; passer devant
  * ne reglait que le second.
  */
 const DEVANT = new Set<string>([])
@@ -433,13 +433,13 @@ export interface ClipArme {
 /**
  * Le coup porte, position par position.
  *
- * L'arme part en arriere pendant l'accroupissement, monte avec la detente,
- * et redescend UNE image avant que le corps ne s'ecrase. C'est ce decalage
+ * L'arme part en arrière pendant l'accroupissement, monte avec la detente,
+ * et redescend UNE image avant que le corps ne s'écrase. C'est ce decalage
  * qui fait qu'un coup porte : si l'arme et le corps arrivent en meme
  * temps, on ne voit pas ce qui entraine l'autre.
  *
  * La remontee de l'image huit n'est pas une erreur : c'est le rebond de
- * l'arme apres l'impact, et sans lui le retour au repos est une glissade.
+ * l'arme après l'impact, et sans lui le retour au repos est une glissade.
  */
 const COUP: PositionArme[] = [
   'contre', 'armement1', 'armement2', 'armement3', 'portee',
@@ -534,7 +534,7 @@ export function spritePixlArme(base: { id: string; nom: string; ms: number; loop
     for (const img of clip.images) {
       // Le calque d'arme ne porte que les pixels d'arme qui se voient, et
       // il passe AU-DESSUS : c'est le seul ordre qui rende les deux cas —
-      // l'arme derriere le corps et l'arme au-dessus des epaules — avec un
+      // l'arme derrière le corps et l'arme au-dessus des epaules — avec un
       // ordre de calques fixe.
       fond.cels.push({ bitmap: imageDePose(img.pose), opacity: 255 })
       dessus.cels.push({ bitmap: armeSeule(img.pose, arme, img.position), opacity: 255 })

@@ -47,7 +47,7 @@ function quand(ms: number): string {
  * La liste dit franchement ou vivent ces fichiers. Une bibliotheque qui a
  * l'air d'un disque dur alors qu'elle est dans le stockage du site fait
  * perdre du travail le jour ou quelqu'un nettoie son navigateur — d'ou la
- * ligne de place occupee, l'etat de persistance, et le bouton d'export a
+ * ligne de place occupee, l'état de persistance, et le bouton d'export a
  * portee de main sur chaque projet.
  */
 export function bibliothequeDialog(app: App): void {

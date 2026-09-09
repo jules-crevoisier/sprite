@@ -9,12 +9,12 @@ export interface TutorialStep {
   text: string
   /** Element a mettre en avant, resolu au moment ou l'etape commence. */
   target?: () => Element | null
-  /** Execute l'etape a la place de l'utilisateur. */
+  /** Execute l'étape a la place de l'utilisateur. */
   auto?: () => void | Promise<void>
   autoLabel?: string
-  /** Vrai quand l'etape est reussie : l'avancement est alors automatique. */
+  /** Vrai quand l'étape est réussie : l'avancement est alors automatique. */
   done?: () => boolean
-  /** Preparation silencieuse a l'entree dans l'etape. */
+  /** Preparation silencieuse a l'entrée dans l'etape. */
   enter?: () => void
   /**
    * Geste a montrer sur la toile, en coordonnees sprite. Une fleche animee
@@ -80,7 +80,7 @@ function markDone(id: string): void {
 
 /**
  * Visite guidee : une carte decrit l'etape, la zone concernee est mise en
- * avant, et l'etape se valide seule des que l'utilisateur a fait le geste.
+ * avant, et l'étape se valide seule des que l'utilisateur a fait le geste.
  * Chaque etape peut aussi s'executer a sa place, pour voir le resultat
  * avant de refaire soi-meme.
  */
@@ -97,7 +97,7 @@ export class Tutorial {
   private pixl = new VuePixl({ echelle: 3, clip: 'repos', titre: 'Pixl vous accompagne' })
   /**
    * La bulle porte la consigne, et par-dessus les reactions de Pixl. Elle
-   * est gardee d'une etape a l'autre pour qu'une reaction en cours ne soit
+   * est gardee d'une étape a l'autre pour qu'une reaction en cours ne soit
    * pas effacee par le rendu de l'etape suivante.
    */
   private bulle = el('p', { class: 'tutor-bulle' })
@@ -156,7 +156,7 @@ export class Tutorial {
       const dirty = this.app.ed.history.canUndo
       if (dirty && !(await confirmDialog(
         lesson.title,
-        'Cette lecon charge un document de demonstration et remplace le travail en cours. Continuer ?',
+        'Cette leçon charge un document de demonstration et remplace le travail en cours. Continuer ?',
         'Charger la demo',
       ))) return
       lesson.setup()
@@ -249,7 +249,7 @@ export class Tutorial {
       const step = this.lesson.steps[this.index]
       // La lecon peut avoir passe sa derniere etape pendant que la boucle
       // attendait de repartir : `this.index` sort alors du tableau, et la
-      // fete est deja a l'ecran. Il n'y a plus rien a surveiller.
+      // fete est deja a l'écran. Il n'y a plus rien a surveiller.
       if (!step) { clearInterval(this.poll); return }
       // La cible peut apparaitre apres coup, par exemple a l'ouverture d'un panneau.
       if (!this.target && step.target) this.target = step.target()
@@ -370,7 +370,7 @@ export class Tutorial {
     const foot = el('div', { class: 'tutor-foot' })
     foot.appendChild(el('button', {
       class: 'btn sm', disabled: this.index === 0, onclick: () => this.previous(),
-    }, 'Precedent'))
+    }, 'Précédent'))
     foot.appendChild(el('span', { class: 'spacer' }))
 
     // Une etape qui attend un geste ne se passe pas au bouton.
@@ -384,7 +384,7 @@ export class Tutorial {
     if (step.auto) {
       foot.appendChild(el('button', {
         class: 'btn sm',
-        title: 'Montrer le resultat — a vous de refaire le geste ensuite',
+        title: 'Montrer le résultat — a vous de refaire le geste ensuite',
         onclick: async () => { await step.auto!() },
       }, step.autoLabel ?? 'Montrer'))
     }
@@ -392,7 +392,7 @@ export class Tutorial {
     if (enAttente && !this.skipOffered) {
       foot.appendChild(el('button', {
         class: 'btn sm primary', disabled: true,
-        title: 'Faites le geste decrit : l\'etape se valide toute seule',
+        title: 'Faites le geste decrit : l\'étape se valide toute seule',
       }, 'En attente…'))
     } else {
       if (enAttente) {
@@ -411,7 +411,7 @@ export class Tutorial {
 
     if (enAttente) {
       this.card.appendChild(el('p', { class: 'tutor-tip' },
-        'A vous de jouer : l\'etape se valide des que c\'est fait.'))
+        'A vous de jouer : l\'étape se valide des que c\'est fait.'))
     }
   }
 
@@ -444,10 +444,10 @@ export class Tutorial {
       el('div', { class: 'tutor-corps' },
         el('div', { class: 'tutor-scene' }, this.pixl.node),
         el('div', { class: 'tutor-bulle' },
-          el('b', null, 'Lecon terminee.'),
-          el('span', null, `${lesson.title} — ${lesson.steps.length} etapes.`),
+          el('b', null, 'Leçon terminée.'),
+          el('span', null, `${lesson.title} — ${lesson.steps.length} étapes.`),
           total ? el('span', { class: 'tutor-compte' },
-            `${faites.size} lecon${faites.size > 1 ? 's' : ''} sur ${total}.`) : null,
+            `${faites.size} leçon${faites.size > 1 ? 's' : ''} sur ${total}.`) : null,
         ),
       ),
       el('div', { class: 'tutor-foot' },
@@ -478,7 +478,7 @@ export class Tutorial {
           el('span', { class: 'form-note' }, lesson.hint)),
         done.has(lesson.id)
           ? el('span', { html: icon('check', 15), style: { color: 'var(--ok)', display: 'flex' } })
-          : el('span', { class: 'form-note' }, `${lesson.steps.length} etapes`),
+          : el('span', { class: 'form-note' }, `${lesson.steps.length} étapes`),
       ))
     }
     const handle = openModal({
@@ -493,10 +493,10 @@ export class Tutorial {
                 ? 'On commence quand vous voulez.'
                 : done.size >= lessons.length
                   ? 'Vous les avez toutes faites.'
-                  : `${done.size} lecon${done.size > 1 ? 's' : ''} sur ${lessons.length}.`),
+                  : `${done.size} leçon${done.size > 1 ? 's' : ''} sur ${lessons.length}.`),
             el('p', { class: 'form-note', style: { margin: '0' } },
-              'Chaque lecon se deroule dans l\'editeur, sur un document de demonstration. ',
-              'Faites le geste vous-meme, ou laissez la lecon le faire pour voir le resultat.'),
+              'Chaque leçon se deroule dans l\'éditeur, sur un document de demonstration. ',
+              'Faites le geste vous-même, ou laissez la leçon le faire pour voir le résultat.'),
           ),
         ),
         el('div', { style: { height: '12px' } }),
@@ -509,7 +509,7 @@ export class Tutorial {
   /**
    * Propose la premiere lecon au tout premier lancement.
    *
-   * C'est le tout premier ecran du logiciel : Pixl s'y presente elle-meme
+   * C'est le tout premier écran du logiciel : Pixl s'y presente elle-meme
    * plutot que de laisser un paragraphe seul dire ce qu'est l'application.
    */
   async offerFirstRun(lessons: Lesson[]): Promise<void> {
@@ -528,7 +528,7 @@ export class Tutorial {
           el('div', null,
             el('p', { class: 'form-note', style: { margin: '0 0 8px', fontSize: '13px' } },
               'Voici Pixl. Elle fait trente-deux pixels de cote, elle a six cycles d\'animation, ',
-              'et elle a ete dessinee ici — c\'est tout ce que fait ce logiciel.'),
+              'et elle a été dessinee ici — c\'est tout ce que fait ce logiciel.'),
             el('p', { class: 'form-note', style: { margin: '0' } },
               'Une visite guidee de quelques minutes montre le dessin, l\'animation, le squelette ',
               'et l\'export vers Unity ou Godot. La lancer ?'),

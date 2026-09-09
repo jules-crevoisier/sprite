@@ -32,7 +32,7 @@ let clics: number[] = []
  * Pixl en guise de logo.
  *
  * La barre du haut se reconstruit a chaque changement de document ou
- * d'historique. On garde donc le meme element d'un rendu a l'autre : le
+ * d'historique. On garde donc le même élément d'un rendu a l'autre : le
  * recreer relancerait le cycle et ferait sauter la mascotte a chaque coup
  * de crayon.
  */
@@ -126,7 +126,7 @@ export function carteAccueilPixl(app: App): HTMLElement {
       vue.node,
       el('div', null,
         el('strong', null, 'Bonjour, je suis Pixl.'),
-        el('p', null, 'Trente-deux pixels de cote, six cycles, dessinee ici meme.'),
+        el('p', null, 'Trente-deux pixels de cote, six cycles, dessinee ici même.'),
       ),
     ),
     el('ul', { class: 'pixl-accueil-liste' },
@@ -191,19 +191,19 @@ export function plancheDePixl(app: App): void {
     body: el('div', null,
       el('p', { class: 'form-note' },
         'Six cycles, trente-deux pixels de cote, une seule palette. ',
-        'Chacun tourne ici a sa cadence reelle — c\'est ce que la timeline ne montre pas, ',
-        'puisqu\'elle les deroule l\'un apres l\'autre.'),
+        'Chacun tourne ici a sa cadence réelle — c\'est ce que la timeline ne montre pas, ',
+        'puisqu\'elle les deroule l\'un après l\'autre.'),
       el('div', { style: { height: '12px' } }),
       grille,
     ),
     actions: [
-      { label: 'Ouvrir dans l\'editeur', onClick: () => { app.runCommand('file.mascotte') } },
+      { label: 'Ouvrir dans l\'éditeur', onClick: () => { app.runCommand('file.mascotte') } },
       { label: 'Fermer', primary: true },
     ],
   })
 }
 
-/** Temps d'arret sur la derniere image d'un cycle joue une seule fois. */
+/** Temps d'arret sur la dernière image d'un cycle joue une seule fois. */
 const PAUSE_PLANCHE = 400
 
 /** Relance un cycle sans boucle tant que sa vue est dans la page. */

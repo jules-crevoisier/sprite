@@ -47,7 +47,7 @@ function makeMarquee(
         ed.selection.clear()
         ed.events.emit('selection', undefined)
       }
-      ed.commitSelectionChange('Selection')
+      ed.commitSelectionChange('Sélection')
     },
     // Annule uniquement le geste en cours : une selection deja validee
     // survit au changement d'outil.
@@ -83,8 +83,8 @@ function resetPreviewBase(ed: Editor): void {
   previewBase = new Uint8Array(ed.selection.mask)
 }
 
-export const selectRectTool = makeMarquee('Selection rectangulaire', 'select-rect', 'select-rect', false, 'M')
-export const selectEllipseTool = makeMarquee('Selection elliptique', 'select-ellipse', 'select-ellipse', true, 'Shift+M')
+export const selectRectTool = makeMarquee('Sélection rectangulaire', 'select-rect', 'select-rect', false, 'M')
+export const selectEllipseTool = makeMarquee('Sélection elliptique', 'select-ellipse', 'select-ellipse', true, 'Shift+M')
 
 /* ------------------------------------------------------------------ */
 /* Lasso                                                               */
@@ -98,7 +98,7 @@ export const lassoTool: Tool = {
   shortcut: 'Shift+L',
   icon: ICONS.lasso,
   group: 'select',
-  hint: 'Trace libre referme automatiquement.',
+  hint: 'Tracé libre referme automatiquement.',
   options: ['selectionMode'],
   cursor: 'crosshair',
   down(ed, p) {
@@ -149,7 +149,7 @@ export const magicWandTool: Tool = {
   shortcut: 'W',
   icon: ICONS['magic-wand'],
   group: 'select',
-  hint: 'Alt : baser la selection sur le calque actif uniquement.',
+  hint: 'Alt : baser la sélection sur le calque actif uniquement.',
   options: ['tolerance', 'contiguous', 'selectionMode'],
   cursor: 'crosshair',
   down(ed, p) {
@@ -182,7 +182,7 @@ let moveState: MoveState | null = null
 
 /** Detache les pixels selectionnes (ou toute la case) pour les deplacer. */
 export function beginMove(ed: Editor): boolean {
-  const cel = ed.beginStroke('Deplacer')
+  const cel = ed.beginStroke('Déplacer')
   if (!cel) return false
   const before = ed.strokeBefore!
   const sel = ed.selection
@@ -232,11 +232,11 @@ export function endMove(ed: Editor): void {
 
 export const moveTool: Tool = {
   id: 'move',
-  name: 'Deplacer',
+  name: 'Déplacer',
   shortcut: 'V',
   icon: ICONS.move,
   group: 'select',
-  hint: 'Deplace la selection, ou tout le contenu du calque si rien n\'est selectionne.',
+  hint: 'Déplace la sélection, ou tout le contenu du calque si rien n\'est sélectionné.',
   options: [],
   cursor: 'move',
   down(ed) { beginMove(ed) },
@@ -271,7 +271,7 @@ export const zoomTool: Tool = {
   shortcut: 'Z',
   icon: ICONS.zoom,
   group: 'nav',
-  hint: 'Clic : zoom avant. Alt ou clic droit : zoom arriere.',
+  hint: 'Clic : zoom avant. Alt ou clic droit : zoom arrière.',
   options: [],
   cursor: 'zoom-in',
   down() {}, move() {}, up() {},

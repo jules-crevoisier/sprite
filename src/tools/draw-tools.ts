@@ -294,7 +294,7 @@ export const gradientTool: Tool = {
   shortcut: 'R',
   icon: ICONS.gradient,
   group: 'draw',
-  hint: 'Glisser pour definir l\'axe. Maj : degrade radial.',
+  hint: 'Glisser pour définir l\'axe. Maj : degrade radial.',
   options: ['gradientDither', 'opacity', 'paintMode'],
   down(ed, _p) { ed.beginStroke('Degrade') },
   move(ed, p) {

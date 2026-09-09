@@ -25,7 +25,7 @@ export interface PointerInfo {
   pressure: number
 }
 
-/** Contexte de dessin de l'apercu, deja mis a l'echelle en pixels sprite. */
+/** Contexte de dessin de l'aperçu, déjà mis a l'echelle en pixels sprite. */
 export interface OverlayContext {
   ctx: CanvasRenderingContext2D
   zoom: number

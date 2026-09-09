@@ -184,15 +184,15 @@ export const MASCOTTES: Mascotte[] = [
   {
     id: 'forge',
     nom: 'Forge',
-    pitch: 'Un golem de braise. Lourd : chaque appui s\'ecrase, chaque saut '
-      + 'retombe. La flamme sur sa tete suit avec un temps de retard.',
+    pitch: 'Un golem de braise. Lourd : chaque appui s\'écrase, chaque saut '
+      + 'retombe. La flamme sur sa tête suit avec un temps de retard.',
     palette: PALETTE_FORGE,
     repos: FORGE_REPOS,
   },
   {
     id: 'pixl',
     nom: 'Pixl',
-    pitch: 'Un chat de pixels. Leger et rapide, une queue en trois segments '
+    pitch: 'Un chat de pixels. Léger et rapide, une queue en trois segments '
       + 'qui fouette a contretemps du corps.',
     palette: PALETTE_PIXL,
     repos: PIXL_REPOS,
@@ -201,7 +201,7 @@ export const MASCOTTES: Mascotte[] = [
     id: 'knave',
     nom: 'Knave',
     pitch: 'Un petit encapuchonne. Silhouette de personnage jouable, et une '
-      + 'echarpe qui traine derriere lui a chaque changement de direction.',
+      + 'echarpe qui traine derrière lui a chaque changement de direction.',
     palette: PALETTE_KNAVE,
     repos: KNAVE_REPOS,
   },

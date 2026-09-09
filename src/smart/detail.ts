@@ -25,8 +25,8 @@ export const DETAIL_MODES: { id: DetailMode; label: string; hint: string }[] = [
   { id: 'speckle', label: 'Grain', hint: 'Pixels isoles plus clairs et plus sombres' },
   { id: 'noise', label: 'Taches', hint: 'Zones irregulieres, pierre et terre' },
   { id: 'clusters', label: 'Touffes', hint: 'Petits amas, herbe et feuillage' },
-  { id: 'edge-shade', label: 'Ombre des bords', hint: 'Assombrit le contour interieur' },
-  { id: 'top-light', label: 'Lumiere du haut', hint: 'Eclaircit les faces tournees vers le haut' },
+  { id: 'edge-shade', label: 'Ombre des bords', hint: 'Assombrit le contour intérieur' },
+  { id: 'top-light', label: 'Lumière du haut', hint: 'Eclaircit les faces tournees vers le haut' },
   { id: 'volume', label: 'Volume', hint: 'Degrade trame du haut vers le bas' },
 ]
 

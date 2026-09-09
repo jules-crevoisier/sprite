@@ -60,7 +60,6 @@ export class StatusBar {
     parts.push(el('span', { class: 'spacer' }))
     parts.push(el('span', null, `calque ${ed.activeLayer + 1}/${ed.sprite.layers.length}`))
     parts.push(el('span', null, `frame ${ed.activeFrame + 1}/${ed.frameCount}`))
-    if (ed.history.canUndo) parts.push(el('span', null, `${ed.history.depth} actions`))
     if (this.savedAt) {
       parts.push(el('span', null, `sauvegarde ${this.savedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`))
     }

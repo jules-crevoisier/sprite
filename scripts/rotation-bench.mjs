@@ -137,7 +137,7 @@ const mesures = await page.evaluate(async () => {
     //
     // Jusqu'a 45 degres — la plage ou se joue une animation de jeu — un corps
     // plein ne perd presque rien : sa profondeur compense ce que sa largeur
-    // cede. C'est la que le defaut de la coque se voyait, et c'est donc la
+    // cede. C'est la que le défaut de la coque se voyait, et c'est donc la
     // qu'on serre a 90%.
     //
     // Au-dela, une forme reellement plate — un anneau, une lame — a le droit
@@ -166,7 +166,7 @@ const mesures = await page.evaluate(async () => {
     }
 
     // Le tangage doit se comporter comme le lacet, a un quart de tour pres :
-    // c'est le meme volume vu par l'autre axe. Une matrice mal composee
+    // c'est le même volume vu par l'autre axe. Une matrice mal composee
     // donnerait ici un resultat different.
     const parLacet = d.masse(d.tourner(img, champ, { lacet: Math.PI / 4, tangage: 0, roulis: 0 }))
     const boiteImg = img.trimBounds()
@@ -202,7 +202,7 @@ for (const r of mesures) {
   check(`${r.nom} : pas de saut d'un degre a l'autre`, r.sautMax <= r.colonne,
     `saut max ${r.sautMax} pixels, une colonne en fait ${r.colonne}`)
   check(`${r.nom} : les deux profils se valent`, r.dissymetrie <= 0.04,
-    `${(r.dissymetrie * 100).toFixed(1)}% d'ecart entre +theta et -theta`)
+    `${(r.dissymetrie * 100).toFixed(1)}% d'écart entre +theta et -theta`)
 }
 
 check('aucune erreur JavaScript', erreurs.length === 0, erreurs.join(' | '))
@@ -211,5 +211,5 @@ await browser.close()
 serveur.kill()
 
 const rates = bilan.filter((c) => !c.ok)
-console.log(`\n${bilan.length - rates.length}/${bilan.length} verifications reussies`)
+console.log(`\n${bilan.length - rates.length}/${bilan.length} vérifications réussies`)
 process.exit(rates.length ? 1 : 0)

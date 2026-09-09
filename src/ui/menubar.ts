@@ -19,7 +19,7 @@ const MENUS: { label: string; items: string[] }[] = [
     ],
   },
   {
-    label: 'Edition',
+    label: 'Édition',
     items: [
       'edit.undo', 'edit.redo', '---',
       'edit.cut', 'edit.copy', 'edit.paste', 'edit.delete', 'edit.fill', '---',
@@ -37,7 +37,7 @@ const MENUS: { label: string; items: string[] }[] = [
     ],
   },
   {
-    label: 'Assiste',
+    label: 'Assisté',
     items: [
       'rig.open', '---',
       'sprite.ramp', 'sprite.shade', 'sprite.rotate3d', '---',
@@ -148,7 +148,7 @@ export function renderTopbar(container: HTMLElement, app: App): void {
   const actions = el('div', { class: 'topbar-actions' },
     iconButton(icon('undo', 16), `Annuler${ed.history.undoLabel ? ` : ${ed.history.undoLabel}` : ''}`,
       () => ed.undo(), { className: 'ghost', disabled: !ed.history.canUndo }),
-    iconButton(icon('redo', 16), `Retablir${ed.history.redoLabel ? ` : ${ed.history.redoLabel}` : ''}`,
+    iconButton(icon('redo', 16), `Rétablir${ed.history.redoLabel ? ` : ${ed.history.redoLabel}` : ''}`,
       () => ed.redo(), { className: 'ghost', disabled: !ed.history.canRedo }),
     el('div', { class: 'opt-sep' }),
     iconButton(icon('layout', 16), 'Espace de travail : dispositions et panneaux',

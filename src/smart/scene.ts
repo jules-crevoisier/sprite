@@ -58,7 +58,7 @@ import type { Angles, ChampProfondeur } from './depth'
  *
  * ## Un seul tampon de profondeur pour toute la scene
  *
- * Les pieces ne sont pas composees l'une apres l'autre : elles sont projetees
+ * Les pieces ne sont pas composees l'une après l'autre : elles sont projetees
  * dans le meme tampon. C'est la seule facon d'obtenir une occultation juste —
  * une main qui passe devant le torse le cache, et devient cachee par lui au
  * demi-tour, sans qu'aucun ordre de calque n'ait a etre gere a la main.
@@ -82,7 +82,7 @@ export const CAMERA_FACE: Camera = { azimut: 0, elevation: 0, zoom: 1 }
 /**
  * Elevation de la vue isometrique du pixel art.
  *
- * Le « 2:1 » designe la pente a l'ecran : un pas vers l'est descend d'un pixel
+ * Le « 2:1 » designe la pente a l'écran : un pas vers l'est descend d'un pixel
  * pour deux vers la droite. Cette pente vaut sin(elevation) une fois l'azimut
  * a 45 degres — la demonstration tient en une ligne et le banc la verifie —
  * donc l'elevation vaut arcsin(1/2), soit trente degres pile.
@@ -105,8 +105,8 @@ export const VUES: { id: string; nom: string; camera: Camera }[] = [
   { id: 'profil', nom: 'Profil', camera: { azimut: 90 * DEG, elevation: 0, zoom: 1 } },
   { id: 'dos', nom: 'Dos', camera: { azimut: 180 * DEG, elevation: 0, zoom: 1 } },
   { id: 'dessus', nom: 'Vue de dessus', camera: { azimut: 0, elevation: 90 * DEG, zoom: 1 } },
-  { id: 'iso', nom: 'Isometrique 2:1', camera: { azimut: 45 * DEG, elevation: ELEVATION_ISO_2_1, zoom: 1 } },
-  { id: 'iso-vraie', nom: 'Isometrique vraie', camera: { azimut: 45 * DEG, elevation: ELEVATION_ISO_VRAIE, zoom: 1 } },
+  { id: 'iso', nom: 'Isométrique 2:1', camera: { azimut: 45 * DEG, elevation: ELEVATION_ISO_2_1, zoom: 1 } },
+  { id: 'iso-vraie', nom: 'Isométrique vraie', camera: { azimut: 45 * DEG, elevation: ELEVATION_ISO_VRAIE, zoom: 1 } },
   { id: 'plongee', nom: 'Plongee de jeu', camera: { azimut: 0, elevation: 55 * DEG, zoom: 1 } },
 ]
 
@@ -241,7 +241,7 @@ export interface RenduScene {
 export interface OptionsRendu {
   largeur: number
   hauteur: number
-  /** Centre de la projection a l'ecran. Par defaut, le centre de l'image. */
+  /** Centre de la projection a l'écran. Par défaut, le centre de l'image. */
   centre?: { x: number; y: number }
   /**
    * Point du monde autour duquel la camera tourne.
@@ -259,8 +259,8 @@ export interface OptionsRendu {
  * Projette toutes les pieces dans un meme tampon.
  *
  * Chaque pixel opaque d'un dessin source represente une colonne de matiere
- * d'epaisseur `2 * champ`, parcourue tranche par tranche d'un pixel. Deux
- * tranches voisines ne peuvent pas s'ecarter de plus d'un pixel a l'ecran —
+ * d'épaisseur `2 * champ`, parcourue tranche par tranche d'un pixel. Deux
+ * tranches voisines ne peuvent pas s'écarter de plus d'un pixel a l'ecran —
  * aucune rotation n'agrandit — donc la projection ne laisse pas de vide, et
  * chaque tranche ne pose qu'un pixel, donc elle n'en invente pas.
  */
@@ -354,7 +354,7 @@ function transposee(m: Mat3): Mat3 {
  * Le critere est le meme que celui de la mesure des trous : boucher et
  * mesurer doivent parler de la meme chose, sinon le banc signale des percees
  * que le bouchage n'avait aucun moyen de voir. Un creux ouvert sur
- * l'exterieur — l'espace entre deux jambes — n'a jamais ses quatre voisins
+ * l'extérieur — l'espace entre deux jambes — n'a jamais ses quatre voisins
  * pleins et reste donc ouvert.
  */
 function boucherLesTrous(img: Bitmap, prof: Float32Array): void {
@@ -456,7 +456,7 @@ export function planchesDeDirections(
 /* ------------------------------------------------------------------ */
 
 /**
- * Pente a l'ecran d'un deplacement d'une unite vers l'est, sous cette camera.
+ * Pente a l'écran d'un deplacement d'une unité vers l'est, sous cette camera.
  *
  * C'est la grandeur qui definit une projection isometrique de pixel art :
  * elle doit valoir exactement 1/2, sans quoi les tuiles ne se raccordent pas

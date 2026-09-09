@@ -27,7 +27,10 @@ export interface LayoutState {
 }
 
 const STORAGE_KEY = 'pixelforge.layout.v3'
-const MIN_DOCK = 180
+// A 180 les en-tetes de panneau sortaient du dock et se faisaient rogner,
+// et l'opacite affichait « 10 » au lieu de « 100% ». Le contenu reel en
+// demande 240.
+const MIN_DOCK = 240
 const MAX_DOCK = 520
 
 /** Dispositions proposees dans le menu, adaptees a une facon de travailler. */
@@ -56,7 +59,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
   },
   animation: {
     label: 'Animation',
-    hint: 'Apercu et calques, timeline en avant',
+    hint: 'Aperçu et calques, timeline en avant',
     layout: () => ({
       docks: { left: [], right: ['preview', 'layers', 'rig'] },
       hidden: ['color', 'palette'],
@@ -91,7 +94,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
 
 /**
  * Gere les panneaux lateraux : rangement dans un dock gauche ou droit,
- * ordre, pliage, visibilite et largeur. L'etat est conserve d'une session a
+ * ordre, pliage, visibilite et largeur. L'état est conserve d'une session a
  * l'autre dans le navigateur.
  */
 export class Workspace {
@@ -353,7 +356,7 @@ export class Workspace {
         onClick: () => this.toggleCollapsed(id),
       },
       {
-        label: `Deplacer a ${other === 'left' ? 'gauche' : 'droite'}`,
+        label: `Déplacer a ${other === 'left' ? 'gauche' : 'droite'}`,
         icon: other === 'left' ? 'panel-left' : 'panel-right',
         onClick: () => this.place(id, other, this.state.docks[other].length),
       },

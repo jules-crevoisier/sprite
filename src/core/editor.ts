@@ -134,7 +134,7 @@ export class Editor {
 
   /**
    * Courbe de vitesse des images intermediaires. Elle vit sur l'editeur et
-   * non dans un panneau : c'est un reglage d'animation, employe aussi bien
+   * non dans un panneau : c'est un réglage d'animation, employe aussi bien
    * par la timeline que par le squelette.
    */
   easing: EasingId = 'ease-in-out'
@@ -301,7 +301,7 @@ export class Editor {
       this.syncSelectionSize()
       this.events.emit('doc', undefined)
       this.events.emit('cursor', undefined)
-      this.toast(`Annule : ${label}`)
+      this.toast(`Annulé : ${label}`)
     }
   }
 
@@ -312,7 +312,7 @@ export class Editor {
       this.syncSelectionSize()
       this.events.emit('doc', undefined)
       this.events.emit('cursor', undefined)
-      this.toast(`Retabli : ${label}`)
+      this.toast(`Rétabli : ${label}`)
     }
   }
 

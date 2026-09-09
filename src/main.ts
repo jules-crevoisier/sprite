@@ -2,7 +2,7 @@ import './styles.css'
 import { App } from './ui/app'
 
 /**
- * Point d'entree. L'application entiere vit dans l'onglet : aucun etat n'est
+ * Point d'entrée. L'application entiere vit dans l'onglet : aucun état n'est
  * envoye a un serveur.
  */
 function boot(): void {

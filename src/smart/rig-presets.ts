@@ -71,16 +71,16 @@ export const RIG_TEMPLATES: RigTemplate[] = [
   {
     id: 'humanoid-side',
     label: 'Humanoide de profil',
-    hint: 'Membres avant et arriere separes, pour une marche',
+    hint: 'Membres avant et arrière separes, pour une marche',
     bones: [
       { name: 'torse', x: 0.5, y: 0.7, ex: 0.48, ey: 0.4, parent: null, role: 'torso', radius: 0.34 },
       { name: 'tete', x: 0.48, y: 0.4, ex: 0.44, ey: 0.04, parent: 0, role: 'head', radius: 0.34 },
-      { name: 'bras arriere', x: 0.56, y: 0.44, ex: 0.62, ey: 0.6, parent: 0, role: 'armR', depth: -0.12 },
-      { name: 'avant-bras arriere', x: 0.62, y: 0.6, ex: 0.68, ey: 0.76, parent: 2, role: 'forearmR', depth: -0.12 },
+      { name: 'bras arrière', x: 0.56, y: 0.44, ex: 0.62, ey: 0.6, parent: 0, role: 'armR', depth: -0.12 },
+      { name: 'avant-bras arrière', x: 0.62, y: 0.6, ex: 0.68, ey: 0.76, parent: 2, role: 'forearmR', depth: -0.12 },
       { name: 'bras avant', x: 0.42, y: 0.44, ex: 0.36, ey: 0.6, parent: 0, role: 'armL', depth: 0.12 },
       { name: 'avant-bras avant', x: 0.36, y: 0.6, ex: 0.3, ey: 0.76, parent: 4, role: 'forearmL', depth: 0.12 },
-      { name: 'cuisse arriere', x: 0.54, y: 0.7, ex: 0.6, ey: 0.85, parent: 0, role: 'legR', depth: -0.08 },
-      { name: 'tibia arriere', x: 0.6, y: 0.85, ex: 0.64, ey: 0.98, parent: 6, role: 'shinR', depth: -0.08 },
+      { name: 'cuisse arrière', x: 0.54, y: 0.7, ex: 0.6, ey: 0.85, parent: 0, role: 'legR', depth: -0.08 },
+      { name: 'tibia arrière', x: 0.6, y: 0.85, ex: 0.64, ey: 0.98, parent: 6, role: 'shinR', depth: -0.08 },
       { name: 'cuisse avant', x: 0.46, y: 0.7, ex: 0.4, ey: 0.85, parent: 0, role: 'legL', depth: 0.08 },
       { name: 'tibia avant', x: 0.4, y: 0.85, ex: 0.36, ey: 0.98, parent: 8, role: 'shinL', depth: 0.08 },
     ],
@@ -88,7 +88,7 @@ export const RIG_TEMPLATES: RigTemplate[] = [
   {
     id: 'quadruped',
     label: 'Quadrupede',
-    hint: 'Corps, tete, queue et quatre pattes',
+    hint: 'Corps, tête, queue et quatre pattes',
     bones: [
       { name: 'corps', x: 0.72, y: 0.46, ex: 0.28, ey: 0.42, parent: null, role: 'torso', radius: 0.34 },
       { name: 'tete', x: 0.28, y: 0.42, ex: 0.08, ey: 0.28, parent: 0, role: 'head', radius: 0.34 },
@@ -102,7 +102,7 @@ export const RIG_TEMPLATES: RigTemplate[] = [
   {
     id: 'bird',
     label: 'Oiseau',
-    hint: 'Deux ailes battantes, tete et queue',
+    hint: 'Deux ailes battantes, tête et queue',
     bones: [
       { name: 'corps', x: 0.58, y: 0.6, ex: 0.4, ey: 0.4, parent: null, role: 'torso', radius: 0.34 },
       { name: 'tete', x: 0.4, y: 0.4, ex: 0.26, ey: 0.22, parent: 0, role: 'head', radius: 0.34 },

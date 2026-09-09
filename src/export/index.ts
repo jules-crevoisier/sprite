@@ -138,10 +138,10 @@ const UNITY_README = (base: string) => `Import dans Unity
 =================
 
 1. Glissez ${base}.png ET ${base}.png.meta ensemble dans le dossier Assets.
-   Le .meta contient deja le decoupage en sprites, le pivot et les reglages
+   Le .meta contient déjà le découpage en sprites, le pivot et les réglages
    d'import (Point filter, sans compression) : ne le renommez pas.
 2. Les fichiers .anim sont des AnimationClip prets a l'emploi. Glissez-en un
-   sur un GameObject possedant un SpriteRenderer pour creer l'Animator, puis
+   sur un GameObject possedant un SpriteRenderer pour créer l'Animator, puis
    ajoutez les autres clips dans l'Animator Controller.
 3. Si Unity ne montre pas les sprites decoupes, faites un clic droit sur la
    texture puis Reimport.
@@ -153,13 +153,13 @@ outils tiers.
 const GODOT_README = (base: string, resPath: string) => `Import dans Godot 4
 ===================
 
-1. Copiez ${base}.png et ${base}_frames.tres dans votre projet.
-   Le .tres pointe vers ${resPath} : adaptez le chemin si vous rangez la
-   texture ailleurs (ouvrez le .tres dans un editeur de texte).
+1. Copiez ${base}.png et ${base}_frames.très dans votre projet.
+   Le .très pointe vers ${resPath} : adaptez le chemin si vous rangez la
+   texture ailleurs (ouvrez le .très dans un éditeur de texte).
 2. Selectionnez la texture dans le FileSystem, onglet Import, mettez
    Filter sur Nearest puis Reimport. C'est indispensable pour du pixel art.
-3. Ajoutez un AnimatedSprite2D et assignez ${base}_frames.tres a sa
-   propriete Sprite Frames. Chaque tag d'animation devient une animation.
+3. Ajoutez un AnimatedSprite2D et assignez ${base}_frames.très a sa
+   propriété Sprite Frames. Chaque tag d'animation devient une animation.
 
-Les durees par frame sont conservees via le multiplicateur de duree de Godot.
+Les durées par frame sont conservees via le multiplicateur de durée de Godot.
 `

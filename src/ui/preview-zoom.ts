@@ -104,18 +104,18 @@ export function zoomablePreview(opts: { hauteur?: number } = {}): ZoomablePrevie
   cadre.addEventListener('dblclick', () => { regleALaMain = false; ajuster() })
 
   const barre = el('div', { class: 'apercu-barre' },
-    iconButton(icon('zoom-out', 13), 'Reduire', () => {
+    iconButton(icon('zoom-out', 13), 'Réduire', () => {
       zoomerVers(palierSuivant(zoom, -1), cadre.clientWidth / 2, cadre.clientHeight / 2)
     }, { className: 'ghost sm icon-only' }),
     badge,
     iconButton(icon('zoom-in', 13), 'Agrandir', () => {
       zoomerVers(palierSuivant(zoom, 1), cadre.clientWidth / 2, cadre.clientHeight / 2)
     }, { className: 'ghost sm icon-only' }),
-    iconButton(icon('fit', 13), 'Ajuster (double-clic dans l\'apercu)', () => {
+    iconButton(icon('fit', 13), 'Ajuster (double-clic dans l\'aperçu)', () => {
       regleALaMain = false
       ajuster()
     }, { className: 'ghost sm icon-only' }),
-    el('span', { class: 'apercu-aide' }, 'molette : zoom · glisser : deplacer'),
+    el('span', { class: 'apercu-aide' }, 'molette : zoom · glisser : déplacer'),
   )
 
   const node = el('div', { class: 'apercu-bloc' }, cadre, barre)

@@ -122,7 +122,7 @@ export function buildCommands(app: App): Command[] {
     id: 'file.save-as', label: 'Enregistrer sous…', group: 'Fichier', keys: 'Ctrl+Maj+S', icon: 'save-as',
     hint: () => (ecritureDisqueDisponible()
       ? 'Choisir un fichier ; Ctrl+S le reecrira ensuite'
-      : 'Telecharge une copie : ce navigateur ne sait pas ecrire sur le disque'),
+      : 'Téléchargé une copie : ce navigateur ne sait pas ecrire sur le disque'),
     run: async () => {
       const contenu = serializeSprite(ed.sprite)
       const nom = `${safeName(ed.sprite.name)}.${PROJECT_EXT}`
@@ -130,7 +130,7 @@ export function buildCommands(app: App): Command[] {
         // Firefox et Safari n'ont pas l'API : le telechargement reste le
         // comportement normal, pas un mode degrade.
         downloadText(contenu, nom, 'application/json')
-        showToast('Projet telecharge', 'success')
+        showToast('Projet téléchargé', 'success')
         return
       }
       const poignee = await choisirFichierEnregistrement(nom)
@@ -189,7 +189,7 @@ export function buildCommands(app: App): Command[] {
 
 
   add({
-    id: 'file.copy-png', label: 'Copier la frame dans le presse-papiers systeme', group: 'Fichier', icon: 'copy',
+    id: 'file.copy-png', label: 'Copier la frame dans le presse-papiers système', group: 'Fichier', icon: 'copy',
     run: async () => {
       try {
         const blob = await new Promise<Blob>((resolve, reject) => {
@@ -199,7 +199,7 @@ export function buildCommands(app: App): Command[] {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
         showToast('Frame copiee', 'success')
       } catch {
-        showToast('Le navigateur a refuse l\'acces au presse-papiers', 'error')
+        showToast('Le navigateur a refuse l\'accès au presse-papiers', 'error')
       }
     },
   })
@@ -207,59 +207,59 @@ export function buildCommands(app: App): Command[] {
   /* ---------------- Edition ---------------- */
 
   add({
-    id: 'edit.undo', label: 'Annuler', group: 'Edition', keys: 'Ctrl+Z', icon: 'undo',
+    id: 'edit.undo', label: 'Annuler', group: 'Édition', keys: 'Ctrl+Z', icon: 'undo',
     enabled: () => ed.history.canUndo,
     run: () => ed.undo(),
   })
   add({
-    id: 'edit.redo', label: 'Retablir', group: 'Edition', keys: 'Ctrl+Y', icon: 'redo',
+    id: 'edit.redo', label: 'Rétablir', group: 'Édition', keys: 'Ctrl+Y', icon: 'redo',
     enabled: () => ed.history.canRedo,
     run: () => ed.redo(),
   })
   add({
-    id: 'edit.cut', label: 'Couper', group: 'Edition', keys: 'Ctrl+X',
+    id: 'edit.cut', label: 'Couper', group: 'Édition', keys: 'Ctrl+X',
     run: () => { if (!ops.cutSelection(ed)) showToast('Rien a couper', 'error') },
   })
   add({
-    id: 'edit.copy', label: 'Copier', group: 'Edition', keys: 'Ctrl+C', icon: 'copy',
+    id: 'edit.copy', label: 'Copier', group: 'Édition', keys: 'Ctrl+C', icon: 'copy',
     run: () => { if (ops.copySelection(ed)) showToast('Copie') },
   })
   add({
-    id: 'edit.paste', label: 'Coller', group: 'Edition', keys: 'Ctrl+V',
+    id: 'edit.paste', label: 'Coller', group: 'Édition', keys: 'Ctrl+V',
     run: () => ops.pasteClipboard(ed),
   })
   add({
-    id: 'edit.delete', label: 'Effacer la selection', group: 'Edition', keys: 'Suppr', icon: 'trash',
+    id: 'edit.delete', label: 'Effacer la sélection', group: 'Édition', keys: 'Suppr', icon: 'trash',
     run: () => ops.deleteSelection(ed),
   })
   add({
-    id: 'edit.fill', label: 'Remplir avec la couleur principale', group: 'Edition', keys: 'F',
+    id: 'edit.fill', label: 'Remplir avec la couleur principale', group: 'Édition', keys: 'F',
     run: () => ops.fillSelection(ed, ed.primary),
   })
   add({
-    id: 'edit.select-all', label: 'Tout selectionner', group: 'Edition', keys: 'Ctrl+A',
+    id: 'edit.select-all', label: 'Tout sélectionner', group: 'Édition', keys: 'Ctrl+A',
     run: () => ops.selectAll(ed),
   })
   add({
-    id: 'edit.deselect', label: 'Deselectionner', group: 'Edition', keys: 'Ctrl+D',
+    id: 'edit.deselect', label: 'Désélectionner', group: 'Édition', keys: 'Ctrl+D',
     enabled: () => ed.selection.active,
     run: () => ops.deselect(ed),
   })
   add({
-    id: 'edit.invert-selection', label: 'Inverser la selection', group: 'Edition', keys: 'Ctrl+I',
+    id: 'edit.invert-selection', label: 'Inverser la sélection', group: 'Édition', keys: 'Ctrl+I',
     run: () => ops.invertSelection(ed),
   })
   add({
-    id: 'edit.select-opaque', label: 'Selectionner le contenu du calque', group: 'Edition',
+    id: 'edit.select-opaque', label: 'Sélectionner le contenu du calque', group: 'Édition',
     run: () => ops.selectOpaque(ed),
   })
   add({
-    id: 'edit.grow', label: 'Dilater la selection', group: 'Edition',
+    id: 'edit.grow', label: 'Dilater la sélection', group: 'Édition',
     enabled: () => ed.selection.active,
     run: () => ops.growSelection(ed, 1),
   })
   add({
-    id: 'edit.shrink', label: 'Contracter la selection', group: 'Edition',
+    id: 'edit.shrink', label: 'Contracter la sélection', group: 'Édition',
     enabled: () => ed.selection.active,
     run: () => ops.growSelection(ed, -1),
   })
@@ -275,9 +275,9 @@ export function buildCommands(app: App): Command[] {
     run: () => dlg.scaleSpriteDialog(ed),
   })
   add({
-    id: 'sprite.crop', label: 'Rogner sur la selection', group: 'Sprite', icon: 'crop',
+    id: 'sprite.crop', label: 'Rogner sur la sélection', group: 'Sprite', icon: 'crop',
     enabled: () => ed.selection.active,
-    run: () => { if (!ops.cropToSelection(ed)) showToast('Aucune selection', 'error') },
+    run: () => { if (!ops.cropToSelection(ed)) showToast('Aucune sélection', 'error') },
   })
   add({
     id: 'sprite.trim', label: 'Rogner les bords vides', group: 'Sprite', icon: 'crop',
@@ -320,15 +320,15 @@ export function buildCommands(app: App): Command[] {
     run: () => ops.applyColorEffect(ed, 'Inverser les couleurs', 'cel', invertColors),
   })
   add({
-    id: 'sprite.desaturate', label: 'Desaturer', group: 'Sprite',
-    run: () => ops.applyColorEffect(ed, 'Desaturer', 'cel', desaturate),
+    id: 'sprite.desaturate', label: 'Désaturer', group: 'Sprite',
+    run: () => ops.applyColorEffect(ed, 'Désaturer', 'cel', desaturate),
   })
   add({
     id: 'sprite.snap-palette', label: 'Aligner les couleurs sur la palette', group: 'Sprite', icon: 'palette',
     run: () => ops.snapToPalette(ed, 'sprite'),
   })
   add({
-    id: 'rig.open', label: 'Passer en mode Squelette', group: 'Assiste', keys: 'Maj+K', icon: 'rig',
+    id: 'rig.open', label: 'Passer en mode Squelette', group: 'Assisté', keys: 'Maj+K', icon: 'rig',
     checked: () => ed.mode === 'rig',
     run: () => {
       app.setMode(ed.mode === 'rig' ? 'draw' : 'rig')
@@ -336,30 +336,30 @@ export function buildCommands(app: App): Command[] {
     },
   })
   add({
-    id: 'sprite.variants', label: 'Variantes de couleur…', group: 'Assiste', keys: 'Ctrl+Maj+V', icon: 'variants',
+    id: 'sprite.variants', label: 'Variantes de couleur…', group: 'Assisté', keys: 'Ctrl+Maj+V', icon: 'variants',
     run: () => variantsDialog(ed),
   })
   add({
-    id: 'sprite.detail', label: 'Ajouter du detail…', group: 'Assiste', keys: 'Ctrl+Maj+D', icon: 'detail',
+    id: 'sprite.detail', label: 'Ajouter du détail…', group: 'Assisté', keys: 'Ctrl+Maj+D', icon: 'detail',
     run: () => detailDialog(ed),
   })
   add({
-    id: 'sprite.shade', label: 'Ombrage automatique…', group: 'Assiste', keys: 'Ctrl+Maj+O', icon: 'shading',
+    id: 'sprite.shade', label: 'Ombrage automatique…', group: 'Assisté', keys: 'Ctrl+Maj+O', icon: 'shading',
     run: () => shadeDialog(ed),
   })
 
   add({
-    id: 'sprite.rotate3d', label: 'Tourner en 3D…', group: 'Assiste', keys: 'Ctrl+Maj+R', icon: 'rig',
+    id: 'sprite.rotate3d', label: 'Tourner en 3D…', group: 'Assisté', keys: 'Ctrl+Maj+R', icon: 'rig',
     hint: () => 'Trois-quarts et profils, sans redessiner',
     run: () => rotationDialog(ed),
   })
   add({
-    id: 'sprite.ramp', label: 'Rampe de couleurs…', group: 'Assiste', keys: 'Ctrl+Maj+G', icon: 'palette',
+    id: 'sprite.ramp', label: 'Rampe de couleurs…', group: 'Assisté', keys: 'Ctrl+Maj+G', icon: 'palette',
     run: () => rampDialog(ed),
   })
 
   add({
-    id: 'sprite.slice-new', label: 'Nouvelle zone depuis la selection…', group: 'Sprite', icon: 'crop',
+    id: 'sprite.slice-new', label: 'Nouvelle zone depuis la sélection…', group: 'Sprite', icon: 'crop',
     run: () => {
       const box = ed.selection.active ? ed.selection.bounds() : ed.sprite.bounds
       dlg.sliceDialog(ed, {
@@ -436,7 +436,7 @@ export function buildCommands(app: App): Command[] {
       run: () => {
         const layer = ed.layer
         ed.run(`Ajouter : ${kind.label.toLowerCase()}`, () => { layer.effects.push(createEffect(kind.id)) })
-        ed.toast(`${kind.label} ajoutee — reglages dans le panneau Calques`, 'success')
+        ed.toast(`${kind.label} ajoutee — réglages dans le panneau Calques`, 'success')
       },
     })
   }
@@ -469,7 +469,7 @@ export function buildCommands(app: App): Command[] {
     id: 'layer.toggle-visible', label: 'Afficher / masquer le calque', group: 'Calque', icon: 'eye',
     run: () => {
       const layer = ed.layer
-      ed.run('Visibilite du calque', () => { layer.visible = !layer.visible })
+      ed.run('Visibilité du calque', () => { layer.visible = !layer.visible })
     },
   })
   add({
@@ -528,19 +528,19 @@ export function buildCommands(app: App): Command[] {
     run: () => ed.setActiveFrame(ed.activeFrame + 1),
   })
   add({
-    id: 'frame.prev', label: 'Frame precedente', group: 'Animation', keys: ',', icon: 'prev',
+    id: 'frame.prev', label: 'Frame précédente', group: 'Animation', keys: ',', icon: 'prev',
     run: () => ed.setActiveFrame(ed.activeFrame - 1),
   })
   add({
-    id: 'frame.first', label: 'Premiere frame', group: 'Animation', keys: 'Origine',
+    id: 'frame.first', label: 'Première frame', group: 'Animation', keys: 'Origine',
     run: () => ed.setActiveFrame(0),
   })
   add({
-    id: 'frame.last', label: 'Derniere frame', group: 'Animation', keys: 'Fin',
+    id: 'frame.last', label: 'Dernière frame', group: 'Animation', keys: 'Fin',
     run: () => ed.setActiveFrame(ed.frameCount - 1),
   })
   add({
-    id: 'frame.play', label: 'Lire / arreter l\'animation', group: 'Animation', keys: 'Entree', icon: 'play',
+    id: 'frame.play', label: 'Lire / arreter l\'animation', group: 'Animation', keys: 'Entrée', icon: 'play',
     checked: () => ed.playing,
     run: () => app.playback.toggle(),
   })
@@ -549,7 +549,7 @@ export function buildCommands(app: App): Command[] {
     run: () => app.timeline.createTag(),
   })
   add({
-    id: 'frame.propagate', label: 'Copier la case vers les frames selectionnees', group: 'Animation', icon: 'copy',
+    id: 'frame.propagate', label: 'Copier la case vers les frames sélectionnées', group: 'Animation', icon: 'copy',
     run: () => ops.propagateCel(ed),
   })
   add({
@@ -569,11 +569,11 @@ export function buildCommands(app: App): Command[] {
     run: () => app.viewport.setZoom(ed.view.zoom * 2),
   })
   add({
-    id: 'view.zoom-out', label: 'Zoom arriere', group: 'Vue', keys: '-',
+    id: 'view.zoom-out', label: 'Zoom arrière', group: 'Vue', keys: '-',
     run: () => app.viewport.setZoom(ed.view.zoom / 2),
   })
   add({
-    id: 'view.zoom-fit', label: 'Ajuster a la fenetre', group: 'Vue', keys: 'Ctrl+0',
+    id: 'view.zoom-fit', label: 'Ajuster a la fenêtre', group: 'Vue', keys: 'Ctrl+0',
     run: () => app.viewport.fit(),
   })
   add({
@@ -595,7 +595,7 @@ export function buildCommands(app: App): Command[] {
     run: () => ed.updateView({ showPixelGrid: !ed.view.showPixelGrid }),
   })
   add({
-    id: 'view.tiled', label: 'Apercu en tuiles 3×3', group: 'Vue', keys: 'Alt+T',
+    id: 'view.tiled', label: 'Aperçu en tuiles 3×3', group: 'Vue', keys: 'Alt+T',
     checked: () => ed.view.tiledPreview,
     run: () => ed.updateView({ tiledPreview: !ed.view.tiledPreview }),
   })
@@ -605,12 +605,12 @@ export function buildCommands(app: App): Command[] {
     run: () => { ed.tiledDrawing = !ed.tiledDrawing; ed.events.emit('settings', undefined) },
   })
   add({
-    id: 'view.symmetry-x', label: 'Symetrie verticale', group: 'Vue', icon: 'symmetry',
+    id: 'view.symmetry-x', label: 'Symétrie verticale', group: 'Vue', icon: 'symmetry',
     checked: () => ed.symmetry.x,
     run: () => { ed.symmetry.x = !ed.symmetry.x; ed.events.emit('settings', undefined) },
   })
   add({
-    id: 'view.symmetry-y', label: 'Symetrie horizontale', group: 'Vue', icon: 'symmetry',
+    id: 'view.symmetry-y', label: 'Symétrie horizontale', group: 'Vue', icon: 'symmetry',
     checked: () => ed.symmetry.y,
     run: () => { ed.symmetry.y = !ed.symmetry.y; ed.events.emit('settings', undefined) },
   })
@@ -684,8 +684,8 @@ function shortcutGroups(commands: Command[]): { title: string; items: [string, s
       ['Crayon', 'B'], ['Gomme', 'E'], ['Pot de peinture', 'G'], ['Pipette', 'I'],
       ['Ligne', 'L'], ['Rectangle', 'U'], ['Ellipse', 'Shift+U'], ['Contour', 'Q'],
       ['Courbe', 'Shift+C'], ['Degrade', 'R'], ['Ombrage', 'D'], ['Flou', 'Y'],
-      ['Aerographe', 'A'], ['Selection rect.', 'M'], ['Selection ellipse', 'Shift+M'],
-      ['Lasso', 'Shift+L'], ['Baguette magique', 'W'], ['Deplacer', 'V'],
+      ['Aerographe', 'A'], ['Sélection rect.', 'M'], ['Sélection ellipse', 'Shift+M'],
+      ['Lasso', 'Shift+L'], ['Baguette magique', 'W'], ['Déplacer', 'V'],
       ['Main', 'H'], ['Loupe', 'Z'],
     ],
   })
@@ -694,13 +694,13 @@ function shortcutGroups(commands: Command[]): { title: string; items: [string, s
     items: [
       ['Dessiner avec la couleur secondaire', 'Clic droit'],
       ['Pipette temporaire', 'Alt + clic'],
-      ['Deplacer la vue', 'Espace + glisser / clic molette'],
+      ['Déplacer la vue', 'Espace + glisser / clic molette'],
       ['Zoomer', 'Molette'],
-      ['Contraindre a 45°', 'Maj pendant le trace'],
-      ['Forme depuis le centre', 'Alt pendant le trace'],
-      ['Ajouter a la selection', 'Maj'],
-      ['Soustraire de la selection', 'Alt'],
-      ['Deplacer les pixels au clavier', 'Fleches'],
+      ['Contraindre a 45°', 'Maj pendant le tracé'],
+      ['Forme depuis le centre', 'Alt pendant le tracé'],
+      ['Ajouter a la sélection', 'Maj'],
+      ['Soustraire de la sélection', 'Alt'],
+      ['Déplacer les pixels au clavier', 'Fleches'],
       ['Taille de brosse', '[ et ]'],
       ['Permuter les couleurs', 'X'],
       ['Annuler l\'action en cours', 'Echap'],

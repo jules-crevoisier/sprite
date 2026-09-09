@@ -70,7 +70,7 @@ function ouvrirBase(): Promise<IDBDatabase> {
     requete.onsuccess = () => resolve(requete.result)
     requete.onerror = () => reject(requete.error ?? new Error('Stockage local inaccessible'))
     // Une autre onglet garde une version plus ancienne ouverte.
-    requete.onblocked = () => reject(new Error('Une autre fenetre de PixelForge bloque la mise a jour'))
+    requete.onblocked = () => reject(new Error('Une autre fenêtre de PixelForge bloque la mise a jour'))
   })
   // Un echec ne doit pas se figer : la tentative suivante rouvre.
   base.catch(() => { base = null })

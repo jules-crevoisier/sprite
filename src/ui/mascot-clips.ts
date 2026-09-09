@@ -193,7 +193,7 @@ export function ecartDePattes(p: Pose): number {
 /**
  * Masse reellement posee par une pose : la somme des pixels de ses pieces.
  *
- * C'est la vraie regle de masse constante. Celle qu'on mesurait jusqu'ici
+ * C'est la vraie réglé de masse constante. Celle qu'on mesurait jusqu'ici
  * comparait les images composees, donc elle mesurait surtout combien du
  * personnage se cache lui-meme — de l'occlusion, pas de la matiere. Une
  * pose qui choisirait une variante de tete deux fois plus legere passerait
@@ -258,7 +258,7 @@ function pose(r: Reglage = {}): Pose {
   const [tx, ty] = r.tete ?? [0, 0]
   const corpsArt = r.corpsArt ? ARTS_CORPS[r.corpsArt] : undefined
   // Les variantes de corps gardent le meme bas et le meme centre :
-  // l'ecrase deborde d'un pixel de chaque cote, l'etire monte d'un pixel.
+  // l'écrase deborde d'un pixel de chaque cote, l'etire monte d'un pixel.
   // Sans ce recentrage, l'ecrasement ferait glisser le personnage.
   const cx = r.corpsArt === 'ecrase' ? bx - 1 : bx
   const cy = r.corpsArt === 'ecrase' ? by + 1 : r.corpsArt === 'etire' ? by - 1 : by
@@ -267,7 +267,7 @@ function pose(r: Reglage = {}): Pose {
   // sinon une ligne vide s'ouvre entre les deux et la tete flotte.
   const dCorps = r.corpsArt === 'ecrase' ? 1 : r.corpsArt === 'etire' ? -1 : 0
   // La tete ecrasee est plus large de deux pixels : elle se recentre, sans
-  // quoi l'ecrasement ferait glisser le personnage d'un pixel.
+  // quoi l'écrasement ferait glisser le personnage d'un pixel.
   const ecrasee = r.teteArt === 'ecrasee' || r.teteArt === 'ecraseeClin'
   const teteY = (ecrasee ? by - 12 : by - 13) + dCorps
   const teteX = ecrasee ? bx - 2 : bx - 1
@@ -431,7 +431,7 @@ const SAUT: Reglage[] = [
  * le coup avait le meme defaut, en pire : soixante pour cent de la
  * silhouette changeaient d'un coup. Elle a maintenant son intervalle.
  *
- * L'ecrasement pose les pieds sur leurs colonnes de repos. Ecartes d'un
+ * L'écrasement pose les pieds sur leurs colonnes de repos. Ecartes d'un
  * pixel, il fallait ensuite les y ramener un pied a la fois — la regle
  * anti-patinage l'exige — et cela coutait trois images pendant lesquelles
  * ni le corps ni la tete ne bougeaient d'un pixel. L'ecart existe toujours,
@@ -511,7 +511,7 @@ export const CLIPS_PIXL: ClipMascotte[] = [
   { id: 'course', nom: 'Course', ms: 80, loop: true, poses: COURSE.map(pose) },
   { id: 'saut', nom: 'Saut', ms: 80, loop: false, poses: SAUT.map(pose) },
   { id: 'attaque', nom: 'Attaque', ms: 80, loop: false, poses: ATTAQUE.map(pose) },
-  { id: 'degats', nom: 'Degats', ms: 90, loop: false, poses: DEGATS.map(pose) },
+  { id: 'degats', nom: 'Dégâts', ms: 90, loop: false, poses: DEGATS.map(pose) },
 ]
 
 export function spritePixl(): Sprite { return mascotteAnimee(CLIPS_PIXL) }

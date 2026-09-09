@@ -142,8 +142,8 @@ export function variantsDialog(ed: Editor): void {
 
   const updateSummary = () => {
     summary.textContent = chosen.size
-      ? `${chosen.size} variante(s) selectionnee(s) sur ${variants.length}. Cliquer une vignette pour l'inclure ou l'exclure.`
-      : 'Aucune variante selectionnee.'
+      ? `${chosen.size} variante(s) sélectionnée(s) sur ${variants.length}. Cliquer une vignette pour l'inclure ou l'exclure.`
+      : 'Aucune variante sélectionnée.'
   }
 
   const controls = el('div', { class: 'form-grid' },
@@ -158,7 +158,7 @@ export function variantsDialog(ed: Editor): void {
     el('label', null, 'Luminosite'),
     slider(-0.5, 0.5, options.value, 0.05, (v) => { options.value = v; refresh() },
       (v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`),
-    el('label', null, 'Resultat'),
+    el('label', null, 'Résultat'),
     select([
       { value: 'frames', label: 'Nouvelles frames (+ tag « variantes »)' },
       { value: 'layer', label: 'Nouveaux calques' },
@@ -172,12 +172,12 @@ export function variantsDialog(ed: Editor): void {
   const body = el('div', null,
     el('p', { class: 'form-note' },
       'Les couleurs du sprite sont regroupees en familles. Choisissez celle a decliner : ',
-      'les rapports d\'ombre et de lumiere sont conserves.'),
+      'les rapports d\'ombre et de lumière sont conserves.'),
     el('div', { class: 'form-section' }, 'Famille de couleurs'),
     rampList,
-    el('div', { class: 'form-section' }, 'Reglages'),
+    el('div', { class: 'form-section' }, 'Réglages'),
     controls,
-    el('div', { class: 'form-section' }, 'Apercu'),
+    el('div', { class: 'form-section' }, 'Aperçu'),
     grid,
     summary,
   )
@@ -272,7 +272,7 @@ function applyVariants(ed: Editor, variants: Variant[], target: ApplyTarget): vo
  * « Varier » relance le tirage sans rien perdre de ce qui est deja fige.
  */
 export function detailDialog(ed: Editor): void {
-  const cel = ed.beginStroke('Detail')
+  const cel = ed.beginStroke('Détail')
   if (!cel) return
 
   let presetId: string | null = 'herbe'
@@ -299,8 +299,8 @@ export function detailDialog(ed: Editor): void {
     ed.events.emit('doc', undefined)
     apercu.show(target.bitmap)
     info.textContent = touched
-      ? `${touched} pixels modifies · ${passes} passe(s) deja figee(s) · graine ${seed}`
-      : 'Aucun pixel touche : baissez la selection ou augmentez la densite.'
+      ? `${touched} pixels modifies · ${passes} passe(s) déjà figee(s) · graine ${seed}`
+      : 'Aucun pixel touche : baissez la sélection ou augmentez la densité.'
   }
 
   const presetRow = el('div', { class: 'form-row' })
@@ -315,7 +315,7 @@ export function detailDialog(ed: Editor): void {
     presetRow.appendChild(el('button', {
       class: `btn sm ${presetId === null ? 'active' : ''}`,
       onclick: () => { presetId = null; rebuildPresets(); rebuildManual(); apply() },
-    }, 'Reglage manuel'))
+    }, 'Réglage manuel'))
   }
 
   const manual = el('div')
@@ -326,7 +326,7 @@ export function detailDialog(ed: Editor): void {
       el('label', null, 'Effet'),
       select(DETAIL_MODES.map((m) => ({ value: m.id, label: `${m.label} — ${m.hint}` })), mode,
         (v) => { mode = v; apply() }),
-      el('label', null, 'Densite'),
+      el('label', null, 'Densité'),
       slider(0.02, 1, density, 0.02, (v) => { density = v; apply() }, (v) => `${Math.round(v * 100)}%`),
     ))
   }
@@ -337,13 +337,13 @@ export function detailDialog(ed: Editor): void {
 
   const body = el('div', null,
     el('p', { class: 'form-note' },
-      'Le detail reprend les couleurs deja presentes : chaque pixel se decale d\'un cran ',
+      'Le détail reprend les couleurs déjà presentes : chaque pixel se décale d\'un cran ',
       'dans sa propre famille de teintes, donc le rendu reste coherent.'),
-    el('div', { class: 'form-section' }, 'Matiere'),
+    el('div', { class: 'form-section' }, 'Matière'),
     presetRow,
     manual,
     el('div', { class: 'form-grid', style: { marginTop: '10px' } },
-      el('label', null, 'Intensite'),
+      el('label', null, 'Intensité'),
       slider(0.2, 2, intensity, 0.1, (v) => { intensity = v; apply() }, (v) => `${Math.round(v * 100)}%`),
       el('label', null, 'Graine'),
       el('div', { class: 'form-row' },
@@ -355,15 +355,15 @@ export function detailDialog(ed: Editor): void {
         }, el('span', null, 'Varier')),
       ),
       el('label', null, ''),
-      checkbox('Limiter a la selection', onlySelection, (v) => { onlySelection = v; apply() }),
+      checkbox('Limiter a la sélection', onlySelection, (v) => { onlySelection = v; apply() }),
     ),
-    el('div', { class: 'form-section' }, 'Apercu'),
+    el('div', { class: 'form-section' }, 'Aperçu'),
     preview,
     info,
   )
 
   const handle = openModal({
-    title: 'Ajouter du detail',
+    title: 'Ajouter du détail',
     icon: 'detail',
     body,
     actions: [
@@ -374,7 +374,7 @@ export function detailDialog(ed: Editor): void {
         onClick: () => {
           ed.commitStroke()
           passes++
-          if (!ed.beginStroke('Detail')) { handle.close(); return }
+          if (!ed.beginStroke('Détail')) { handle.close(); return }
           seed = Math.floor(Math.random() * 1e9)
           apply()
           showToast(`Passe ${passes} ajoutee`, 'success')
@@ -397,7 +397,7 @@ export function detailDialog(ed: Editor): void {
 
 /**
  * Ombre le dessin selon une direction de lumiere, puis casse les marches
- * d'escalier. Les deux operations n'emploient que les tons deja presents :
+ * d'escalier. Les deux opérations n'emploient que les tons deja presents :
  * la palette du sprite reste la sienne.
  */
 export function shadeDialog(ed: Editor): void {
@@ -411,7 +411,7 @@ export function shadeDialog(ed: Editor): void {
   const apercu = zoomablePreview({ hauteur: 200 })
   const preview = apercu.node
   const info = el('p', { class: 'form-note' })
-  const boussole = el('div', { class: 'light-dial', title: 'Direction de la lumiere' },
+  const boussole = el('div', { class: 'light-dial', title: 'Direction de la lumière' },
     el('i'), el('b'))
 
   const placerBoussole = () => {
@@ -431,10 +431,10 @@ export function shadeDialog(ed: Editor): void {
     ed.events.emit('doc', undefined)
     apercu.show(target.bitmap)
     info.textContent = bilan.changed || lisses
-      ? `${bilan.changed} pixels ombres sur ${bilan.ramps} matiere(s)`
+      ? `${bilan.changed} pixels ombres sur ${bilan.ramps} matière(s)`
         + (lisses ? `, ${lisses} coins adoucis` : '')
-        + (poses ? ` · ${poses} passe(s) deja figee(s)` : '')
-      : 'Aucun pixel touche : le dessin n\'a pas assez de tons par matiere. '
+        + (poses ? ` · ${poses} passe(s) déjà figee(s)` : '')
+      : 'Aucun pixel touche : le dessin n\'a pas assez de tons par matière. '
         + 'Ajoutez-en avec « Rampe de couleurs ».'
   }
 
@@ -460,10 +460,10 @@ export function shadeDialog(ed: Editor): void {
   placerBoussole()
 
   const controls = el('div', { class: 'form-grid' },
-    el('label', null, 'Lumiere'),
+    el('label', null, 'Lumière'),
     el('div', { class: 'form-row' }, boussole,
       el('span', { class: 'form-note', style: { flex: '1' } },
-        'Tirez dans le cadran : les surfaces tournees vers la lumiere montent '
+        'Tirez dans le cadran : les surfaces tournees vers la lumière montent '
         + 'dans leur rampe, les autres descendent.')),
     el('label', null, 'Force'),
     slider(0, 1, options.strength, 0.05, (v) => { options.strength = v; apply() },
@@ -471,7 +471,7 @@ export function shadeDialog(ed: Editor): void {
     el('label', null, 'Portee'),
     slider(1, 8, options.radius, 1, (v) => { options.radius = v; apply() }, (v) => `${v} px`),
     el('label', null, 'Contre-jour'),
-    checkbox('Liseré clair sur le bord oppose', options.rimLight, (v) => {
+    checkbox('Liseré clair sur le bord opposé', options.rimLight, (v) => {
       options.rimLight = v
       apply()
     }),
@@ -486,12 +486,12 @@ export function shadeDialog(ed: Editor): void {
     icon: 'shading',
     body: el('div', null,
       el('p', { class: 'form-note' },
-        'La silhouette indique l\'orientation de chaque surface : un pixel pres '
+        'La silhouette indique l\'orientation de chaque surface : un pixel près '
         + 'du bord gauche appartient a une paroi tournee vers la gauche. Chaque '
         + 'pixel prend alors un autre ton de sa propre famille de couleurs — '
         + 'aucune teinte etrangere n\'est introduite.'),
       controls,
-      el('div', { class: 'form-section' }, 'Apercu'),
+      el('div', { class: 'form-section' }, 'Aperçu'),
       preview,
       info,
     ),
@@ -537,7 +537,7 @@ export function rampDialog(ed: Editor): void {
       }, toHex(c)))),
     )
     info.textContent = `${colors.length} tons autour de ${toHex(ed.primary)} — `
-      + `l\'ombre glisse de ${recipe.hueShift}° vers le froid, la lumiere autant vers le chaud.`
+      + `l\'ombre glisse de ${recipe.hueShift}° vers le froid, la lumière autant vers le chaud.`
   }
 
   refresh()
@@ -547,8 +547,8 @@ export function rampDialog(ed: Editor): void {
     body: el('div', null,
       el('p', { class: 'form-note' },
         'Assombrir en ne baissant que la luminosite donne du gris. Une ombre '
-        + 'reelle glisse vers le bleu et une lumiere vers le jaune : c\'est ce '
-        + 'decalage de teinte qui distingue une rampe juste d\'une rampe fade.'),
+        + 'réelle glisse vers le bleu et une lumière vers le jaune : c\'est ce '
+        + 'décalage de teinte qui distingue une rampe juste d\'une rampe fade.'),
       bande,
       info,
       el('div', { class: 'form-grid' },
@@ -626,13 +626,13 @@ export function rotationDialog(ed: Editor): void {
 
     // Les trois mesures du banc, sous les yeux : une pose qui perd de la
     // matiere, se perce ou invente une couleur se voit ici avant d'etre
-    // posee, au lieu d'etre decouverte a la lecture de l'animation.
+    // posee, au lieu d'être decouverte a la lecture de l'animation.
     const m = masse(tourne)
     const perte = masseSource ? Math.round((1 - m / masseSource) * 100) : 0
     const perces = trousInterieurs(tourne) - trousSource
     const etrangeres = couleursEtrangeres(source, tourne).length
     const alertes: string[] = []
-    if (perte > 12) alertes.push(`${perte}% de matiere perdue`)
+    if (perte > 12) alertes.push(`${perte}% de matière perdue`)
     if (perces > 0) alertes.push(`${perces} trou(s) ouvert(s)`)
     if (etrangeres > 0) alertes.push(`${etrangeres} couleur(s) etrangere(s)`)
     info.textContent = alertes.length
@@ -645,9 +645,9 @@ export function rotationDialog(ed: Editor): void {
   const QUART = Math.PI / 2
 
   const controls = el('div', { class: 'form-grid' },
-    el('label', { title: 'Le personnage se tourne sur lui-meme' }, 'Lacet'),
+    el('label', { title: 'Le personnage se tourne sur lui-même' }, 'Lacet'),
     slider(-QUART, QUART, 0, 0.02, (v) => { angles.lacet = v; apply() }, deg),
-    el('label', { title: 'Le personnage se penche en avant ou en arriere' }, 'Tangage'),
+    el('label', { title: 'Le personnage se penche en avant ou en arrière' }, 'Tangage'),
     slider(-QUART, QUART, 0, 0.02, (v) => { angles.tangage = v; apply() }, deg),
     el('label', { title: 'Rotation dans le plan du dessin' }, 'Roulis'),
     slider(-Math.PI, Math.PI, 0, 0.02, (v) => { angles.roulis = v; apply() }, deg),
@@ -662,13 +662,13 @@ export function rotationDialog(ed: Editor): void {
   const body = el('div', null,
     el('p', { class: 'form-note', style: { margin: '0 0 8px', lineHeight: '1.6' } },
       'Le dessin est la tranche du milieu d\'un volume : le relief dit de combien '
-      + 'la matiere deborde de chaque cote, devine a partir de la silhouette. '
-      + 'Aucune couleur n\'est melangee — les pixels sont deplaces, jamais interpoles.'),
+      + 'la matière deborde de chaque cote, devine a partir de la silhouette. '
+      + 'Aucune couleur n\'est mélangée — les pixels sont deplaces, jamais interpoles.'),
     apercu.node,
     controls,
     info,
     el('p', { class: 'form-note' },
-      'Le dos n\'existe pas dans le dessin : au-dela d\'un demi-tour, le resultat '
+      'Le dos n\'existe pas dans le dessin : au-dela d\'un demi-tour, le résultat '
       + 'est une base a reprendre au crayon, pas une vue juste.'),
   )
 

@@ -165,7 +165,7 @@ export const turnSquash = (angle: number): number =>
   Math.max(TURN_MIN_WIDTH, Math.abs(Math.cos(angle))) * (Math.cos(angle) < 0 ? -1 : 1)
 
 /**
- * Profondeur d'un os apres rotation : c'est elle qui decide qui passe
+ * Profondeur d'un os après rotation : c'est elle qui decide qui passe
  * devant. Un bras place devant le corps se retrouve derriere quand le
  * personnage pivote de l'autre cote.
  */

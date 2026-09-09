@@ -23,7 +23,7 @@ export interface RampRecipe {
   /**
    * Rotation de teinte entre l'ombre et la lumiere, en degres.
    *
-   * C'est le point qui separe une rampe juste d'une rampe fade. Assombrir en
+   * C'est le point qui séparé une rampe juste d'une rampe fade. Assombrir en
    * ne baissant que la luminosite donne du gris ; les ombres reelles glissent
    * vers le bleu et les lumieres vers le jaune. Une rampe sans decalage de
    * teinte se reconnait immediatement.
@@ -296,7 +296,7 @@ export function antiAlias(bitmap: Bitmap, ramps: Ramp[], strength = 1): number {
 }
 
 /**
- * Trie une rampe de l'ombre a la lumiere. Les familles extraites d'un dessin
+ * Trie une rampe de l'ombre a la lumière. Les familles extraites d'un dessin
  * ne le sont pas toujours, et l'ombrage suppose cet ordre.
  */
 export const sortRamp = (colors: RGBA[]): RGBA[] =>
