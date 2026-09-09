@@ -130,6 +130,33 @@ const PAL_HEROS: Palette = {
  * virent a l'auburn, les autres s'assombrissent. Ce n'est pas un jugement de
  * gout : c'est la regle `fond-confondu` qui l'a chiffre.
  *
+ * ## Ce que le tour 4 a repris au tour 3
+ *
+ * Le bras droit etait eclaire a l'envers : `t` a 106 contre une colonne de
+ * torse `u` a 75, c'est-a-dire, du cote a l'ombre, un plan exterieur plus
+ * clair que le plan tourne vers la lumiere. La separation des bras du tour 3
+ * avait ete payee par une inversion d'eclairage. `q` devient un bleu franc a
+ * 51 et prend le bras : vingt-quatre unites plus sombre que ce qu'il touche.
+ *
+ * Les bottes ne tenaient que sur un rang, votaient contre le rang de contour
+ * d'en dessous et disparaissaient entierement a mi-taille. Elles en occupent
+ * deux, prises sur un rang de jambe.
+ *
+ * La jambe droite etait un bloc plein d'un seul ton, et ce ton avait
+ * exactement la valeur de la dalle claire du donjon — elle ne s'en separait
+ * que par la teinte, ce que `fond-confondu` declare insuffisant. Chaque jambe
+ * a maintenant son propre degrade.
+ *
+ * ## Deux reductions a ne pas confondre
+ *
+ * Un vide de deux pixels survit a la COMPRESSION A SOIXANTE POUR CENT qui
+ * fabrique les huit directions. Il ne survit pas au VOTE DE MI-TAILLE de la
+ * planche : il tombe a cheval sur deux cellules de vote, qui recoivent chacune
+ * un pixel de vide contre un de remplissage. Pour qu'il tienne il faudrait le
+ * caler sur une cellule, ce qu'un interieur de six colonnes ne permet pas sans
+ * des jambes de largeur inegale. Les deux reductions ont longtemps ete
+ * confondues dans ce commentaire.
+ *
  * ## Ce qui a ete refuse, et pourquoi
  *
  * Detacher les bras du torse par du vide. Il y faut deux pixels de part et
