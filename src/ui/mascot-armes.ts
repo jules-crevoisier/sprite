@@ -63,41 +63,23 @@ export interface Arme {
    * chacun est le maximum verifie pour elle.
    */
   montee: [[number, number], [number, number], [number, number]]
-  /** Le meme dessin abattu, obtenu par rotation. */
-  abattue: string[]
-  priseAbattue: [number, number]
-}
-
-/**
- * Quart de tour vers la gauche.
- *
- * C'est la seule facon de dessiner l'arme abattue sans lui faire perdre un
- * pixel : une rotation deplace la matiere, elle n'en enleve pas. Redessiner
- * la lame a l'horizontale la ferait maigrir quelque part, et elle
- * maigrirait sur l'element le plus contraste de l'image.
- *
- * Un pixel (x, y) d'un dessin large de `l` se retrouve en (y, l - 1 - x).
- */
-function pivoter(art: string[]): string[] {
-  const h = art.length, l = art[0].length
-  const sortie: string[][] = Array.from({ length: l }, () => Array(h).fill('.'))
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < l; x++) {
-      if (art[y][x] === '.') continue
-      sortie[l - 1 - x][y] = art[y][x]
-    }
-  }
-  return sortie.map((ligne) => ligne.join(''))
-}
-
-/** La prise suit la meme rotation que le dessin qui la porte. */
-function prisePivotee(prise: [number, number], largeur: number): [number, number] {
-  return [prise[1], largeur - 1 - prise[0]]
-}
-
-/** Complete une arme de sa version abattue, calculee et non dessinee. */
-function armer(a: Omit<Arme, 'abattue' | 'priseAbattue'>): Arme {
-  return { ...a, abattue: pivoter(a.art), priseAbattue: prisePivotee(a.prise, a.art[0].length) }
+  /**
+   * Le dessin de l'impact : l'arme abattue en diagonale, tranchant vers le
+   * bas et vers l'exterieur.
+   *
+   * Il a d'abord ete obtenu par rotation d'un quart de tour, ce qui
+   * garantissait l'egalite des masses sans rien dessiner. Mais une
+   * rotation met la prise a l'oppose du tranchant : pour sortir la lame du
+   * corps il fallait enfoncer la poignee dans le personnage, et les deux
+   * pixels de patte finissaient dessines ENTRE ses pieds. La moitie de
+   * l'arme passait derriere les pattes, et l'image la plus importante du
+   * cycle montrait une planche posee par terre.
+   *
+   * Le dessin est donc fait a la main, et l'egalite des masses est exigee
+   * par le test au lieu d'etre offerte par la construction.
+   */
+  impact: string[]
+  priseImpact: [number, number]
 }
 
 /**
@@ -168,30 +150,81 @@ const BATON = [
   '..C..',
 ]
 
+/**
+ * L'epee abattue : la lame descend en diagonale vers l'exterieur, la
+ * poignee reste sous la patte. Vingt-six pixels, comme le dessin porte.
+ */
+const EPEE_IMPACT = [
+  '........C..',
+  '........cPP',
+  '........cPP',
+  '....AAAAA..',
+  '.....bA....',
+  '....bA.....',
+  '...bA......',
+  '..bA.......',
+  '.bA........',
+  'bA.........',
+  'bb.........',
+]
+
+/** Le marteau abattu : la masse arrive au sol. Trente-trois pixels. */
+const MARTEAU_IMPACT = [
+  '........C..',
+  '........cPP',
+  '........cPP',
+  '.......cc..',
+  '......cc...',
+  '.....cc....',
+  '.ooooo.....',
+  '.oAAAo.....',
+  '.oAAAo.....',
+  '.ooooo.....',
+]
+
+/** Le baton abattu : la gemme finit sa course en bas. Dix-huit pixels. */
+const BATON_IMPACT = [
+  '........C..',
+  '........cPP',
+  '........cPP',
+  '.......cc..',
+  '......cc...',
+  '.....cc....',
+  '.....d.....',
+  '....dfd....',
+  '.....d.....',
+]
+
 export const ARMES: Arme[] = [
-  armer({
+  ({
     id: 'epee',
     nom: 'Epee',
     pitch: 'La plus longue des trois : elle donne la direction du coup une image avant le corps.',
     art: EPEE,
     prise: [3, 9],
     montee: [[0, -4], [0, -8], [0, -9]],
+    impact: EPEE_IMPACT,
+    priseImpact: [8, 1],
   }),
-  armer({
+  ({
     id: 'marteau',
     nom: 'Marteau',
     pitch: 'La masse est au bout du bras de levier : le meme deplacement se lit plus lourd.',
     art: MARTEAU,
     prise: [2, 12],
     montee: [[0, -3], [0, -5], [0, -6]],
+    impact: MARTEAU_IMPACT,
+    priseImpact: [8, 1],
   }),
-  armer({
+  ({
     id: 'baton',
     nom: 'Baton',
     pitch: 'La gemme est le seul point clair : c\'est elle qu\'on suit, donc elle decrit le plus grand arc.',
     art: BATON,
     prise: [2, 9],
     montee: [[0, -4], [0, -8], [0, -9]],
+    impact: BATON_IMPACT,
+    priseImpact: [8, 1],
   }),
 ]
 
@@ -228,22 +261,15 @@ export const POSITIONS_ARME = {
   contre: [0, 2],
   // L'amorti : l'arme continue vers le bas apres l'impact.
   retombee: [0, 3],
-  // La seule position qui change de dessin : l'arme abattue, tranchant ou
-  // masse vers l'exterieur. Verticale, la lame pointait vers le ciel
-  // pendant tout le coup — ca ne se lit pas comme un coup porte.
-  //
-  // L'offset vient d'un balayage, pas d'un reglage a l'oeil : c'est le
-  // meilleur des cent douze qui gardent l'arme accrochee et dans le cadre.
-  // Il plafonne a onze pixels ajoutes au contour, et c'est un mur, pas un
-  // reglage : avec une arme de douze pixels a l'horizontale, une prise a
-  // trois colonnes du flanc et une toile de trente-deux, la moitie de
-  // l'arme passe forcement derriere les pattes.
-  abattue: [8, 5],
+  // La seule position qui change de dessin : l'impact, tranchant ou masse
+  // vers le bas et vers l'exterieur. Verticale, la lame pointait vers le
+  // ciel pendant tout le coup — ca ne se lit pas comme un coup porte.
+  impact: [3, -2],
   rebond: [0, -1],
 } as const
 
-/** Les positions qui utilisent le dessin pivote. */
-const ABATTUES = new Set<string>(['abattue'])
+/** Les positions qui utilisent le dessin d'impact. */
+const IMPACTS = new Set<string>(['impact'])
 
 /**
  * Les positions ou l'arme passerait DEVANT le personnage. Aucune.
@@ -290,8 +316,8 @@ export function decalageDeLArme(arme: Arme, position: PositionArme): readonly [n
 
 /** Le dessin et sa prise pour une position donnee. */
 export function dessinDeLArme(arme: Arme, position: PositionArme): [string[], [number, number]] {
-  return ABATTUES.has(position)
-    ? [arme.abattue, arme.priseAbattue]
+  return IMPACTS.has(position)
+    ? [arme.impact, arme.priseImpact]
     : [arme.art, arme.prise]
 }
 
@@ -386,7 +412,7 @@ export interface ClipArme {
  */
 const COUP: PositionArme[] = [
   'contre', 'armement1', 'armement2', 'armement3', 'portee',
-  'abattue', 'retombee', 'rebond', 'portee',
+  'impact', 'retombee', 'rebond', 'portee',
 ]
 
 /**

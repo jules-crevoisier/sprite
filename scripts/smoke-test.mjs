@@ -2075,11 +2075,12 @@ const armee = await page.evaluate(async () => {
     armesBasses: [], gainHauteurMin: 99,
     positions: Object.keys(POSITIONS_ARME).length,
     massesArmes: ARMES.map((a) => masseDArme(a.art)),
-    // Le dessin abattu est une rotation du dessin porte : la masse doit
-    // etre identique au pixel pres, sans quoi la lame maigrit en tombant.
+    // Le dessin d'impact est fait a la main : l'egalite des masses n'est
+    // plus offerte par une rotation, elle doit etre exigee, sans quoi la
+    // lame maigrit en tombant.
     armesInegales: ARMES
-      .filter((a) => masseDArme(a.art) !== masseDArme(a.abattue))
-      .map((a) => `${a.id} ${masseDArme(a.art)} vs ${masseDArme(a.abattue)}`),
+      .filter((a) => masseDArme(a.art) !== masseDArme(a.impact))
+      .map((a) => `${a.id} ${masseDArme(a.art)} vs ${masseDArme(a.impact)}`),
   }
 
   for (const arme of ARMES) {
@@ -2155,7 +2156,7 @@ check('aucune image armee n\'en repete une autre', armee.jumelles.length === 0,
 // est constante par construction, et c'est ce que ce releve confirme.
 check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0) && armee.armesInegales.length === 0,
   armee.armesInegales.join(', ')
-    || `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions, dessin abattu compris`)
+    || `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions, dessin d'impact compris`)
 check('l\'arme change toujours la silhouette', armee.armeInvisible.length === 0,
   armee.armeInvisible.join(', ') || `${armee.visibleMin} px ajoutes au contour au minimum`)
 check('l\'arme brandie depasse au-dessus de la tete', armee.armesBasses.length === 0,
