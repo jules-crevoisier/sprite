@@ -50,6 +50,7 @@ const BINDINGS: Record<string, string> = {
   'ctrl+shift+l': 'file.library',
   'ctrl+shift+o': 'sprite.shade',
   'ctrl+shift+r': 'sprite.rotate3d',
+  'ctrl+shift+u': 'sprite.vues',
   'ctrl+alt+c': 'sprite.canvas-size',
   'ctrl+alt+i': 'sprite.scale',
   'shift+h': 'sprite.flip-h',

@@ -257,6 +257,50 @@ export function profilDe(src: Bitmap, champ: ChampProfondeur, vertical = false):
   return Math.max(0.25, Math.min(0.85, epaisseur / cote))
 }
 
+/**
+ * Compression a appliquer pour un angle donne, signe compris.
+ *
+ * Sa valeur absolue va de 1 (de face) a la largeur du profil, et n'atteint
+ * jamais zero : c'est ce plancher qui empeche le dessin de se reduire a un
+ * trait quand on le regarde par la tranche.
+ *
+ * Le SIGNE, lui, est celui du cosinus, et il porte tout le demi-tour. Passe
+ * le quart de tour il devient negatif, l'image se retourne d'elle-meme, et
+ * l'on voit le dessin de face par derriere — ce qui est exactement le
+ * substitut qu'on veut faute d'un vrai dessin de dos. Le prendre en valeur
+ * absolue obligeait a retourner la bitmap a la main, ce qui marchait pour un
+ * dessin seul et se cassait des qu'une scene avait plusieurs pieces : le
+ * miroir se faisait autour du cadre et non autour du personnage, et l'ordre
+ * de profondeur ne s'inversait pas au demi-tour.
+ */
+export const compression = (profil: number, angle: number): number => {
+  const c = Math.cos(angle)
+  return Math.sign(c || 1) * (profil + (1 - profil) * Math.abs(c))
+}
+
+/**
+ * Combien le relief decale une colonne, pour un angle donne.
+ *
+ * C'est `sin` — mais portant le meme signe que la compression. Passe le quart
+ * de tour, on regarde l'autre face du volume : le relief doit bomber de
+ * l'autre cote, sinon il tire l'image dans le sens contraire de la
+ * compression et la silhouette se replie sur elle-meme. Mesure : a cent
+ * degres, la mascotte se dechirait en morceaux avec deux trous dans le corps.
+ *
+ * Les deux termes changent donc de signe ensemble, exactement au profil : ce
+ * qu'on voit a quatre-vingt-onze degres est le miroir exact de ce qu'on voit
+ * a quatre-vingt-neuf, ce qui est precisement le sens de « passer de l'autre
+ * cote ».
+ *
+ * Amortir ce decalage pres du profil — le multiplier par |cos| — a ete essaye
+ * pour adoucir la couture entre deux dessins sources : la couture passe de
+ * 122% a 106%, et tout le reste se degrade. La profondeur d'un os ne le place
+ * plus devant le corps au quart de tour, deux directions sur huit deviennent
+ * identiques, et la lisibilite tombe. Rendu.
+ */
+export const deplacementRelief = (angle: number): number =>
+  Math.sign(Math.cos(angle) || 1) * Math.sin(angle)
+
 export function tourner(
   src: Bitmap,
   z: ChampProfondeur,
@@ -274,26 +318,21 @@ export function tourner(
   const cx = opts.cx ?? (boite.w > 0 ? boite.x + (boite.w - 1) / 2 : (w - 1) / 2)
   const cy = opts.cy ?? (boite.h > 0 ? boite.y + (boite.h - 1) / 2 : (h - 1) / 2)
 
-  // Au-dela d'un quart de tour, on retourne le dessin plutot que d'inventer
-  // un dos. L'angle repasse alors dans le premier quadrant : un personnage vu
-  // a cent-vingt degres est son miroir vu a soixante.
-  let lacet = normaliser(angles.lacet)
-  let tangage = normaliser(angles.tangage)
-  const miroirH = Math.abs(lacet) > Math.PI / 2
-  const miroirV = Math.abs(tangage) > Math.PI / 2
-  if (miroirH) lacet = Math.sign(lacet) * (Math.PI - Math.abs(lacet))
-  if (miroirV) tangage = Math.sign(tangage) * (Math.PI - Math.abs(tangage))
-
-  const source = miroirH || miroirV ? retourner(src, miroirH, miroirV, cx, cy) : src
-  const champ = miroirH || miroirV ? retournerChamp(z, w, h, miroirH, miroirV, cx, cy) : z
+  // Au-dela d'un quart de tour, c'est le signe de la compression qui retourne
+  // le dessin : on voit la face par derriere. Un substitut du dos, faute de
+  // dessin — et l'interface le dit.
+  const lacet = normaliser(angles.lacet)
+  const tangage = normaliser(angles.tangage)
+  const source = src
+  const champ = z
 
   const profilX = opts.profil ?? profilDe(src, champ)
   const profilY = opts.profil ?? profilDe(src, champ, true)
 
-  const cosL = Math.cos(lacet), sinL = Math.sin(lacet)
-  const cosT = Math.cos(tangage), sinT = Math.sin(tangage)
-  const compX = profilX + (1 - profilX) * Math.abs(cosL)
-  const compY = profilY + (1 - profilY) * Math.abs(cosT)
+  const cosL = Math.cos(lacet), sinL = deplacementRelief(lacet)
+  const cosT = Math.cos(tangage), sinT = deplacementRelief(tangage)
+  const compX = compression(profilX, lacet)
+  const compY = compression(profilY, tangage)
 
   const out = new Bitmap(w, h)
   const zbuf = opts.sortieZ ?? new Float32Array(w * h)
@@ -350,7 +389,7 @@ export function tourner(
   }
 
   if (angles.roulis) return rouler(out, angles.roulis, cx, cy, zbuf)
-  boucherLesTrous(out, zbuf)
+  boucherLesPoches(out, zbuf)
   return out
 }
 
@@ -369,7 +408,7 @@ export function tourner(
  * ce sont les collisions, arbitrees par la profondeur, qui decident du
  * resultat.
  */
-function couverture(a: number, b: number): [number, number] {
+export function couverture(a: number, b: number): [number, number] {
   const min = Math.min(a, b), max = Math.max(a, b)
   const debut = Math.ceil(min)
   const fin = Math.ceil(max) - 1
@@ -401,35 +440,6 @@ function normaliser(a: number): number {
   return r
 }
 
-/** Miroir d'un dessin autour de son propre centre. */
-function retourner(src: Bitmap, h: boolean, v: boolean, cx: number, cy: number): Bitmap {
-  const out = new Bitmap(src.width, src.height)
-  for (let y = 0; y < src.height; y++) {
-    for (let x = 0; x < src.width; x++) {
-      const sx = h ? Math.round(2 * cx - x) : x
-      const sy = v ? Math.round(2 * cy - y) : y
-      if (sx < 0 || sy < 0 || sx >= src.width || sy >= src.height) continue
-      out.u32[y * src.width + x] = src.u32[sy * src.width + sx]
-    }
-  }
-  return out
-}
-
-function retournerChamp(
-  z: ChampProfondeur, w: number, hh: number, h: boolean, v: boolean, cx: number, cy: number,
-): ChampProfondeur {
-  const out = new Float32Array(w * hh)
-  for (let y = 0; y < hh; y++) {
-    for (let x = 0; x < w; x++) {
-      const sx = h ? Math.round(2 * cx - x) : x
-      const sy = v ? Math.round(2 * cy - y) : y
-      if (sx < 0 || sy < 0 || sx >= w || sy >= hh) continue
-      out[y * w + x] = z[sy * w + sx]
-    }
-  }
-  return out
-}
-
 /**
  * Roulis : une vraie rotation dans le plan du dessin, faite a l'envers.
  *
@@ -456,50 +466,92 @@ function rouler(
       zOut[y * w + x] = zbuf[j]
     }
   }
-  boucherLesTrous(out, zOut)
+  boucherLesPoches(out, zOut)
   return out
 }
 
 /**
- * Comble les pixels vides cernes par du plein.
+ * Comble les petites poches fermees ouvertes par la projection.
  *
- * Le critere est celui des quatre voisins orthogonaux : un pixel vide dont
- * le haut, le bas, la gauche et la droite sont pleins est enferme, et le
- * reste quelle que soit sa diagonale.
+ * Une poche est un groupe de pixels vides que le fond n'atteint pas : on part
+ * du bord de l'image et on inonde ; ce qui reste vide sans avoir ete atteint
+ * est enferme. C'est mot pour mot la definition qu'emploie la mesure des
+ * trous — boucher et mesurer doivent parler de la meme chose, sinon le banc
+ * signale des percees que le bouchage n'avait aucun moyen de voir.
  *
- * Le seuil a d'abord ete pose a cinq voisins sur huit, et le banc a montre
- * ce que cela coutait : a zero degre, l'encoche entre les deux oreilles de
- * la mascotte a cinq voisins pleins, elle se refermait, et la rotation nulle
- * ne rendait plus le dessin d'origine. Exiger les huit reglait cela mais
- * laissait passer les trous a diagonale ouverte — que la mesure, elle,
- * comptait bien comme des trous, puisqu'elle inonde en quatre-connexite.
- * Boucher et mesurer parlent maintenant de la meme chose.
+ * Seules les PETITES poches sont comblees. Le trou d'un anneau est enferme
+ * lui aussi, et il appartient au dessin : le seuil separe l'accident de
+ * projection — deux ou trois pixels au milieu d'un aplat, la ou le relief a
+ * replie la surface sur elle-meme — du vide voulu.
  *
- * Un vrai creux du dessin — l'espace entre deux jambes, l'oeil d'un anneau —
- * touche l'extérieur par construction et n'a donc jamais ses quatre voisins
- * pleins.
+ * Le critere d'avant, « les quatre voisins orthogonaux sont pleins », ne
+ * voyait que les poches d'un seul pixel. Le banc comptait deux poches de deux
+ * pixels que le bouchage laissait passer, a des angles ou la projection se
+ * replie.
  */
-function boucherLesTrous(img: Bitmap, zbuf: Float32Array): void {
+export function boucherLesPoches(
+  img: Bitmap, zbuf: Float32Array, tailleMax = 4, prop?: Int32Array,
+): void {
   const { width: w, height: h } = img
-  const copie = img.u32.slice()
-  const ORTHO = [-1, 1, -w, w]
+  const dehors = new Uint8Array(w * h)
+  const pile: number[] = []
+  const pousser = (i: number): void => {
+    if (dehors[i] || getA(img.u32[i]) !== 0) return
+    dehors[i] = 1
+    pile.push(i)
+  }
+  for (let x = 0; x < w; x++) { pousser(x); pousser((h - 1) * w + x) }
+  for (let y = 0; y < h; y++) { pousser(y * w); pousser(y * w + w - 1) }
+  while (pile.length) {
+    const i = pile.pop()!
+    const x = i % w, y = (i / w) | 0
+    if (x > 0) pousser(i - 1)
+    if (x < w - 1) pousser(i + 1)
+    if (y > 0) pousser(i - w)
+    if (y < h - 1) pousser(i + w)
+  }
 
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = y * w + x
-      if (getA(copie[i]) !== 0) continue
-      let meilleur = -Infinity
-      let couleur = 0
-      let enferme = true
-      for (const v of ORTHO) {
-        const j = i + v
-        if (getA(copie[j]) === 0) { enferme = false; break }
-        if (zbuf[j] > meilleur) { meilleur = zbuf[j]; couleur = copie[j] }
+  const vus = new Uint8Array(w * h)
+  for (let depart = 0; depart < w * h; depart++) {
+    if (dehors[depart] || vus[depart] || getA(img.u32[depart]) !== 0) continue
+    // Une poche : on la releve entierement avant de decider de son sort.
+    const poche: number[] = []
+    const aVoir = [depart]
+    vus[depart] = 1
+    while (aVoir.length) {
+      const i = aVoir.pop()!
+      poche.push(i)
+      const x = i % w, y = (i / w) | 0
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const xx = x + dx, yy = y + dy
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue
+        const j = yy * w + xx
+        if (vus[j] || getA(img.u32[j]) !== 0) continue
+        vus[j] = 1
+        aVoir.push(j)
       }
-      if (enferme) {
-        img.u32[i] = couleur
-        zbuf[i] = meilleur
+    }
+    if (poche.length > tailleMax) continue
+
+    // Chaque pixel prend la couleur de son voisin plein le plus proche de
+    // l'oeil : c'est celui qui aurait du le recouvrir.
+    for (const i of poche) {
+      const x = i % w, y = (i / w) | 0
+      let meilleur = -Infinity, couleur = 0, qui = -1
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const xx = x + dx, yy = y + dy
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue
+        const j = yy * w + xx
+        if (getA(img.u32[j]) === 0) continue
+        if (zbuf[j] <= meilleur) continue
+        meilleur = zbuf[j]
+        couleur = img.u32[j]
+        qui = prop ? prop[j] : -1
       }
+      if (!couleur) continue
+      img.u32[i] = couleur
+      zbuf[i] = meilleur
+      if (prop) prop[i] = qui
     }
   }
 }

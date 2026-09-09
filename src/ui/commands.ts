@@ -412,6 +412,15 @@ export function buildCommands(app: App): Command[] {
     run: () => rotationDialog(ed),
   })
   add({
+    id: 'sprite.vues', label: 'Toutes les directions…', group: 'Assisté', keys: 'Ctrl+Maj+U', icon: 'rig',
+    hint: () => 'Le tour du personnage, dos compris, depuis un seul dessin',
+    run: async () => {
+      const { vuesDialog } = await import('./vues-dialog')
+      vuesDialog(ed)
+    },
+  })
+
+  add({
     id: 'sprite.combler', label: 'Refermer les fentes…', group: 'Assisté', icon: 'detail',
     hint: () => 'Rendre au dessin ce qu\'une pose lui a arrache',
     run: () => comblerDialog(ed),

@@ -1060,6 +1060,30 @@ input[type="range"]::-moz-range-thumb {
 }
 .form-subsection:first-child { margin-top: 0; }
 
+/*
+   Planche de directions : une vignette par direction, en grille qui s'adapte.
+   Le fond sombre derriere chaque vignette evite qu'un personnage clair se
+   perde dans la fenetre, et l'echelle entiere garde les pixels nets.
+*/
+.vues-grille {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px; margin-bottom: 12px;
+}
+.vue-case {
+  margin: 0; padding: 6px; text-align: center;
+  background: var(--bg-0); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.vue-vignette {
+  width: 100%; height: auto; image-rendering: pixelated; display: block;
+}
+.vue-case figcaption {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 6px; margin-top: 5px; font-size: 10px; color: var(--text-faint);
+}
+.vue-case figcaption b { color: var(--text-dim); font-family: var(--mono); }
+.vue-invente { color: var(--warn, #e0a33e); }
+
 /* Apercu d'un fichier texte dans un dialogue : quelques lignes, en chasse
    fixe, sans jamais pousser la fenetre. */
 .code-apercu {

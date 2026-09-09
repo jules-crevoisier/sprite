@@ -2,6 +2,7 @@ import { Bitmap } from '../core/bitmap'
 import { getA } from '../core/color'
 import { champAuto, hauteurSuggeree, type ProfilRelief } from './depth'
 import type { Piece, VueSource } from './scene'
+import { vueDeDos, DOS_DEFAUT, type OptionsDos } from './vues'
 import { applyX, applyY, worldTransforms, type Rig, type RigPart } from './rig'
 
 /**
@@ -51,6 +52,18 @@ export interface OptionsPieces {
    * dos. La cle est l'index de l'os.
    */
   vuesSupplementaires?: Map<number, VueSource[]>
+  /**
+   * Ajoute a chaque morceau une vue de dos devinee : le morceau retourne,
+   * sans les traits du visage. Sans elle, le demi-tour montre un personnage
+   * qui a des yeux dans la nuque.
+   *
+   * Une vue dessinee a la main pour le meme os prime : `choisirSource` prend
+   * la plus proche, et deux sources a la meme direction se departagent dans
+   * l'ordre ou elles arrivent — les supplementaires sont ajoutees apres.
+   */
+  dosAuto?: boolean
+  /** Reglage de la devinette du dos. */
+  optionsDos?: OptionsDos
 }
 
 /**
@@ -97,6 +110,10 @@ export function piecesDuRig(
     const relief = opts.relief ?? { hauteur: hauteurSuggeree(bitmap), galbe: 0.5 }
     const champ = champAuto(bitmap, relief)
     const sources: VueSource[] = [{ azimut: 0, elevation: 0, bitmap, champ }]
+    if (opts.dosAuto) {
+      const dos = vueDeDos(bitmap, opts.optionsDos ?? DOS_DEFAUT)
+      sources.push({ azimut: Math.PI, elevation: 0, bitmap: dos, champ: champAuto(dos, relief) })
+    }
     if (os !== null) {
       const extra = opts.vuesSupplementaires?.get(os)
       if (extra) sources.push(...extra)

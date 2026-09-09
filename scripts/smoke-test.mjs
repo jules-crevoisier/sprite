@@ -3011,6 +3011,46 @@ check('aucune lecon ne charge sa demo par-dessus le document',
   chargementsDirects.length === 0,
   chargementsDirects.join(' | ').slice(0, 120) || 'toutes passent par ouvrirDemo')
 
+// La planche de directions : elle doit s'ouvrir, montrer autant de vignettes
+// que de directions, dire de combien chacune devine, et poser ses images en
+// frames. C'est le seul ecran qui expose la scene multi-vues — sans lui, tout
+// ce travail existait sans que personne puisse s'en servir.
+await page.evaluate(() => window.pixelforge.runCommand('sprite.vues'))
+await sleep(1200)
+const planche8 = await page.evaluate(() => ({
+  titre: document.querySelector('.modal h2, .modal .modal-title')?.textContent?.trim() ?? '',
+  vignettes: document.querySelectorAll('.vue-case').length,
+  nommees: [...document.querySelectorAll('.vue-case figcaption b')].map((b) => b.textContent).join(','),
+  devinees: [...document.querySelectorAll('.vue-case figcaption span')]
+    .filter((s2) => /devin/.test(s2.textContent ?? '')).length,
+  dessinees: [...document.querySelectorAll('.vue-case figcaption span')]
+    .filter((s2) => /dessin/.test(s2.textContent ?? '')).length,
+}))
+check('la planche de directions montre huit vignettes',
+  planche8.vignettes === 8, `${planche8.vignettes} vignette(s), titre « ${planche8.titre} »`)
+check('les directions portent les noms du compas',
+  planche8.nommees === 'S,SE,E,NE,N,NO,O,SO', planche8.nommees)
+// Une planche qui pretendrait que tout est dessine mentirait ; une qui dirait
+// que tout est devine oublierait la face.
+check('chaque vignette dit si elle est dessinee ou devinee',
+  planche8.dessinees >= 1 && planche8.devinees >= 1,
+  `${planche8.dessinees} dessinee(s), ${planche8.devinees} devinee(s)`)
+
+const avantP8 = await page.evaluate(() => window.pixelforge.ed.frameCount)
+await page.locator('.modal button', { hasText: 'Poser en frames' }).click()
+await sleep(700)
+const apresP8 = await page.evaluate(() => ({
+  frames: window.pixelforge.ed.frameCount,
+  tag: window.pixelforge.ed.sprite.tags.at(-1)?.name ?? '',
+}))
+check('poser la planche ajoute une frame par direction',
+  apresP8.frames === avantP8 + 8,
+  `${avantP8} -> ${apresP8.frames} frames`)
+check('la planche posee est marquee par un tag', apresP8.tag === 'directions',
+  apresP8.tag || 'aucun')
+for (let i = 0; i < 8; i++) await page.keyboard.press('Control+z')
+await sleep(400)
+
 // Le damier de transparence doit tomber sur la grille des pixels. A pas fixe
 // en pixels d'ecran, une case faisait 1,33 pixel du sprite a 12x et le fond
 // glissait sous le dessin. On lit le rendu lui-meme : les changements de

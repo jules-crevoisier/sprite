@@ -204,10 +204,22 @@ const m = await page.evaluate(async () => {
   const trait = []
   let accentsPerdus = null
   let mouchMax = mouchSource
+  // Ce que la compression prevoit a chaque direction : c'est contre elle que
+  // se juge la masse, et non contre un pourcentage fixe. Comprimer un dessin,
+  // c'est justement lui retirer de la largeur.
+  const profilPixl = d.profilDe(pixl, seule.sources[0].champ)
+  let pireMasse = { deg: 0, marge: Infinity, ratio: 1, prevu: 1 }
   for (let i = 0; i < 36; i++) {
     const deg = (i / 36) * 360
     const r = s.rendreScene([seule], { azimut: (deg * Math.PI) / 180, elevation: 0, zoom: 1 }, cadreUn)
     masses.push(s.masse(r.image))
+    {
+      const ratio = s.masse(r.image) / masse0
+      const prevu = Math.abs(d.compression(profilPixl, (deg * Math.PI) / 180))
+      if (ratio - prevu < pireMasse.marge) {
+        pireMasse = { deg: Math.round(deg), marge: ratio - prevu, ratio, prevu }
+      }
+    }
     if (d.couleursEtrangeres(pixl, r.image).length) etrangeres.push(i)
     if (d.trousInterieurs(r.image) > trous0) trous.push(i)
 
@@ -246,6 +258,62 @@ const m = await page.evaluate(async () => {
   for (let i = 0; i < masses.length; i++) {
     sautMax = Math.max(sautMax, Math.abs(masses[i] - masses[(i + 1) % masses.length]))
   }
+
+  /* --- 3bis. La vue de dos devinee --- */
+  const vues = await import('/src/smart/vues.ts')
+  const perso0 = (await import('/src/ui/demo-content.ts')).demoCharacter()
+    .layers[0].cels[0].bitmap
+  const dosDe = (img) => {
+    const retourne = vues.retourner(img)
+    const efface = vues.effacerLesDetails(retourne)
+    const palette = (b) => {
+      const set = new Set()
+      for (let i = 0; i < b.u32.length; i++) if ((b.u32[i] >>> 24) !== 0) set.add(b.u32[i])
+      return set
+    }
+    const silhouette = (b) => {
+      let n = 0
+      for (let i = 0; i < b.u32.length; i++) if ((b.u32[i] >>> 24) !== 0) n++
+      return n
+    }
+    const source = palette(img)
+    let etrangeres = 0
+    for (const c of palette(efface)) if (!source.has(c)) etrangeres++
+    // Ce que l'effacement a change : les pixels du visage.
+    let changes = 0
+    for (let i = 0; i < efface.u32.length; i++) {
+      if (efface.u32[i] !== retourne.u32[i]) changes++
+    }
+    return {
+      masseSource: silhouette(img),
+      masseDos: silhouette(efface),
+      etrangeres,
+      changes,
+      bordIdentique: JSON.stringify(efface.trimBounds()) === JSON.stringify(retourne.trimBounds()),
+    }
+  }
+  const dos = { perso: dosDe(perso0), pixl: dosDe(pixl) }
+
+  // Avec une vue de dos, aucune direction n'est a plus d'un quart de tour
+  // d'un dessin. Sans elle, le demi-tour invente tout.
+  const avecDos = pieceDe('pixl', pixl, { x: 0, y: 0, z: 0 },
+    [(() => {
+      const bitmap = vues.vueDeDos(pixl)
+      return {
+        azimut: Math.PI, elevation: 0, bitmap,
+        champ: d.champAuto(bitmap, { hauteur: d.hauteurSuggeree(bitmap), galbe: 0.5 }),
+      }
+    })()])
+  let ecartAvecDos = 0, ecartSansDos = 0
+  for (let i = 0; i < 36; i++) {
+    const az = (i / 36) * Math.PI * 2
+    ecartAvecDos = Math.max(ecartAvecDos,
+      s.rendreScene([avecDos], { azimut: az, elevation: 0, zoom: 1 }, cadreUn).ecartMax)
+    ecartSansDos = Math.max(ecartSansDos,
+      s.rendreScene([seule], { azimut: az, elevation: 0, zoom: 1 }, cadreUn).ecartMax)
+  }
+  dos.ecartAvecDos = Math.round((ecartAvecDos * 180) / Math.PI)
+  dos.ecartSansDos = Math.round((ecartSansDos * 180) / Math.PI)
 
   /* --- 4. Occultation entre pieces, et son inversion au demi-tour --- */
   // Deux blocs unis superposes en profondeur : le rouge devant, le bleu
@@ -474,7 +542,7 @@ const m = await page.evaluate(async () => {
       ? Math.hypot(brasApres.x - attendu.x, brasApres.y - attendu.y) : null,
     osUtilises: morceaux.filter((x) => x.os !== null).length,
     posesDistinctes: new Set(sigPose).size,
-    videsPose, deriveX, deriveY,
+    videsPose, deriveX, deriveY, pireMasse, dos,
     minPose: Math.min(...massesPose), maxPose: Math.max(...massesPose),
   }
 })
@@ -491,7 +559,11 @@ check('l\'isométrique vraie raccourcit les trois axes pareil',
 
 check('le tour du compas se referme', m.boucle === m.masse0Rendue,
   `${m.masse0Rendue} puis ${m.boucle} pixels`)
-check('aucune direction ne se vide', m.minMasse >= m.masse0 * 0.7,
+check('la masse de chaque direction suit la compression annoncee',
+  m.pireMasse.marge >= -0.08,
+  `au pire ${(m.pireMasse.ratio * 100).toFixed(0)}% a ${m.pireMasse.deg}deg,`
+  + ` la compression en prevoit ${(m.pireMasse.prevu * 100).toFixed(0)}%`)
+check('aucune direction ne se vide', m.minMasse >= m.masse0 * 0.4,
   `au pire ${Math.round((m.minMasse / m.masse0) * 100)}% de la masse de face`)
 check('aucune direction n\'enfle', m.maxMasse <= m.masse0 * 1.6,
   `au plus ${Math.round((m.maxMasse / m.masse0) * 100)}%`)
@@ -605,6 +677,26 @@ check('une pose se rend sous huit directions distinctes',
 check('aucune direction d\'une pose ne se vide',
   m.minPose > 0 && m.minPose >= m.maxPose * 0.55,
   `de ${m.minPose} a ${m.maxPose} pixels`)
+
+/* --- La vue de dos devinee --- */
+console.log('')
+for (const [nom, d2] of Object.entries(m.dos)) {
+  if (nom.startsWith('ecart')) continue
+  check(`dos ${nom} : la silhouette ne bouge pas`,
+    d2.masseDos === d2.masseSource && d2.bordIdentique,
+    `${d2.masseSource} -> ${d2.masseDos} pixels`)
+  check(`dos ${nom} : aucune couleur inventee`, d2.etrangeres === 0,
+    `${d2.etrangeres} couleur(s)`)
+  // Contre-epreuve : si rien ne changeait, la regle ne servirait a rien et le
+  // personnage garderait ses yeux dans la nuque.
+  check(`dos ${nom} : les traits du visage sont bien effaces`, d2.changes > 0,
+    `${d2.changes} pixel(s) repeints`)
+}
+check('avec une vue de dos, aucune direction n\'invente plus d\'un quart de tour',
+  m.dos.ecartAvecDos <= 90,
+  `${m.dos.ecartAvecDos}deg avec, ${m.dos.ecartSansDos}deg sans`)
+check('sans vue de dos, le banc avoue que le demi-tour est invente',
+  m.dos.ecartSansDos >= 175, `${m.dos.ecartSansDos}deg`)
 
 check('aucune erreur JavaScript', erreurs.length === 0, erreurs.join(' | '))
 

@@ -1,6 +1,9 @@
 import { Bitmap } from '../core/bitmap'
 import { getA } from '../core/color'
-import type { Angles, ChampProfondeur } from './depth'
+import {
+  boucherLesPoches, compression, couverture, deplacementRelief, profilDe,
+  type Angles, type ChampProfondeur,
+} from './depth'
 
 /**
  * Scene volumetrique et cameras : un personnage dessine une fois, rendu sous
@@ -141,15 +144,6 @@ function rotX(a: number): Mat3 {
   return [1, 0, 0, 0, c, -s, 0, s, c]
 }
 
-/** Rotation dans le plan de l'ecran (z), dite roulis. */
-function rotZ(a: number): Mat3 {
-  const c = Math.cos(a), s = Math.sin(a)
-  return [c, -s, 0, s, c, 0, 0, 0, 1]
-}
-
-const matriceAngles = (a: Angles): Mat3 =>
-  multiplier(rotZ(a.roulis), multiplier(rotX(a.tangage), rotY(a.lacet)))
-
 /**
  * Matrice de la camera.
  *
@@ -283,7 +277,6 @@ export function rendreScene(
   const image = new Bitmap(w, h)
   const profondeur = new Float32Array(w * h).fill(-Infinity)
   const proprietaire = new Int32Array(w * h).fill(-1)
-  const cam = matriceCamera(camera)
   const cx = opts.centre?.x ?? w / 2
   const cy = opts.centre?.y ?? h / 2
   const ox = opts.pivotMonde?.x ?? 0
@@ -297,18 +290,57 @@ export function rendreScene(
     if (!choix) continue
     ecartMax = Math.max(ecartMax, choix.ecart)
 
+    // Ecart qui reste entre le dessin choisi et la camera. C'est lui seul
+    // qu'on doit fabriquer : le reste est deja dessine.
+    const azR = normaliserAngle(camera.azimut - choix.source.azimut)
+    const elR = normaliserAngle(camera.elevation - choix.source.elevation)
 
-    // Le dessin choisi a ete fait depuis sa propre direction : pour l'amener
-    // sous la camera, il faut defaire cette direction puis appliquer celle
-    // qu'on veut. C'est ce produit qui evite de faire tourner de cent quatre
-    // vingts degres un dessin de dos deja correct.
-    const versSource = multiplier(rotX(choix.source.elevation), rotY(choix.source.azimut))
-    const residuel = multiplier(cam, transposee(versSource))
-    const m = multiplier(residuel, matriceAngles(piece.rotation))
-
+    // Passe le quart de tour sans dessin de dos, c'est le signe de la
+    // compression qui retourne l'image : on voit la face par derriere. Un
+    // substitut, pas une verite — `ecartMax` dit de combien on invente.
     const { bitmap, champ } = choix.source
     const bw = bitmap.width, bh = bitmap.height
+
+    const profil = profilDe(bitmap, champ)
+    const compX = compression(profil, azR)
+    const compY = compression(profilDe(bitmap, champ, true), elR)
+    const sinAz = deplacementRelief(azR), cosAz = Math.cos(azR)
+    const sinEl = deplacementRelief(elR), cosEl = Math.cos(elR)
+
+    // Roulis propre de la piece : la pose du squelette, qui est une rotation
+    // dans le plan du dessin.
+    const roulis = piece.rotation.roulis
+    const cr = Math.cos(roulis), sr = Math.sin(roulis)
     const z = camera.zoom
+
+    /**
+     * Un point du dessin, porte dans le monde puis vu par la camera.
+     *
+     * La compression s'applique autour de l'axe du MONDE, pas autour du pivot
+     * de chaque piece. C'est la difference entre un personnage qui se tourne
+     * et un tas de morceaux qui se comprimeraient chacun vers son propre os :
+     * la seconde version faisait deriver la silhouette de cinq pixels au tour
+     * du compas. Et c'est aussi ce qui fait passer le bras eloigne derriere le
+     * torse — sa profondeur le decale vers l'axe, celle du bras proche l'en
+     * ecarte.
+     */
+    const projeter = (bx: number, by: number, d: number): [number, number, number] => {
+      const lx = bx - piece.pivot.x
+      const ly = by - piece.pivot.y
+      const rx = lx * cr - ly * sr
+      const ry = lx * sr + ly * cr
+      const wx = piece.position.x + rx - ox
+      const wy = piece.position.y + ry - oy
+      const wz = piece.position.z + d - piece.pivot.z - oz
+
+      // Tour du compas, puis prise de hauteur : dans cet ordre, sinon l'axe
+      // de rotation bascule avec la camera.
+      const x1 = wx * compX + wz * sinAz
+      const z1 = wz * cosAz - wx * sinAz
+      const y2 = wy * compY - z1 * sinEl
+      const z2 = wy * sinEl + z1 * cosEl
+      return [x1 * z + cx, y2 * z + cy, z2]
+    }
 
     for (let py = 0; py < bh; py++) {
       for (let px = 0; px < bw; px++) {
@@ -316,80 +348,75 @@ export function rendreScene(
         const couleur = bitmap.u32[i]
         if (getA(couleur) === 0) continue
 
-        const lx = px - piece.pivot.x
-        const ly = py - piece.pivot.y
-        const demi = champ[i]
-        const tranches = Math.max(1, Math.ceil(demi * 2) + 1)
+        // Les quatre coins du pixel : leur boite couvre ce qu'il occupe une
+        // fois tourne, comprime et decale par le relief. Sans elle, une
+        // compression de moitie laisse une colonne sur deux vide. Le relief
+        // d'un coin est la moyenne des cases qui le touchent, pour que deux
+        // pixels voisins partagent exactement le meme bord.
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
+        for (const [dx, dy] of COINS) {
+          const [sx, sy] = projeter(px + dx, py + dy, champCoin(champ, bw, bh, px, py, dx, dy))
+          if (sx < x0) x0 = sx
+          if (sx > x1) x1 = sx
+          if (sy < y0) y0 = sy
+          if (sy > y1) y1 = sy
+        }
+        const [xa, xb] = couverture(x0, x1)
+        const [ya, yb] = couverture(y0, y1)
+        const prof = projeter(px, py, champ[i])[2]
 
-        for (let t = 0; t < tranches; t++) {
-          const lz = (tranches === 1 ? 0 : -demi + (t * demi * 2) / (tranches - 1)) - piece.pivot.z
-          const rx = m[0] * lx + m[1] * ly + m[2] * lz
-          const ry = m[3] * lx + m[4] * ly + m[5] * lz
-          const rz = m[6] * lx + m[7] * ly + m[8] * lz
-
-          // La position de la piece est deja exprimee dans le monde : elle
-          // subit la camera, jamais la rotation propre de la piece. Elle est
-          // rapportee au pivot avant d'etre tournee, sinon la scene entiere
-          // tourne autour du coin du cadre.
-          const px3 = piece.position.x - ox
-          const py3 = piece.position.y - oy
-          const pz3 = piece.position.z - oz
-          const wx = cam[0] * px3 + cam[1] * py3 + cam[2] * pz3
-          const wy = cam[3] * px3 + cam[4] * py3 + cam[5] * pz3
-          const wz = cam[6] * px3 + cam[7] * py3 + cam[8] * pz3
-
-          const sx = Math.round((rx + wx) * z + cx)
-          const sy = Math.round((ry + wy) * z + cy)
-          if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue
-          const j = sy * w + sx
-          const prof = rz + wz
-          if (prof <= profondeur[j]) continue
-          profondeur[j] = prof
-          proprietaire[j] = idPiece
-          image.u32[j] = couleur
+        for (let ty = ya; ty <= yb; ty++) {
+          if (ty < 0 || ty >= h) continue
+          for (let tx = xa; tx <= xb; tx++) {
+            if (tx < 0 || tx >= w) continue
+            const j = ty * w + tx
+            if (prof <= profondeur[j]) continue
+            profondeur[j] = prof
+            proprietaire[j] = idPiece
+            image.u32[j] = couleur
+          }
         }
       }
     }
   }
 
-  boucherLesTrous(image, profondeur, proprietaire)
+  boucherLesPoches(image, profondeur, 4, proprietaire)
   return { image, profondeur, proprietaire, ecartMax }
 }
 
-
-function transposee(m: Mat3): Mat3 {
-  return [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]
-}
+/** Les quatre coins d'un pixel, en demi-pixels. */
+const COINS: [number, number][] = [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]
 
 /**
- * Comble les pixels vides dont les quatre voisins orthogonaux sont pleins.
+ * Relief d'un coin de pixel : la moyenne des cases qui le touchent.
  *
- * Le critere est le meme que celui de la mesure des trous : boucher et
- * mesurer doivent parler de la meme chose, sinon le banc signale des percees
- * que le bouchage n'avait aucun moyen de voir. Un creux ouvert sur
- * l'extérieur — l'espace entre deux jambes — n'a jamais ses quatre voisins
- * pleins et reste donc ouvert.
+ * Deux pixels voisins doivent lire exactement la meme valeur pour leur coin
+ * commun, sinon leurs bords ne se rejoignent pas et le relief ouvre une fente
+ * a chaque marche. Prendre le relief du pixel lui-meme ferait de chacun un
+ * petit plateau, et le banc comptait alors des silhouettes percees dans
+ * trente-deux directions sur trente-six.
  */
-function boucherLesTrous(img: Bitmap, prof: Float32Array, prop: Int32Array): void {
-  const w = img.width, h = img.height
-  const copie = img.u32.slice()
-  const ORTHO = [-1, 1, -w, w]
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const i = y * w + x
-      if (getA(copie[i]) !== 0) continue
-      let enferme = true
-      let meilleur = -Infinity
-      let couleur = 0
-      let qui = -1
-      for (const v of ORTHO) {
-        const j = i + v
-        if (getA(copie[j]) === 0) { enferme = false; break }
-        if (prof[j] > meilleur) { meilleur = prof[j]; couleur = copie[j]; qui = prop[j] }
-      }
-      if (enferme) { img.u32[i] = couleur; prof[i] = meilleur; prop[i] = qui }
-    }
+function champCoin(
+  champ: ChampProfondeur, w: number, h: number,
+  x: number, y: number, dx: number, dy: number,
+): number {
+  const x0 = dx < 0 ? x - 1 : x
+  const y0 = dy < 0 ? y - 1 : y
+  let somme = 0, n = 0
+  for (const [ax, ay] of [[x0, y0], [x0 + 1, y0], [x0, y0 + 1], [x0 + 1, y0 + 1]]) {
+    if (ax < 0 || ay < 0 || ax >= w || ay >= h) continue
+    somme += champ[ay * w + ax]
+    n++
   }
+  return n ? somme / n : champ[y * w + x]
+}
+
+/** Ramene un angle dans ]-pi, pi]. */
+function normaliserAngle(a: number): number {
+  let r = a % (Math.PI * 2)
+  if (r > Math.PI) r -= Math.PI * 2
+  if (r <= -Math.PI) r += Math.PI * 2
+  return r
 }
 
 /* ------------------------------------------------------------------ */
@@ -417,21 +444,33 @@ const NOMS_4 = ['S', 'E', 'N', 'O']
  * ses os sont places.
  */
 export function pivotDesPieces(pieces: Piece[]): { x: number; y: number; z: number } {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  // Centre de masse, et non milieu de la boite : un bras leve tire la boite
+  // vers le haut sans que le personnage ait bouge, et l'axe de rotation
+  // partirait avec lui.
+  //
+  // La profondeur compte autant que le reste. Avec un axe fixe a z = 0, une
+  // piece placee a six pixels de profondeur orbite autour du personnage au
+  // lieu de tourner avec lui : le banc mesurait quatre pixels et demi de
+  // derive sur un tour du compas.
+  let somme = 0, sx = 0, sy = 0, sz = 0
   for (const p of pieces) {
-    const b = p.sources[0]?.bitmap.trimBounds()
-    if (!b || !b.w) continue
-    // Les pixels d'un morceau gardent les coordonnees du dessin ; sa position
-    // dit ou son pivot atterrit. L'ecart entre les deux est le deplacement.
+    const src = p.sources[0]
+    if (!src) continue
+    const b = src.bitmap
     const dx = p.position.x - p.pivot.x
     const dy = p.position.y - p.pivot.y
-    minX = Math.min(minX, b.x + dx)
-    maxX = Math.max(maxX, b.x + b.w + dx)
-    minY = Math.min(minY, b.y + dy)
-    maxY = Math.max(maxY, b.y + b.h + dy)
+    for (let y = 0; y < b.height; y++) {
+      for (let x = 0; x < b.width; x++) {
+        if (getA(b.u32[y * b.width + x]) === 0) continue
+        somme++
+        sx += x + dx
+        sy += y + dy
+        sz += p.position.z - p.pivot.z
+      }
+    }
   }
-  if (!Number.isFinite(minX)) return { x: 0, y: 0, z: 0 }
-  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, z: 0 }
+  if (!somme) return { x: 0, y: 0, z: 0 }
+  return { x: sx / somme, y: sy / somme, z: sz / somme }
 }
 
 /**
