@@ -1,7 +1,7 @@
 import type { App } from './app'
 import { el, clear } from './dom'
 import { icon } from './icons'
-import { confirmDialog, openModal, showToast } from './overlay'
+import { confirmDialog, openModal } from './overlay'
 import { VuePixl } from './mascot-view'
 import { marqueReagit } from './mascot-ui'
 
@@ -46,6 +46,26 @@ const SKIP_AFTER_MS = 25000
  */
 const PATIENCE_MS = 9000
 
+/**
+ * Ce que Pixl dit quand une etape est reussie.
+ *
+ * Court, et jamais la meme deux fois de suite : une felicitation qui se
+ * repete mot pour mot cesse d'etre lue des la troisieme etape. Le texte de
+ * la consigne, lui, ne bouge pas — c'est la mascotte qui commente, pas le
+ * logiciel qui se felicite.
+ */
+const BRAVOS = [
+  'Bien joue.', 'C\'est ca.', 'Voila.', 'Parfait.', 'Nickel.',
+  'Exactement.', 'Impeccable.', 'On continue.',
+]
+
+/** Ce qu'elle dit quand elle attend depuis un moment. */
+const PATIENCES = [
+  'Je vous attends — le geste est juste la.',
+  'Prenez votre temps, je ne bouge pas.',
+  'C\'est la zone en surbrillance.',
+]
+
 const DONE_KEY = 'pixelforge.tutorials.done'
 const SEEN_KEY = 'pixelforge.tutorials.seen'
 
@@ -74,7 +94,16 @@ export class Tutorial {
    * etape a l'autre : la carte est refaite a chaque etape, une mascotte
    * recreee repartirait de sa premiere image a chaque phrase lue.
    */
-  private pixl = new VuePixl({ clip: 'repos', titre: 'Pixl vous accompagne' })
+  private pixl = new VuePixl({ echelle: 3, clip: 'repos', titre: 'Pixl vous accompagne' })
+  /**
+   * La bulle porte la consigne, et par-dessus les reactions de Pixl. Elle
+   * est gardee d'une etape a l'autre pour qu'une reaction en cours ne soit
+   * pas effacee par le rendu de l'etape suivante.
+   */
+  private bulle = el('p', { class: 'tutor-bulle' })
+  private direTimer = 0
+  /** Derniere felicitation dite, pour ne jamais la repeter d'affilee. */
+  private dernierBravo = -1
   private spotlight = el('div', { class: 'tutor-spotlight', hidden: true })
   private poll = 0
   private raf = 0
@@ -91,6 +120,32 @@ export class Tutorial {
   }
 
   get running(): boolean { return this.lesson !== null }
+
+  /**
+   * Pixl dit une phrase, puis rend la bulle a la consigne.
+   *
+   * La consigne reste la reference : une reaction qui resterait affichee
+   * effacerait ce qu'il y a a faire, et c'est exactement au moment ou l'on
+   * felicite que la personne cherche l'etape suivante.
+   */
+  private parler(texte: string, ms = 1500): void {
+    window.clearTimeout(this.direTimer)
+    this.bulle.textContent = texte
+    this.bulle.classList.add('dit')
+    this.direTimer = window.setTimeout(() => {
+      this.bulle.classList.remove('dit')
+      const step = this.lesson?.steps[this.index]
+      if (step) this.bulle.textContent = step.text
+    }, ms)
+  }
+
+  /** Une felicitation, jamais la meme que la precedente. */
+  private bravo(): string {
+    let i = this.dernierBravo
+    while (i === this.dernierBravo) i = Math.floor(Math.random() * BRAVOS.length)
+    this.dernierBravo = i
+    return BRAVOS[i]
+  }
 
   /* ---------------------------------------------------------------- */
   /* Cycle de vie                                                      */
@@ -116,6 +171,7 @@ export class Tutorial {
   stop(completed = false): void {
     window.clearTimeout(this.skipTimer)
     window.clearTimeout(this.patienceTimer)
+    window.clearTimeout(this.direTimer)
     this.skipOffered = false
     // La lecon finie, la carte disparait : la reaction passe donc a la
     // marque, seule presence de Pixl qui reste a l'ecran.
@@ -148,9 +204,7 @@ export class Tutorial {
     this.pixl.jouer('repos')
     this.index++
     if (this.index >= this.lesson.steps.length) {
-      const title = this.lesson.title
-      this.stop(true)
-      showToast(`Lecon terminee : ${title}`, 'success')
+      this.feter(this.lesson)
       return
     }
     const step = this.lesson.steps[this.index]
@@ -171,7 +225,9 @@ export class Tutorial {
       // Elle fait les cent pas plutot que de rester assise : c'est le signe
       // qu'on attend quelque chose de nous, sans une phrase de plus.
       this.patienceTimer = window.setTimeout(() => {
-        if (this.lesson && !step.done!()) this.pixl.jouer('marche')
+        if (!this.lesson || step.done!()) return
+        this.pixl.jouer('marche')
+        this.parler(PATIENCES[Math.floor(Math.random() * PATIENCES.length)], 2800)
       }, PATIENCE_MS)
     }
   }
@@ -191,12 +247,17 @@ export class Tutorial {
     this.poll = window.setInterval(() => {
       if (!this.lesson) return
       const step = this.lesson.steps[this.index]
+      // La lecon peut avoir passe sa derniere etape pendant que la boucle
+      // attendait de repartir : `this.index` sort alors du tableau, et la
+      // fete est deja a l'ecran. Il n'y a plus rien a surveiller.
+      if (!step) { clearInterval(this.poll); return }
       // La cible peut apparaitre apres coup, par exemple a l'ouverture d'un panneau.
       if (!this.target && step.target) this.target = step.target()
       if (step.done?.()) {
         // Le geste est fait : elle saute. La carte devient verte au meme
         // instant, la mascotte dit la meme chose plus vite que la couleur.
         this.pixl.jouer('saut', 'repos')
+        this.parler(this.bravo(), 1100)
         window.clearTimeout(this.patienceTimer)
         this.card.classList.add('validated')
         setTimeout(() => { this.card.classList.remove('validated'); this.next() }, 420)
@@ -277,17 +338,33 @@ export class Tutorial {
     const step = lesson.steps[this.index]
     clear(this.card)
 
+    // Une jauge par etape plutot qu'une barre continue : sur une lecon de
+    // quatorze etapes, un trait qui avance de sept pour cent ne se voit pas,
+    // alors qu'un segment qui s'allume se voit toujours.
+    const jauge = el('div', { class: 'tutor-jauge' })
+    for (let i = 0; i < lesson.steps.length; i++) {
+      jauge.appendChild(el('i', { class: i < this.index ? 'fait' : i === this.index ? 'ici' : '' }))
+    }
+
+    window.clearTimeout(this.direTimer)
+    this.bulle.classList.remove('dit')
+    this.bulle.textContent = step.text
+
     this.card.append(
       el('div', { class: 'tutor-head' },
-        el('span', { class: 'tutor-pixl' }, this.pixl.node),
         el('strong', null, lesson.title),
         el('span', { class: 'spacer' }),
         el('span', { class: 'tutor-count' }, `${this.index + 1}/${lesson.steps.length}`),
         el('button', { class: 'btn ghost sm icon-only', title: 'Quitter', html: icon('close', 13), onclick: () => this.stop() }),
       ),
-      el('div', { class: 'tutor-progress' },
-        el('i', { style: { width: `${((this.index + 1) / lesson.steps.length) * 100}%` } })),
-      el('p', { class: 'tutor-text' }, step.text),
+      jauge,
+      // La consigne sort de la bouche de la mascotte, elle n'est pas
+      // affichee a cote d'elle : c'est ce qui fait qu'on la lit comme
+      // quelqu'un qui parle plutot que comme un panneau d'aide.
+      el('div', { class: 'tutor-corps' },
+        el('div', { class: 'tutor-scene' }, this.pixl.node),
+        this.bulle,
+      ),
     )
 
     const foot = el('div', { class: 'tutor-foot' })
@@ -338,6 +415,50 @@ export class Tutorial {
     }
   }
 
+  /**
+   * Fin de lecon : la carte reste, et Pixl fete.
+   *
+   * Un simple message qui passe se lit comme une notification de plus. Une
+   * lecon qui se termine merite qu'on s'arrete dessus une seconde — c'est
+   * le seul moment ou la personne a fini quelque chose.
+   */
+  private feter(lesson: Lesson): void {
+    markDone(lesson.id)
+    this.target = null
+    this.spotlight.hidden = true
+    this.app.viewport.gesture = null
+    this.app.viewport.invalidate()
+    clearInterval(this.poll)
+    window.clearTimeout(this.direTimer)
+    clear(this.card)
+    this.card.classList.add('fete')
+
+    this.pixl.jouer('attaque', 'repos')
+    const faites = new Set(loadDone())
+    // `lessons` est une methode : lire `.length` dessus donnerait le nombre
+    // de parametres declares, c'est-a-dire zero, et la ligne de compte ne
+    // s'afficherait jamais.
+    const total = this.app.lessons().length
+
+    this.card.append(
+      el('div', { class: 'tutor-corps' },
+        el('div', { class: 'tutor-scene' }, this.pixl.node),
+        el('div', { class: 'tutor-bulle' },
+          el('b', null, 'Lecon terminee.'),
+          el('span', null, `${lesson.title} — ${lesson.steps.length} etapes.`),
+          total ? el('span', { class: 'tutor-compte' },
+            `${faites.size} lecon${faites.size > 1 ? 's' : ''} sur ${total}.`) : null,
+        ),
+      ),
+      el('div', { class: 'tutor-foot' },
+        el('span', { class: 'spacer' }),
+        el('button', {
+          class: 'btn sm primary', onclick: () => { this.card.classList.remove('fete'); this.stop(true) },
+        }, 'Continuer'),
+      ),
+    )
+  }
+
   /* ---------------------------------------------------------------- */
   /* Choix d'une lecon                                                 */
   /* ---------------------------------------------------------------- */
@@ -366,10 +487,17 @@ export class Tutorial {
       body: el('div', null,
         el('div', { class: 'pixl-guide' },
           el('div', { class: 'pixl-guide-scene' }, new VuePixl({ echelle: 2, clip: 'repos' }).node),
-          el('p', { class: 'form-note', style: { margin: '0' } },
-            'Chaque lecon charge un document de demonstration et se deroule dans l\'editeur. ',
-            'Vous pouvez faire le geste vous-meme ou laisser la lecon le faire pour voir le resultat. ',
-            'Pixl vous accompagne : elle saute quand une etape est reussie.'),
+          el('div', null,
+            el('b', { style: { display: 'block', fontSize: '13px', marginBottom: '3px' } },
+              done.size === 0
+                ? 'On commence quand vous voulez.'
+                : done.size >= lessons.length
+                  ? 'Vous les avez toutes faites.'
+                  : `${done.size} lecon${done.size > 1 ? 's' : ''} sur ${lessons.length}.`),
+            el('p', { class: 'form-note', style: { margin: '0' } },
+              'Chaque lecon se deroule dans l\'editeur, sur un document de demonstration. ',
+              'Faites le geste vous-meme, ou laissez la lecon le faire pour voir le resultat.'),
+          ),
         ),
         el('div', { style: { height: '12px' } }),
         list,

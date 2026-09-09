@@ -359,10 +359,18 @@ const guided = await page.evaluate(async () => {
   out.avance.push(await jusqua(14))
 
   ed.sprite.rig.bones[ed.sprite.rig.bones.length - 1].softness = 0.6
-  await attendre(() => !document.querySelector('.tutor-card:not([hidden])'))
+  // La derniere etape ne fait plus disparaitre la carte : elle la remplace
+  // par la fete de fin de lecon, qui attend qu'on la referme.
+  await attendre(() => !!document.querySelector('.tutor-card.fete'))
   out.avance.push(etape() || 'terminee')
+  const fete = document.querySelector('.tutor-card.fete')
+  out.feteTexte = fete?.textContent ?? ''
+  out.fetePixl = fete?.querySelector('.pixl')?.dataset.pixl ?? ''
 
-  app.tutorial.stop()
+  // On la referme par son propre bouton, pas par l'API : c'est le geste
+  // que fait la personne, et c'est lui qui doit rendre la main.
+  ;[...fete.querySelectorAll('button')].find((b) => /Continuer/.test(b.textContent))?.click()
+  await attendre(() => !document.querySelector('.tutor-card:not([hidden])'))
   out.carteFermee = !document.querySelector('.tutor-card:not([hidden])')
   return out
 })
@@ -503,9 +511,15 @@ check('la lecon exige de vrais gestes', guided.gestesExiges >= 4, `${guided.gest
 const dernierePas = guided.avance[guided.avance.length - 1] ?? ''
 const [fait, total] = dernierePas.split('/')
 check('la lecon se deroule jusqu\'au bout sur de vrais gestes',
-  guided.rigLie && guided.rigPose && fait === total && Number(total) >= 8,
+  guided.rigLie && guided.rigPose && (fait === total || dernierePas === 'terminee') && guided.avance.length >= 8,
   guided.avance.join(' -> '))
-check('quitter le tutoriel referme la carte', guided.carteFermee)
+// La fin de lecon est le seul moment ou la personne a fini quelque chose :
+// elle merite un ecran, pas un message qui passe.
+check('la lecon se termine par une fete', /Lecon terminee/.test(guided.feteTexte),
+  guided.feteTexte.slice(0, 70))
+check('la mascotte fete la fin de la lecon', guided.fetePixl === 'attaque' || guided.fetePixl === 'repos',
+  guided.fetePixl || 'aucune mascotte')
+check('le bouton Continuer referme la carte', guided.carteFermee)
 
 /* --- l'interface du mode squelette ne se coupe ni ne se recouvre --- */
 const habillage = await page.evaluate(async () => {

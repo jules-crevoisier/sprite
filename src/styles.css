@@ -990,7 +990,7 @@ input[type="range"]::-moz-range-thumb {
   position: fixed;
   left: 16px;
   bottom: 16px;
-  width: min(340px, calc(100vw - 32px));
+  width: min(392px, calc(100vw - 32px));
   background: var(--bg-2);
   border: 1px solid var(--accent);
   border-radius: var(--radius-lg);
@@ -1000,7 +1000,9 @@ input[type="range"]::-moz-range-thumb {
   animation: pop .16s ease;
 }
 .tutor-card.validated { border-color: var(--ok); }
-.tutor-card.validated .tutor-progress i { background: var(--ok); }
+.tutor-card.validated .tutor-jauge i.ici { background: var(--ok); }
+.tutor-card.validated .tutor-bulle { border-color: var(--ok); }
+.tutor-card.validated .tutor-bulle::before { border-right-color: var(--ok); }
 
 .tutor-head {
   display: flex; align-items: center; gap: 8px;
@@ -1010,16 +1012,78 @@ input[type="range"]::-moz-range-thumb {
 .tutor-head .spacer { flex: 1; }
 .tutor-count { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
 
-.tutor-progress { height: 2px; background: var(--bg-4); }
-.tutor-progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
-
-.tutor-text {
-  margin: 0;
-  padding: 12px 14px;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--text-dim);
+/*
+   Une jauge par etape, pas une barre continue : sur une lecon de quatorze
+   etapes, un trait qui avance de sept pour cent ne se voit pas, alors qu'un
+   segment qui s'allume se voit toujours.
+*/
+.tutor-jauge { display: flex; gap: 2px; padding: 0 13px 2px; }
+.tutor-jauge i {
+  flex: 1; height: 3px; border-radius: 2px;
+  background: var(--bg-4);
+  transition: background .18s;
 }
+.tutor-jauge i.fait { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.tutor-jauge i.ici { background: var(--accent); }
+
+/*
+   La consigne sort de la bouche de la mascotte au lieu d'etre posee a cote
+   d'elle : c'est la difference entre quelqu'un qui parle et un panneau
+   d'aide. La fleche de la bulle fait le lien, et elle vise le haut du
+   personnage, pas son milieu.
+*/
+.tutor-corps {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 13px 12px;
+}
+.tutor-scene {
+  flex: none;
+  width: 96px; height: 96px;
+  display: flex; align-items: flex-end; justify-content: center;
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+.tutor-bulle {
+  position: relative;
+  flex: 1;
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  transition: border-color .18s, color .18s;
+}
+.tutor-bulle b { display: block; font-size: 13px; color: var(--text); margin-bottom: 3px; }
+.tutor-bulle span { display: block; }
+.tutor-bulle .tutor-compte {
+  margin-top: 5px;
+  font-family: var(--mono); font-size: 11px; color: var(--text-faint);
+}
+/* La fleche est doublee : le trait d'abord, le fond par-dessus. */
+.tutor-bulle::before, .tutor-bulle::after {
+  content: ''; position: absolute; top: 13px;
+  border: 6px solid transparent;
+}
+.tutor-bulle::before { left: -12px; border-right-color: var(--line); }
+.tutor-bulle::after { left: -11px; border-right-color: var(--bg-1); }
+
+/* Ce que Pixl dit par-dessus la consigne : plus clair, et ca revient. */
+.tutor-bulle.dit {
+  color: var(--text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.tutor-bulle.dit::before { border-right-color: var(--accent); }
+
+.tutor-card.fete { border-color: var(--ok); }
+.tutor-card.fete .tutor-bulle { border-color: var(--ok); }
+.tutor-card.fete .tutor-bulle::before { border-right-color: var(--ok); }
+.tutor-card.fete .tutor-scene { border-color: var(--ok); }
 .tutor-foot {
   display: flex; align-items: center; gap: 6px;
   padding: 0 12px 12px;
@@ -1237,6 +1301,12 @@ canvas.pixl {
 
 @media (max-width: 1180px) {
   .pixl-planche { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* La scene mange trop de la carte sur un ecran etroit. */
+@media (max-width: 760px) {
+  .tutor-scene { width: 64px; height: 64px; }
+  .tutor-scene .pixl { width: 64px !important; height: 64px !important; }
 }
 
 /* Mouvement refuse : la carte d'accueil et la traversee ne s'animent plus.
