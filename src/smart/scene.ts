@@ -231,6 +231,16 @@ export interface RenduScene {
   /** Profondeur retenue par pixel ; -Infinity la ou rien n'a ete pose. */
   profondeur: Float32Array
   /**
+   * Index de la piece qui a peint chaque pixel ; -1 la ou rien n'a ete pose.
+   *
+   * C'est ce qui permet ensuite de distinguer une dechirure d'une encoche :
+   * un vide borde par DEUX pieces differentes est un ecart ouvert par la
+   * pose, un vide borde par une seule piece appartient au dessin. Sans cette
+   * information, refermer les fentes referme aussi l'espace entre les
+   * oreilles.
+   */
+  proprietaire: Int32Array
+  /**
    * Plus grand ecart, en radians, entre la camera et le dessin source
    * effectivement employe. C'est la mesure de confiance du resultat : a zero
    * on montre un vrai dessin, a un demi-tour on montre une invention.
@@ -272,6 +282,7 @@ export function rendreScene(
   const { largeur: w, hauteur: h } = opts
   const image = new Bitmap(w, h)
   const profondeur = new Float32Array(w * h).fill(-Infinity)
+  const proprietaire = new Int32Array(w * h).fill(-1)
   const cam = matriceCamera(camera)
   const cx = opts.centre?.x ?? w / 2
   const cy = opts.centre?.y ?? h / 2
@@ -280,7 +291,8 @@ export function rendreScene(
   const oz = opts.pivotMonde?.z ?? 0
   let ecartMax = 0
 
-  for (const piece of pieces) {
+  for (let idPiece = 0; idPiece < pieces.length; idPiece++) {
+    const piece = pieces[idPiece]
     const choix = choisirSource(piece.sources, camera.azimut, camera.elevation)
     if (!choix) continue
     ecartMax = Math.max(ecartMax, choix.ecart)
@@ -333,14 +345,15 @@ export function rendreScene(
           const prof = rz + wz
           if (prof <= profondeur[j]) continue
           profondeur[j] = prof
+          proprietaire[j] = idPiece
           image.u32[j] = couleur
         }
       }
     }
   }
 
-  boucherLesTrous(image, profondeur)
-  return { image, profondeur, ecartMax }
+  boucherLesTrous(image, profondeur, proprietaire)
+  return { image, profondeur, proprietaire, ecartMax }
 }
 
 
@@ -357,7 +370,7 @@ function transposee(m: Mat3): Mat3 {
  * l'extérieur — l'espace entre deux jambes — n'a jamais ses quatre voisins
  * pleins et reste donc ouvert.
  */
-function boucherLesTrous(img: Bitmap, prof: Float32Array): void {
+function boucherLesTrous(img: Bitmap, prof: Float32Array, prop: Int32Array): void {
   const w = img.width, h = img.height
   const copie = img.u32.slice()
   const ORTHO = [-1, 1, -w, w]
@@ -368,12 +381,13 @@ function boucherLesTrous(img: Bitmap, prof: Float32Array): void {
       let enferme = true
       let meilleur = -Infinity
       let couleur = 0
+      let qui = -1
       for (const v of ORTHO) {
         const j = i + v
         if (getA(copie[j]) === 0) { enferme = false; break }
-        if (prof[j] > meilleur) { meilleur = prof[j]; couleur = copie[j] }
+        if (prof[j] > meilleur) { meilleur = prof[j]; couleur = copie[j]; qui = prop[j] }
       }
-      if (enferme) { img.u32[i] = couleur; prof[i] = meilleur }
+      if (enferme) { img.u32[i] = couleur; prof[i] = meilleur; prop[i] = qui }
     }
   }
 }

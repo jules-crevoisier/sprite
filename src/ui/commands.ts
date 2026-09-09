@@ -2,7 +2,9 @@ import type { App } from './app'
 import * as ops from '../core/operations'
 import { normaliserTouches } from './shortcuts'
 import * as dlg from './dialogs'
-import { variantsDialog, detailDialog, shadeDialog, rampDialog, rotationDialog } from './smart-dialogs'
+import {
+  variantsDialog, detailDialog, shadeDialog, rampDialog, rotationDialog, comblerDialog,
+} from './smart-dialogs'
 import { exportFramePng, exportFramesZip, exportGif } from '../export'
 import { downloadText, pickFiles, safeName } from '../export/files'
 import { serializeSprite, deserializeSprite, PROJECT_EXT } from '../io/project'
@@ -353,6 +355,11 @@ export function buildCommands(app: App): Command[] {
     id: 'sprite.rotate3d', label: 'Tourner en 3D…', group: 'Assisté', keys: 'Ctrl+Maj+R', icon: 'rig',
     hint: () => 'Trois-quarts et profils, sans redessiner',
     run: () => rotationDialog(ed),
+  })
+  add({
+    id: 'sprite.combler', label: 'Refermer les fentes…', group: 'Assisté', icon: 'detail',
+    hint: () => 'Rendre au dessin ce qu\'une pose lui a arrache',
+    run: () => comblerDialog(ed),
   })
   add({
     id: 'sprite.ramp', label: 'Rampe de couleurs…', group: 'Assisté', keys: 'Ctrl+Maj+G', icon: 'palette',

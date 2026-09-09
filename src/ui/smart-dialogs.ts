@@ -17,6 +17,7 @@ import {
 import {
   champAuto, hauteurSuggeree, tourner, masse, trousInterieurs, couleursEtrangeres,
 } from '../smart/depth'
+import { comblerLesFentes, proprietaireUnique } from '../smart/combler'
 import { el, checkbox, numberInput, select, slider } from './dom'
 import { zoomablePreview } from './preview-zoom'
 import { icon } from './icons'
@@ -696,6 +697,101 @@ export function rotationDialog(ed: Editor): void {
           showToast('Pose posee sur une nouvelle frame', 'success')
         },
       },
+      { label: 'Appliquer', primary: true, onClick: () => { ed.commitStroke() } },
+    ],
+    onClose: () => { ed.cancelStroke() },
+  })
+}
+
+
+/**
+ * « Refermer les fentes » : rendre a un dessin fendu ce que la fente a
+ * emporte.
+ *
+ * Le cas d'usage vient d'une pose : deux morceaux qui ne tournent pas du meme
+ * angle s'ecartent et laissent un trait de vide en plein milieu du torse.
+ * Mais la meme fente arrive apres un decalage a la main, un collage, un
+ * agrandissement rate.
+ *
+ * L'algorithme ne sait pas, seul, distinguer une dechirure d'une encoche
+ * voulue — l'espace entre deux oreilles a exactement la meme forme. Deux
+ * garde-fous, donc : la largeur maximale, reglee bas par defaut, et la
+ * selection, qui limite la reparation a la zone que l'on designe. Et le
+ * compte des pixels poses est affiche avant de valider.
+ */
+export function comblerDialog(ed: Editor): void {
+  const cel = ed.beginStroke('Refermer les fentes')
+  if (!cel) return
+
+  const source = cel.bitmap.clone()
+  const zone = ed.selection.active ? ed.selection : null
+  const opts = { largeurMax: 2, respecterSelection: !!zone, protegerLesCreux: !zone }
+  const apercu = zoomablePreview({ hauteur: 200 })
+  const info = el('p', { class: 'form-note' })
+
+  const apply = (): void => {
+    ed.resetStroke()
+    const cible = ed.peekCel()
+    if (!cible) return
+    const { image, bilan } = comblerLesFentes(source, {
+      largeurMax: opts.largeurMax,
+      // Sans squelette, aucun morceau ne se distingue d'un autre : le seul
+      // moyen honnete de proteger les creux du dessin est de considerer tout
+      // le dessin comme un seul morceau. Rien ne se comble alors, sauf ce
+      // que la selection designe.
+      proprietaire: opts.protegerLesCreux ? proprietaireUnique(source) : undefined,
+      autorise: opts.respecterSelection && zone
+        ? (x, y) => zone.contains(x, y)
+        : undefined,
+    })
+    cible.bitmap.copyFrom(image)
+    ed.events.emit('doc', undefined)
+    apercu.show(cible.bitmap)
+
+    info.textContent = bilan.combles
+      ? `${bilan.combles} pixel(s) posé(s)`
+        + (bilan.epargnes ? `, ${bilan.epargnes} creux laissé(s) intact(s).` : '.')
+      : 'Aucune fente trouvée à cette largeur.'
+        + (bilan.epargnes ? ` ${bilan.epargnes} creux protégé(s).` : '')
+    info.style.color = bilan.combles ? 'var(--text-faint)' : 'var(--warn, #e0a33e)'
+  }
+
+  const body = el('div', null,
+    el('p', { class: 'form-note', style: { margin: '0 0 8px', lineHeight: '1.6' } },
+      'Chaque pixel ajouté reprend une couleur déjà présente au bord de la fente : '
+      + 'la palette du dessin ne bouge pas, et rien n\'est mélangé.'),
+    apercu.node,
+    el('div', { class: 'form-grid' },
+      el('label', { title: 'Un vide plus large que cela est considéré comme voulu' },
+        'Largeur maxi'),
+      slider(1, 8, opts.largeurMax, 1, (v) => { opts.largeurMax = v; apply() },
+        (v) => `${v} px`),
+      el('label', null, 'Creux du dessin'),
+      checkbox('Ne pas les refermer', opts.protegerLesCreux,
+        (v) => { opts.protegerLesCreux = v; apply() }),
+      ...(zone ? [
+        el('label', null, 'Sélection'),
+        checkbox('Ne réparer que la sélection', opts.respecterSelection,
+          (v) => { opts.respecterSelection = v; apply() }),
+      ] : []),
+    ),
+    info,
+    zone ? el('p', { class: 'form-note' },
+      'La sélection est le moyen le plus sûr : elle dit à l\'algorithme où se '
+      + 'trouve la déchirure, ce qu\'aucune analyse de la forme ne peut deviner.')
+      : el('p', { class: 'form-note' },
+        'Sans sélection, seuls les vides bordés par deux zones distinctes sont '
+        + 'refermés. Sélectionnez la déchirure pour réparer un creux volontaire.'),
+  )
+
+  apply()
+
+  openModal({
+    title: 'Refermer les fentes',
+    icon: 'detail',
+    body,
+    actions: [
+      { label: 'Annuler', onClick: () => { ed.cancelStroke() } },
       { label: 'Appliquer', primary: true, onClick: () => { ed.commitStroke() } },
     ],
     onClose: () => { ed.cancelStroke() },
