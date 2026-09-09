@@ -2048,6 +2048,7 @@ const armee = await page.evaluate(async () => {
   const bilan = {
     armes: ARMES.length, cycles: 0, images: 0,
     detachees: [], horsCadre: [], jumelles: [], armeInvisible: [], visibleMin: 999,
+    armesBasses: [], gainHauteurMin: 99,
     positions: Object.keys(POSITIONS_ARME).length,
     massesArmes: ARMES.map((a) => masseDArme(a.art)),
     // Le dessin abattu est une rotation du dessin porte : la masse doit
@@ -2061,6 +2062,10 @@ const armee = await page.evaluate(async () => {
     for (const clip of clipsArmes(arme, CLIPS_PIXL)) {
       bilan.cycles++
       const bmps = clip.images.map((img) => imageDePoseArmee(img.pose, arme, img.position))
+      // L'armement monte : c'est son SOMMET qui doit casser la ligne du
+      // haut, pas chacun de ses paliers. Exiger le depassement des la
+      // premiere image interdirait justement de monter progressivement.
+      const gainsArmement = []
       bmps.forEach((bm, i) => {
         bilan.images++
         // Une arme posee a cote du personnage fait deux morceaux. C'est le
@@ -2087,11 +2092,28 @@ const armee = await page.evaluate(async () => {
         }
         if (ajoutes < 8) bilan.armeInvisible.push(`${clip.id}#${i + 1} (${ajoutes} px)`)
         bilan.visibleMin = Math.min(bilan.visibleMin, ajoutes)
+        // Le compte d'ajout au contour sature : des que l'arme est
+        // entierement degagee du corps, il ne distingue plus une arme
+        // brandie d'une arme baissee de deux pixels. Sur les images
+        // d'armement, on exige donc qu'elle casse la ligne du HAUT — c'est
+        // ce qui fait qu'un personnage a l'air arme sur une vignette.
+        if (clip.images[i].position.startsWith('armement')) {
+          let hautNu = 99
+          for (let y = 0; y < TAILLE && hautNu === 99; y++) {
+            for (let x = 0; x < TAILLE; x++) if (nu.u32[y * TAILLE + x] >>> 24) { hautNu = y; break }
+          }
+          gainsArmement.push(hautNu - y0)
+        }
       })
       for (let a = 0; a < bmps.length; a++) for (let b = a + 1; b < bmps.length; b++) {
         let d = 0
         for (let k = 0; k < bmps[a].u32.length; k++) if (bmps[a].u32[k] !== bmps[b].u32[k]) d++
         if (d === 0) bilan.jumelles.push(`${clip.id} ${a + 1}=${b + 1}`)
+      }
+      if (gainsArmement.length) {
+        const sommet = Math.max(...gainsArmement)
+        bilan.gainHauteurMin = Math.min(bilan.gainHauteurMin, sommet)
+        if (sommet < 1) bilan.armesBasses.push(`${clip.id} (${sommet} px)`)
       }
     }
   }
@@ -2112,6 +2134,8 @@ check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0) && armee.a
     || `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions, dessin abattu compris`)
 check('l\'arme change toujours la silhouette', armee.armeInvisible.length === 0,
   armee.armeInvisible.join(', ') || `${armee.visibleMin} px ajoutes au contour au minimum`)
+check('l\'arme brandie depasse au-dessus de la tete', armee.armesBasses.length === 0,
+  armee.armesBasses.join(', ') || `${armee.gainHauteurMin} px au-dessus au plus juste`)
 
 /* --- Pixl dans l'application --- */
 // Une mascotte peut disparaitre d'un coin sans que rien ne casse : plus

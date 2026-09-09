@@ -366,14 +366,23 @@ const MARCHE: Reglage[] = [
  * Le ciseau continue pendant le vol : sans ca les images 2 et 3 avaient
  * exactement les memes pattes, et la jambe restait figee cent soixante
  * millisecondes en pleine foulee.
+ *
+ * Chaque patte decrit 24 au contact, puis 20, 18, 21, 20, 22 : un repli au
+ * passage suivi d'une detente vers le sol. La version precedente laissait
+ * le pied arriere sur la meme ligne pendant trois images — deux cent
+ * quarante millisecondes clouees, deux fois par tour — pendant que la
+ * patte visible sous le torse passait de trois a six rangees. La jambe ne
+ * balancait pas, elle telescopait, et aucun invariant ne pouvait le voir :
+ * `lignesDePatteVisibles` ne rend que le minimum des deux pattes, et c'est
+ * toujours l'autre.
  */
 const COURSE: Reglage[] = [
   { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [0, 1], gauche: [-1, -4], droite: [0, -3], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -6], droite: [0, -3], queue: 'basse' },
+  { corps: [-1, -2], tete: [0, 1], gauche: [-1, -4], droite: [0, -4], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -6], droite: [0, -2], queue: 'basse' },
   { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [0, 1], gauche: [0, -3], droite: [1, -4], queue: 'basmilieu' },
-  { corps: [0, -3], tete: [0, 1], gauche: [0, -3], droite: [0, -6], queue: 'basse' },
+  { corps: [1, -2], tete: [0, 1], gauche: [0, -4], droite: [1, -4], queue: 'basmilieu' },
+  { corps: [0, -3], tete: [0, 1], gauche: [0, -2], droite: [0, -6], queue: 'basse' },
 ]
 
 /**
@@ -451,8 +460,8 @@ const ATTAQUE: Reglage[] = [
   { corps: [1, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
   { corps: [1, 0], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
   { corps: [2, -2], corpsArt: 'etire', tete: [0, 1], gauche: [1, -3], droite: [1, -3], queue: 'basse' },
-  { corps: [1, -1], gauche: [0, -3], droite: [2, -3], queue: 'basmilieu' },
-  { corps: [1, 1], gauche: [0, -2], droite: [1, -2], queue: 'milieu' },
+  { corps: [1, -2], gauche: [0, -3], droite: [2, -3], queue: 'basmilieu' },
+  { corps: [1, 0], gauche: [0, -2], droite: [1, -2], queue: 'milieu' },
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [-1, 1], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
   { corps: [0, -1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },

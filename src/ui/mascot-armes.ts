@@ -53,6 +53,16 @@ export interface Arme {
    * point qu'on pose au flanc du corps ; tout le reste suit.
    */
   prise: [number, number]
+  /**
+   * Les trois paliers de l'armement, propres a l'arme.
+   *
+   * Un offset global ne peut pas faire monter les trois armes au-dessus de
+   * la tete : l'epee se detache a moins cinq et moins six et redevient
+   * valide a moins sept, tandis que la tete du marteau sort du cadre des
+   * moins six. Les paliers sont donc par arme, et chacun est le maximum
+   * verifie pour elle.
+   */
+  montee: [[number, number], [number, number], [number, number]]
   /** Le meme dessin abattu, obtenu par rotation. */
   abattue: string[]
   priseAbattue: [number, number]
@@ -91,8 +101,8 @@ function armer(a: Omit<Arme, 'abattue' | 'priseAbattue'>): Arme {
 }
 
 /**
- * Epee. La lame double la hauteur de la silhouette : c'est elle qui donne
- * la direction du coup, une image avant que le corps ne suive.
+ * Epee. La plus longue des trois : c'est elle qui donne la direction du
+ * coup, une image avant que le corps ne suive.
  *
  * Deux colonnes, une claire et une sombre. A une seule colonne, la lame
  * n'etait qu'un trait : en aplat, l'epee et le baton ne se distinguaient
@@ -165,6 +175,7 @@ export const ARMES: Arme[] = [
     pitch: 'La lame double la hauteur de la silhouette et donne la direction du coup avant le corps.',
     art: EPEE,
     prise: [3, 9],
+    montee: [[0, -4], [0, -8], [0, -9]],
   }),
   armer({
     id: 'marteau',
@@ -172,6 +183,7 @@ export const ARMES: Arme[] = [
     pitch: 'La masse est au bout du bras de levier : le meme deplacement se lit plus lourd.',
     art: MARTEAU,
     prise: [2, 12],
+    montee: [[0, -3], [0, -5], [0, -6]],
   }),
   armer({
     id: 'baton',
@@ -179,6 +191,7 @@ export const ARMES: Arme[] = [
     pitch: 'La gemme est le seul point clair : c\'est elle qu\'on suit, donc elle decrit le plus grand arc.',
     art: BATON,
     prise: [2, 9],
+    montee: [[0, -4], [0, -8], [0, -9]],
   }),
 ]
 
@@ -202,7 +215,12 @@ export const POSITIONS_ARME = {
   // tressautait dessous. C'est l'objet qui doit trainer le plus qui ne
   // bougeait pas du tout.
   retardHaut: [0, 2],
-  haute: [0, -4],
+  // Les trois paliers de l'armement. Les valeurs ici ne servent que de
+  // repli : chaque arme donne les siennes, parce qu'aucun offset unique ne
+  // les fait toutes monter au-dessus de la tete.
+  armement1: [0, -4],
+  armement2: [0, -8],
+  armement3: [0, -9],
   // Le contre-mouvement : l'arme descend avant de monter. L'accroupissement
   // seul ne la deplacait pas d'un pixel, parce que le corps descendait de
   // trois et que `levee` remontait de trois — les deux s'annulaient
@@ -214,12 +232,13 @@ export const POSITIONS_ARME = {
   // masse vers l'exterieur. Verticale, la lame pointait vers le ciel
   // pendant tout le coup — ca ne se lit pas comme un coup porte.
   //
-  // Les deux offsets sont le resultat d'un balayage complet, pas d'un
-  // reglage a l'oeil : ce sont les seuls, sur les trois armes et les cinq
-  // images concernees, qui gardent l'arme accrochee au personnage, dans le
-  // cadre, et qui maximisent ce qu'elle ajoute a la silhouette. Une arme
-  // brandie qui n'ajoute rien a la silhouette n'existe pas en aplat.
-  abattue: [8, 4],
+  // L'offset vient d'un balayage, pas d'un reglage a l'oeil : c'est le
+  // meilleur des cent douze qui gardent l'arme accrochee et dans le cadre.
+  // Il plafonne a onze pixels ajoutes au contour, et c'est un mur, pas un
+  // reglage : avec une arme de douze pixels a l'horizontale, une prise a
+  // trois colonnes du flanc et une toile de trente-deux, la moitie de
+  // l'arme passe forcement derriere les pattes.
+  abattue: [8, 5],
   rebond: [0, -1],
 } as const
 
@@ -260,6 +279,15 @@ export function mainDansLaToile(p: Pose): [number, number] {
   return [p.corps[0] - 3, p.corps[1] + 3]
 }
 
+/** Les paliers d'armement, dans l'ordre. */
+const PALIERS: PositionArme[] = ['armement1', 'armement2', 'armement3']
+
+/** Le decalage d'une position, en tenant compte des paliers propres a l'arme. */
+export function decalageDeLArme(arme: Arme, position: PositionArme): readonly [number, number] {
+  const palier = PALIERS.indexOf(position)
+  return palier >= 0 ? arme.montee[palier] : POSITIONS_ARME[position]
+}
+
 /** Le dessin et sa prise pour une position donnee. */
 export function dessinDeLArme(arme: Arme, position: PositionArme): [string[], [number, number]] {
   return ABATTUES.has(position)
@@ -270,7 +298,7 @@ export function dessinDeLArme(arme: Arme, position: PositionArme): [string[], [n
 /** Coin haut-gauche du dessin de l'arme dans la toile, pour une position. */
 export function coinDeLArme(p: Pose, arme: Arme, position: PositionArme): [number, number] {
   const [mx, my] = mainDansLaToile(p)
-  const [dx, dy] = POSITIONS_ARME[position]
+  const [dx, dy] = decalageDeLArme(arme, position)
   const [, prise] = dessinDeLArme(arme, position)
   return [mx + dx - prise[0], my + dy - prise[1]]
 }
@@ -357,7 +385,7 @@ export interface ClipArme {
  * l'arme apres l'impact, et sans lui le retour au repos est une glissade.
  */
 const COUP: PositionArme[] = [
-  'contre', 'haute', 'haute', 'haute', 'portee',
+  'contre', 'armement1', 'armement2', 'armement3', 'portee',
   'abattue', 'retombee', 'rebond', 'portee',
 ]
 
