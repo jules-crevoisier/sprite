@@ -201,6 +201,39 @@ const PAL_HEROS: Palette = {
  * d'autre ne pouvait acheter, quand le vide entre bras et torse n'aurait
  * achete qu'une redite de ce que la couleur fait deja.
  *
+ * ## Ce que le tour 7 a repris au tour 6
+ *
+ * L'epee n'etait pas tenue. Le poing droit etait en colonne 11, la poignee en
+ * colonnes 16-17, et entre les deux : un contour, deux colonnes vides, un
+ * contour. Le seul contact entre l'arme et le corps etait la garde qui butait
+ * contre le torse a hauteur de ceinture, dans le meme brun que la ceinture et
+ * sur la meme rangee — a mi-taille les deux formaient une seule barre brune
+ * traversante, qui se lisait comme une echarpe. Ce n'etait pas une epee tenue,
+ * c'etait une epee glissee dans le ceinturon.
+ *
+ * L'avant-bras sort maintenant du torse et porte le poing jusqu'a la fusee,
+ * sous la garde. Il fait trois rangs et non deux : a deux, le pont bras-epee
+ * ne survit pas a la compression du profil, et le verificateur voyait la
+ * silhouette se casser en deux morceaux — l'epee d'un cote, le personnage de
+ * l'autre.
+ *
+ * Et le vide entre la lame et la tete ne survivait pas non plus. J'avais cale
+ * l'acier sur la grille de vote et laisse le vide a cheval dessus : ses deux
+ * colonnes tombaient sur deux cellules differentes, chacune remportee par le
+ * contour qu'elle touchait, et a mi-taille la lame etait SOUDEE a la tete par
+ * deux colonnes noires accolees. Cinq colonnes payees pour un evenement de
+ * silhouette qui n'existait qu'a taille reelle. La regle est la meme pour le
+ * vide que pour la matiere, et elle n'avait ete appliquee qu'a la matiere.
+ *
+ * L'epee est donc decalee de deux colonnes : l'acier retombe sur une paire
+ * entiere, et le vide occupe desormais une cellule pleine. Deux colonnes et
+ * pas une — a une seule, l'acier se repartit sur deux cellules, perd les deux
+ * egalites contre ses propres contours, et l'arme redevient un baton noir.
+ *
+ * `P` ne survivait a aucune taille de lecture : trois pixels sur une seule
+ * colonne, et sa cellule de vote la mettait a egalite avec le contour. La
+ * jambe gauche lui donne une seconde colonne ; la case de palette est payee.
+ *
  * ## Ce qui a ete refuse, et pourquoi
  *
  * Detacher les bras du torse par du vide. Il y faut deux pixels de part et
@@ -223,27 +256,27 @@ export const HEROS: Dessin = {
   hauteur: 24,
   palette: PAL_HEROS,
   lignes: [
-    '.....oooooo.....oo..',
-    '....oHHHhhho...oAao.',
-    '...oHHHHhhhho..oAao.',
-    '...oHsssssmho..oAao.',
-    '...oHsossomho..oAao.',
-    '...oHsssssmho..oAao.',
-    '....osssssmo...oAao.',
-    '.....oooooo....oAao.',
-    '..ooTTTTttuuoo.oAao.',
-    '..oTutTttuuqqo.oAao.',
-    '..oTutTttuuqqo.oAao.',
-    '..oTutTttuuqqo.oAao.',
-    '...osbbbbbbmoobbbbo.',
-    '...ostTttuumo..obbo.',
-    '...ootTttuuoo..obbo.',
-    '....oPppppqo....oo..',
-    '....oPp..pqo........',
-    '....oPp..pqo........',
-    '....oBB..BBo........',
-    '....oBB..BBo........',
-    '....ooo..ooo........',
+    '.....oooooo.......oo..',
+    '....oHHHhhho.....oAao.',
+    '...oHHHHhhhho....oAao.',
+    '...oHsssssmho....oAao.',
+    '...oHsossomho....oAao.',
+    '...oHsssssmho....oAao.',
+    '....osssssmo.....oAao.',
+    '.....oooooo......oAao.',
+    '..ooTTTTttuuoo...oAao.',
+    '..oTutTttuuqqo...oAao.',
+    '..oTutTttuuqqo...oAao.',
+    '..oTutTttuuqqo..obbbbo',
+    '...osbbbbbbmmmmmmommo.',
+    '...ostTttuummmmmmommo.',
+    '...ootTttuummmmmmommo.',
+    '....oPppppqooooooobbo.',
+    '....oPP..pqo......oo..',
+    '....oPP..pqo..........',
+    '....oBB..BBo..........',
+    '....oBB..BBo..........',
+    '....ooo..ooo..........',
   ],
 }
 
