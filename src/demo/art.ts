@@ -99,7 +99,9 @@ const PAL_SLIME: Palette = {
   V: '#49b06e',
   c: '#8ce0a5',
   y: '#f2f5d0',
-  n: '#16241c',
+  // Ce ton etait a douze unites de `o` : deux couleurs qu'aucun oeil ne
+  // separe, et une case de palette perdue. Le verificateur l'a signale.
+  n: '#08160f',
 }
 
 export const SLIME: Dessin = {

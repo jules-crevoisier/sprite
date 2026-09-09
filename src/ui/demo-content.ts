@@ -74,24 +74,34 @@ const CHARACTER_ART = [
   '.......oooooooooooo.......',
 ]
 
+/**
+ * Palette du personnage.
+ *
+ * Les tons sombres ont ete remontes et le trait assombri sur constat du
+ * verificateur : le contour ne tranchait que sur 53% de ce qu'il touchait, ce
+ * qui veut dire qu'une moitie de la silhouette se lisait comme une seule masse
+ * des que le fond s'eclaircissait. Les valeurs viennent de la mesure, pas de
+ * l'oeil — l'ecart de luminance vise est de quarante-cinq sur deux cent
+ * cinquante-cinq.
+ */
 const CHARACTER_PALETTE: Record<string, string> = {
-  'o': '#191325',
+  'o': '#100c1a',
   's': '#f2cba4',
   'S': '#cc9169',
   'H': '#ffe6c9',
   'h': '#7b41ab',
-  'd': '#4c2172',
+  'd': '#5f2f89',
   'l': '#a86ed8',
   't': '#3d60cf',
-  'T': '#27409e',
+  'T': '#2d49ac',
   'u': '#6488f4',
-  'p': '#3f4769',
-  'P': '#282e4a',
-  'b': '#251e35',
-  'B': '#3c3253',
+  'p': '#4b5580',
+  'P': '#39426a',
+  'b': '#453a63',
+  'B': '#5b4d7d',
   'g': '#a8672f',
   'G': '#70401b',
-  'e': '#191325',
+  'e': '#100c1a',
 }
 
 export function demoCharacter(): Sprite {

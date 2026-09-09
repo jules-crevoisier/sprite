@@ -52,6 +52,7 @@ const BINDINGS: Record<string, string> = {
   'ctrl+shift+r': 'sprite.rotate3d',
   'ctrl+shift+u': 'sprite.vues',
   'ctrl+shift+n': 'sprite.niveau',
+  'ctrl+shift+q': 'sprite.qualite',
   'ctrl+alt+c': 'sprite.canvas-size',
   'ctrl+alt+i': 'sprite.scale',
   'shift+h': 'sprite.flip-h',

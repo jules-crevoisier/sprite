@@ -412,6 +412,15 @@ export function buildCommands(app: App): Command[] {
     run: () => rotationDialog(ed),
   })
   add({
+    id: 'sprite.qualite', label: 'Contrôle qualité…', group: 'Assisté', keys: 'Ctrl+Maj+Q', icon: 'check',
+    hint: () => 'Ce qui cloche dans le dessin, et le geste qui le repare',
+    run: async () => {
+      const { qualiteDialog } = await import('./qualite-dialog')
+      qualiteDialog(ed)
+    },
+  })
+
+  add({
     id: 'sprite.niveau', label: 'Éditeur de niveau…', group: 'Assisté', keys: 'Ctrl+Maj+N', icon: 'grid',
     hint: () => 'Vos frames deviennent des tuiles, et le niveau se joue ici',
     run: async () => {

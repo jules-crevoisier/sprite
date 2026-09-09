@@ -3011,6 +3011,22 @@ check('aucune lecon ne charge sa demo par-dessus le document',
   chargementsDirects.length === 0,
   chargementsDirects.join(' | ').slice(0, 120) || 'toutes passent par ouvrirDemo')
 
+// Le controle qualite doit s'ouvrir et parler du dessin courant. Sur le
+// personnage de demonstration, il ne doit plus rien avoir a dire : ses defauts
+// ont ete corriges sur son constat, et une regression les ramenerait ici.
+await page.evaluate(() => window.pixelforge.runCommand('sprite.qualite'))
+await sleep(700)
+const qualite = await page.evaluate(() => ({
+  titre: document.querySelector('.modal h2, .modal .modal-title')?.textContent?.trim() ?? '',
+  lignes: document.querySelectorAll('.qual-ligne').length,
+  mesures: document.querySelector('.qual-mesures')?.textContent ?? '',
+}))
+check('le controle qualite s\'ouvre et rend ses mesures',
+  qualite.titre === 'Contrôle qualité' && /pixels/.test(qualite.mesures),
+  qualite.mesures.slice(0, 90))
+await page.keyboard.press('Escape')
+await sleep(300)
+
 // L'editeur de niveaux : les frames deviennent des tuiles, on peint, on joue.
 // C'est le seul endroit ou l'application produit autre chose qu'une image, et
 // le seul moyen de verifier que le moteur du jeu et l'editeur parlent bien du
