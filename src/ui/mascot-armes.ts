@@ -58,9 +58,9 @@ export interface Arme {
    *
    * Un offset global ne peut pas faire monter les trois armes au-dessus de
    * la tete : l'epee se detache a moins cinq et moins six et redevient
-   * valide a moins sept, tandis que la tete du marteau sort du cadre des
-   * moins six. Les paliers sont donc par arme, et chacun est le maximum
-   * verifie pour elle.
+   * valide a moins sept, tandis que la tete du marteau touche le bord haut
+   * a moins six et en sort a moins sept. Les paliers sont donc par arme, et
+   * chacun est le maximum verifie pour elle.
    */
   montee: [[number, number], [number, number], [number, number]]
   /** Le meme dessin abattu, obtenu par rotation. */
@@ -172,7 +172,7 @@ export const ARMES: Arme[] = [
   armer({
     id: 'epee',
     nom: 'Epee',
-    pitch: 'La lame double la hauteur de la silhouette et donne la direction du coup avant le corps.',
+    pitch: 'La plus longue des trois : elle donne la direction du coup une image avant le corps.',
     art: EPEE,
     prise: [3, 9],
     montee: [[0, -4], [0, -8], [0, -9]],

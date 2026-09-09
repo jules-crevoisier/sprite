@@ -311,7 +311,7 @@ function pose(r: Reglage = {}): Pose {
  * La tete descend d'un pixel par image et jamais de deux. Le retour la
  * faisait tomber de 7 a 5 d'un coup pendant que le corps n'en bougeait que
  * d'un : sur un cycle qui tourne, ce seul intervalle double se voit comme
- * une coupure. Hauteurs de tete : 5, 6, 7, 7, 7, 6, 5, 5.
+ * une coupure. Hauteurs de tete : 5, 6, 7, 8, 7, 6, 5, 5.
  */
 const REPOS: Reglage[] = [
   { corps: [0, 0], tete: [0, 0], queue: 'milieu' },

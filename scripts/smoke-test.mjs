@@ -1821,7 +1821,7 @@ const mascotte = await page.evaluate(async () => {
     return n
   }
 
-  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], piedsEnLair: [], glissements: [], levitations: [], lignesMin: 99, degagementMin: 99, pattesFondues: [], queuesInegales: [], pattesElastiques: [], masseDessineeMax: 0 }
+  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], piedsEnLair: [], glissements: [], levitations: [], lignesMin: 99, degagementMin: 99, pattesFondues: [], queuesInegales: [], pattesElastiques: [], pattesFigees: [], masseDessineeMax: 0 }
   for (const clip of CLIPS_PIXL) {
     bilan.cycles++
     const bmps = clip.poses.map(imageDePose)
@@ -1922,6 +1922,28 @@ const mascotte = await page.evaluate(async () => {
       if (d > 2) bilan.pattesElastiques.push(`${clip.id} ${i + 1}->${suivant + 1} (${d})`)
     }
 
+    // Une patte qui garde la meme ligne trois images d'affilee telescope
+    // au lieu de balancer : la jambe s'allonge sous le torse pendant que
+    // le pied ne bouge pas. Rien d'autre ne peut le voir —
+    // `lignesDePatteVisibles` ne rend que le minimum des deux pattes, et
+    // c'est toujours l'autre qui repond. Le defaut a bel et bien existe
+    // dans la course, et le banc l'a laisse passer six rondes.
+    if (clip.loop) {
+      const SOL = 24
+      for (const [nom, cle] of [['gauche', 'patteG'], ['droite', 'patteD']]) {
+        const lignes = clip.poses.map((p) => p[cle][1])
+        for (let i = 0; i < lignes.length; i++) {
+          const trois = [i, (i + 1) % lignes.length, (i + 2) % lignes.length].map((k) => lignes[k])
+          // Un pied qui PORTE ne bouge pas, c'est la regle inverse. La
+          // question ne se pose que pour la jambe en l'air.
+          if (trois.some((y) => y >= SOL)) continue
+          if (trois[0] === trois[1] && trois[1] === trois[2]) {
+            bilan.pattesFigees.push(`${clip.id} ${nom} ${i + 1}-${i + 3}`)
+          }
+        }
+      }
+    }
+
     // La vraie masse constante : celle des pieces posees, pas celle de
     // l'image composee, qui melange la matiere et ce qui la cache.
     const posees = clip.poses.map(masseDessinee)
@@ -1994,6 +2016,8 @@ check('la queue garde sa longueur visible', mascotte.queuesInegales.length === 0
   mascotte.queuesInegales.join(', '))
 check('la patte ne s\'allonge pas d\'un coup', mascotte.pattesElastiques.length === 0,
   mascotte.pattesElastiques.join(', '))
+check('aucune patte ne reste figee trois images', mascotte.pattesFigees.length === 0,
+  mascotte.pattesFigees.join(', '))
 check('les images de contact gardent un pied au sol', mascotte.piedsEnLair.length === 0,
   mascotte.piedsEnLair.join(', '))
 // Plus aucune exception : le choc arrache le personnage du sol au lieu de
