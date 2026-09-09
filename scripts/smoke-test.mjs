@@ -3011,6 +3011,98 @@ check('aucune lecon ne charge sa demo par-dessus le document',
   chargementsDirects.length === 0,
   chargementsDirects.join(' | ').slice(0, 120) || 'toutes passent par ouvrirDemo')
 
+// Le damier de transparence doit tomber sur la grille des pixels. A pas fixe
+// en pixels d'ecran, une case faisait 1,33 pixel du sprite a 12x et le fond
+// glissait sous le dessin. On lit le rendu lui-meme : les changements de
+// teinte du damier doivent tous tomber sur un multiple du zoom.
+const damier = await page.evaluate(async () => {
+  const ed = window.pixelforge.ed
+  const cv = document.querySelector('#canvas')
+  const ctx = cv.getContext('2d', { willReadFrequently: true })
+  const dpr = cv.width / cv.getBoundingClientRect().width
+  const visibles = ed.sprite.layers.map((l) => l.visible)
+  const zoomAvant = ed.view.zoom
+  const grilles = { g: ed.view.showGrid, p: ed.view.showPixelGrid }
+  ed.view.backgroundStyle = 'checker'
+  // Les grilles se dessinent par-dessus le fond : leurs traits compteraient
+  // comme des bords de damier et la mesure ne dirait plus rien.
+  ed.view.showGrid = false
+  ed.view.showPixelGrid = false
+  for (const l of ed.sprite.layers) l.visible = false
+  const image = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  const out = []
+  for (const z of [4, 8, 12, 20]) {
+    ed.view.zoom = z
+    ed.events.emit('doc', undefined)
+    await image()
+    const ox = ed.view.panX * dpr, oy = ed.view.panY * dpr
+    const y = Math.round(oy + (ed.sprite.height * z * dpr) / 2)
+    const x0 = Math.ceil(ox) + 1
+    const largeur = Math.max(1, Math.floor(ed.sprite.width * z * dpr) - 2)
+    if (y < 0 || y >= cv.height || x0 + largeur > cv.width) { out.push({ z, hors: true }); continue }
+    const d = ctx.getImageData(x0, y, largeur, 1).data
+    const bords = []
+    for (let i = 1; i < largeur; i++) if (d[i * 4] !== d[(i - 1) * 4]) bords.push(x0 + i)
+    const pas = z * dpr
+    const decale = bords.filter((b) => {
+      const r = (((b - ox) % pas) + pas) % pas
+      return Math.min(r, pas - r) > 0.01
+    })
+    out.push({ z, bords: bords.length, decale: decale.length })
+  }
+  ed.view.zoom = zoomAvant
+  ed.view.showGrid = grilles.g
+  ed.view.showPixelGrid = grilles.p
+  ed.sprite.layers.forEach((l, i) => { l.visible = visibles[i] })
+  ed.events.emit('doc', undefined)
+  return out
+})
+for (const d of damier) {
+  check(`le damier tombe sur la grille des pixels a ${d.z}x`,
+    !d.hors && d.bords > 0 && d.decale === 0,
+    d.hors ? 'hors cadre' : `${d.bords} bord(s), ${d.decale} decale(s)`)
+}
+
+// Aucune barre ne coupe ses boutons, meme sur une fenetre etroite. A 900
+// pixels de large, la barre du haut debordait de 95 pixels et le bouton
+// Exporter etait tranche en deux ; la barre de la timeline perdait ses six
+// derniers boutons, sans aucun moyen de les atteindre.
+const BARRES = ['.topbar', '#optionsbar', '.tl-toolbar', '.statusbar', '.toolbar', '.panel-head']
+const mesurerBarres = () => page.evaluate((sels) => {
+  const out = []
+  for (const sel of sels) {
+    for (const barre of document.querySelectorAll(sel)) {
+      const r = barre.getBoundingClientRect()
+      if (!r.width) continue
+      const st = getComputedStyle(barre)
+      const defile = st.overflowX === 'auto' || st.overflowX === 'scroll'
+      let coupes = 0
+      for (const b of barre.querySelectorAll('button')) {
+        const rb = b.getBoundingClientRect()
+        if (!rb.width) continue
+        if (rb.right > r.right + 0.5 || rb.left < r.left - 0.5) coupes++
+      }
+      // Une barre qui defile n'a rien coupe : ses boutons restent atteignables.
+      out.push({ sel, coupes: defile ? 0 : coupes, defile })
+    }
+  }
+  return out
+}, BARRES)
+
+const barresLarge = await mesurerBarres(BARRES)
+await page.setViewportSize({ width: 900, height: 760 })
+await sleep(600)
+const barresEtroite = await mesurerBarres(BARRES)
+await page.setViewportSize({ width: 1440, height: 900 })
+await sleep(600)
+
+for (const [nom, mesures] of [['1440', barresLarge], ['900', barresEtroite]]) {
+  const fautives = mesures.filter((m) => m.coupes > 0)
+  check(`aucun bouton coupe dans les barres a ${nom}px`, fautives.length === 0,
+    fautives.map((f) => `${f.sel} : ${f.coupes}`).join(', ')
+    || `${mesures.length} barres mesurees`)
+}
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

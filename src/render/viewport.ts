@@ -273,7 +273,21 @@ export class Viewport {
   private drawBackdrop(ctx: CanvasRenderingContext2D, ox: number, oy: number, dw: number, dh: number): void {
     const style = this.ed.view.backgroundStyle
     if (style === 'checker') {
-      const size = Math.max(4, Math.min(16, this.ed.view.zoom * 2))
+      // Le damier se compte en pixels du sprite, pas en pixels d'ecran.
+      //
+      // A pas fixe a l'ecran, les cases tombaient a cheval sur les pixels des
+      // que le zoom n'etait pas un multiple : a 12x, une case faisait 1,33
+      // pixel et le fond se decalait sous le dessin a chaque deplacement.
+      // C'est le genre de detail qui fatigue sans qu'on sache pourquoi.
+      // On prend donc une puissance de deux de pixels du sprite — elle reste
+      // alignee sur la grille des pixels ET sur celle des tuiles — choisie
+      // pour que la case tourne autour de douze pixels a l'ecran.
+      const zoom = this.ed.view.zoom
+      let pas = 1
+      for (const c of [1, 2, 4, 8, 16]) {
+        if (Math.abs(c * zoom - 12) < Math.abs(pas * zoom - 12)) pas = c
+      }
+      const size = pas * zoom
       ctx.save()
       ctx.beginPath()
       ctx.rect(ox, oy, dw, dh)

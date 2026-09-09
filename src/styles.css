@@ -216,7 +216,6 @@ button { cursor: pointer; }
   border-radius: var(--radius-sm);
   padding: 5px 8px;
   max-width: 240px;
-  min-width: 0;
   flex: 0 1 auto;
   text-align: center;
   font-weight: 600;
@@ -491,8 +490,23 @@ input[type="range"]::-moz-range-thumb {
   flex: none;
 }
 .panel-head .spacer { flex: 1; }
+/*
+   Un en-tete de panneau porte un titre et jusqu'a quatre boutons. Le nom de
+   la palette, lui, est de longueur libre : « PICO-8 · 16 » passait a la ligne
+   et poussait le dernier bouton hors du panneau, coupe en deux. Ce qui cede,
+   c'est le texte — les boutons, jamais.
+*/
+.panel-head { min-width: 0; overflow: hidden; }
+.panel-title, .panel-head .lname {
+  min-width: 0; flex: 0 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.panel-head .lname { text-align: right; }
+.panel-head > button, .panel-head > .btn { flex: none; }
 .panel-toggle {
-  width: 16px; height: 16px; flex: none;
+  /* Le chevron dessine fait 18 pixels de large : une boite de 16 le rognait
+     des deux cotes. */
+  width: 18px; height: 18px; flex: none;
   display: grid; place-items: center;
   border: 0; background: transparent; color: var(--text-faint);
   border-radius: var(--radius-xs); transition: transform .15s, color .12s;
@@ -551,7 +565,14 @@ input[type="range"]::-moz-range-thumb {
 }
 .hue-strip { position: relative; height: 12px; border-radius: 6px; margin-top: 8px; cursor: pointer; touch-action: none;
   background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
-.alpha-strip { position: relative; height: 12px; border-radius: 6px; margin-top: 6px; cursor: pointer; touch-action: none;
+/* Le nom de la palette, sous l'en-tete : il tient sur une ligne et se coupe
+   par la fin plutot que de deborder. */
+.palette-nom {
+  font-size: 11px; color: var(--text-faint); padding: 0 2px 5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.alpha-strip { box-sizing: border-box; position: relative; height: 12px; border-radius: 6px; margin-top: 6px; cursor: pointer; touch-action: none;
   background-image: linear-gradient(45deg, #666 25%, transparent 25%), linear-gradient(-45deg, #666 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, #666 75%), linear-gradient(-45deg, transparent 75%, #666 75%);
   background-size: 8px 8px; background-position: 0 0, 0 4px, 4px -4px, -4px 0; }
@@ -726,7 +747,15 @@ input[type="range"]::-moz-range-thumb {
   display: flex; align-items: center; gap: 6px;
   height: 36px; padding: 0 10px; flex: none;
   border-bottom: 1px solid var(--line-soft);
+  /* Sur une fenetre etroite, les derniers boutons sortaient du cadre sans
+     aucun moyen de les atteindre. Ils defilent maintenant, comme ceux de la
+     barre d'options. */
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: thin;
 }
+.tl-toolbar > * { flex: none; }
+.tl-toolbar::-webkit-scrollbar { height: 5px; }
+.tl-toolbar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
 .tl-toolbar .spacer { flex: 1; }
 .tl-fps { display: flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 12px; }
 .tl-fps input { width: 54px; }
@@ -878,6 +907,9 @@ input[type="range"]::-moz-range-thumb {
   user-select: none;
 }
 .statusbar .spacer { flex: 1; }
+/* L'aide de l'outil est la seule chose qu'on peut abreger sans rien perdre :
+   les compteurs, eux, doivent rester lisibles jusqu'au bout. */
+.status-hint { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 .statusbar b { color: var(--text-dim); font-weight: 500; }
 
 .chip {
@@ -999,6 +1031,17 @@ input[type="range"]::-moz-range-thumb {
   border-top: 1px solid var(--line); padding-top: 13px;
 }
 .form-section:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+
+/*
+   Sous-titre a l'interieur d'une section : il separe deux grilles de
+   formats sans le trait ni l'espace d'une vraie section, qui feraient
+   croire a quatre reglages differents.
+*/
+.form-subsection {
+  margin: 12px 0 6px; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-faint); font-weight: 700;
+}
+.form-subsection:first-child { margin-top: 0; }
 
 .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 7px; }
 .preset {
@@ -1490,4 +1533,31 @@ canvas.pixl {
 .proj-actions .btn.danger:hover { color: var(--danger, #e0574f); }
 .proj-vide {
   grid-column: 1 / -1; padding: 24px 8px; text-align: center; color: var(--text-dim);
+}
+
+
+/* ------------------------------------------------------------------
+   Fenetres etroites
+
+   La barre du haut porte huit menus, deux modes, le nom du document et six
+   actions : a 900 pixels de large, cent d'entre eux sortaient du cadre et le
+   bouton Exporter etait coupe. Rien n'est retire — les intitules cedent la
+   place aux icones, que leur infobulle continue de nommer.
+   ------------------------------------------------------------------ */
+
+@media (max-width: 1200px) {
+  .brand-name { display: none; }
+  .brand { padding-right: 6px; margin-right: 2px; }
+}
+@media (max-width: 1000px) {
+  /* Le libelle des modes ne cede qu'en dernier : c'est la bascule la plus
+     structurante de l'application, et un banc verifie qu'elle reste entiere
+     jusqu'a 1024 pixels. */
+  .topbar .seg button > span { display: none; }
+  .topbar .menu-btn { padding: 6px 7px; }
+}
+@media (max-width: 960px) {
+  .topbar-actions .btn.primary > span { display: none; }
+  .doc-title { max-width: 160px; }
+  .tl-fps select { min-width: 120px; }
 }

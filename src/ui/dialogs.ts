@@ -15,15 +15,60 @@ import { zoomablePreview } from './preview-zoom'
 import { openModal, showToast } from './overlay'
 import { videAvecPixl } from './mascot-ui'
 
-const SIZE_PRESETS: [string, number, number][] = [
-  ['Tuile 16', 16, 16],
-  ['Tuile 32', 32, 32],
-  ['Perso 32', 32, 48],
-  ['Perso 64', 64, 64],
-  ['Icône 128', 128, 128],
-  ['Game Boy', 160, 144],
-  ['NES', 256, 240],
-  ['Bandeau', 320, 180],
+/**
+ * Tailles de depart, rangees par usage.
+ *
+ * Une seule grille de huit boutons obligeait a taper les chiffres des qu'on
+ * sortait du cas prevu — une tuile de 8, un portrait, une resolution de
+ * console autre que les deux presentes. Les groupes evitent aussi de melanger
+ * une tuile de 16 et un ecran de 256 dans la meme rangee, ou rien ne dit
+ * lequel est lequel.
+ *
+ * Les resolutions de consoles sont celles de la zone affichee, pas celle du
+ * signal : c'est la taille dans laquelle on dessine.
+ */
+const SIZE_PRESETS: { titre: string; tailles: [string, number, number][] }[] = [
+  {
+    titre: 'Tuiles',
+    tailles: [
+      ['Tuile 8', 8, 8],
+      ['Tuile 16', 16, 16],
+      ['Tuile 32', 32, 32],
+      ['Tuile 48', 48, 48],
+    ],
+  },
+  {
+    titre: 'Personnages et objets',
+    tailles: [
+      ['Petit perso', 16, 16],
+      ['Perso 32', 32, 32],
+      ['Perso haut', 32, 48],
+      ['Perso 64', 64, 64],
+      ['Perso 96', 96, 96],
+      ['Portrait', 64, 80],
+      ['Icône 128', 128, 128],
+    ],
+  },
+  {
+    titre: 'Écrans de consoles',
+    tailles: [
+      ['Game Boy', 160, 144],
+      ['Game Boy Advance', 240, 160],
+      ['NES', 256, 240],
+      ['Super NES', 256, 224],
+      ['Mega Drive', 320, 224],
+      ['PICO-8', 128, 128],
+    ],
+  },
+  {
+    titre: 'Décors et bannières',
+    tailles: [
+      ['Bandeau', 320, 180],
+      ['Paysage 16:9', 480, 270],
+      ['Grand 16:9', 640, 360],
+      ['Carré 256', 256, 256],
+    ],
+  },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -40,12 +85,17 @@ export function newSpriteDialog(ed: Editor): void {
     () => {},
   )
 
-  const presets = el('div', { class: 'preset-grid' })
-  for (const [label, w, h] of SIZE_PRESETS) {
-    presets.appendChild(el('button', {
-      class: 'preset',
-      onclick: () => { width.value = String(w); height.value = String(h) },
-    }, label, el('b', null, `${w} × ${h}`)))
+  const presets = el('div', null)
+  for (const groupe of SIZE_PRESETS) {
+    const grille = el('div', { class: 'preset-grid' })
+    for (const [label, w, h] of groupe.tailles) {
+      grille.appendChild(el('button', {
+        class: 'preset',
+        title: `${label} — ${w} × ${h} pixels`,
+        onclick: () => { width.value = String(w); height.value = String(h) },
+      }, label, el('b', null, `${w} × ${h}`)))
+    }
+    presets.append(el('div', { class: 'form-subsection' }, groupe.titre), grille)
   }
 
   const body = el('div', null,

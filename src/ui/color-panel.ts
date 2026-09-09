@@ -40,7 +40,13 @@ export class ColorPanel {
     title: 'Retoucher la palette : le sprite se recolore en direct',
     html: '',
   })
-  private paletteName = el('span', { class: 'lname', style: { flex: '1', fontSize: '11px' } })
+  /**
+   * Nom de la palette courante. Il vit dans le corps du panneau et non dans
+   * l'en-tete : la, entre le titre et quatre boutons, « PICO-8 · 16 » passait
+   * a la ligne et poussait le dernier bouton hors du panneau. En dessous, il
+   * a la largeur qu'il lui faut.
+   */
+  private paletteName = el('div', { class: 'palette-nom' })
   private channelRows: { input: HTMLInputElement; badge: HTMLElement }[] = []
   private suppress = false
   /**
@@ -139,9 +145,8 @@ export class ColorPanel {
 
     ;(this as { pickerContent: HTMLElement }).pickerContent = picker
     ;(this as { paletteContent: HTMLElement }).paletteContent =
-      el('div', { class: 'panel-body tight' }, this.paletteGrid)
+      el('div', { class: 'panel-body tight' }, this.paletteName, this.paletteGrid)
     ;(this as { paletteActions: HTMLElement[] }).paletteActions = [
-      this.paletteName,
       iconButton(icon('plus', 14), 'Ajouter la couleur courante', () => this.addCurrent(), { className: 'ghost sm icon-only' }),
       this.editToggle,
       iconButton(icon('settings', 14), 'Options de palette', (e) => this.paletteMenu(e), { className: 'ghost sm icon-only' }),
@@ -334,7 +339,8 @@ export class ColorPanel {
 
   renderPalette(): void {
     const palette = this.ed.sprite.palette
-    this.paletteName.textContent = `${palette.name} · ${palette.size}`
+    this.paletteName.textContent = `${palette.name} · ${palette.size} couleurs`
+    this.paletteName.title = `${palette.name} · ${palette.size} couleurs`
     clear(this.paletteGrid)
 
     const transparent = el('div', {
