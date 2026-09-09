@@ -175,6 +175,22 @@ const m = await page.evaluate(async () => {
   // doit parler que quand on lui donne le fond.
   const sansDecor = verifier(bFondu)
 
+  // Une lettre absente de la palette est ignoree sans bruit par `bitmapDe` :
+  // le pixel reste transparent, et rien ne le dit. Un `c` cyrillique U+0441
+  // s'etait glisse dans la caisse du donjon, qui avait donc un trou d'un pixel
+  // dans sa bande basse. Le controle est bete et il n'a coute qu'une fois.
+  const lettresInconnues = []
+  for (const [nom, d] of Object.entries(art)) {
+    if (!d || typeof d !== 'object' || !Array.isArray(d.lignes) || !d.palette) continue
+    for (let y = 0; y < d.lignes.length; y++) {
+      for (const lettre of d.lignes[y]) {
+        if (lettre === '.' || d.palette[lettre]) continue
+        lettresInconnues.push(`${nom} ligne ${y} : « ${lettre} » (U+`
+          + `${lettre.codePointAt(0).toString(16).padStart(4, '0').toUpperCase()})`)
+      }
+    }
+  }
+
   /* --- l'etat des dessins du depot --- */
   const depot = []
   const ajouter = (nom, bm, opts = {}) => {
@@ -204,6 +220,7 @@ const m = await page.evaluate(async () => {
     }])),
     depot,
     sansDecor: sansDecor.constats.map((c) => c.id),
+    lettresInconnues,
   }
 })
 
@@ -218,6 +235,10 @@ for (const [regle, r] of Object.entries(m.casse)) {
 
 check('la regle « fond-confondu » se tait quand on ne lui donne pas de decor',
   !m.sansDecor.includes('fond-confondu'), m.sansDecor.join(', ') || 'aucun constat')
+
+check('aucun dessin n\'emploie une lettre absente de sa palette',
+  m.lettresInconnues.length === 0,
+  m.lettresInconnues.join(' ; ') || `${m.depot.length} dessins relus`)
 
 console.log('\n--- etat des dessins du depot ---')
 let sansDefaut = 0

@@ -114,8 +114,17 @@ const donnees = await page.evaluate(async (sujet) => {
           if (getA(c) === 0) continue
           compte.set(c, (compte.get(c) ?? 0) + 1)
         }
+        // Deux couleurs a egalite : c'est la plus sombre qui l'emporte, jamais
+        // la premiere rencontree. Departager par l'ordre de parcours n'est pas
+        // symetrique — le bras gauche du heros perdait toutes ses egalites
+        // contre le contour a sa gauche pendant que le bras droit gagnait les
+        // siennes, et la moitie annoncait un personnage manchot d'un seul
+        // cote. Le contour l'emporte donc partout, ce qui est aussi ce qu'on
+        // veut voir : la silhouette avant le remplissage.
         let gagnante = 0, n = 0
-        for (const [c, v] of compte) if (v > n) { n = v; gagnante = c }
+        for (const [c, v] of compte) {
+          if (v > n || (v === n && luminance(c) < luminance(gagnante))) { n = v; gagnante = c }
+        }
         if (n >= 2) out.u32[y * w + x] = gagnante
       }
     }
