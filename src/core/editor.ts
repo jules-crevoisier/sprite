@@ -80,6 +80,8 @@ export interface EditorEvents {
   reload: void
   /** Etat de lecture de l'animation. */
   playback: boolean
+  /** La liste des documents ouverts, ou l'onglet actif, a change. */
+  documents: void
   /** Le mode de travail a change. */
   mode: EditorMode
 }

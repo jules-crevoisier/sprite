@@ -76,7 +76,11 @@ const SIZE_PRESETS: { titre: string; tailles: [string, number, number][] }[] = [
 /* Nouveau sprite                                                      */
 /* ------------------------------------------------------------------ */
 
-export function newSpriteDialog(ed: Editor): void {
+/**
+ * `poser` decide OU va le sprite cree : dans l'onglet courant ou dans un
+ * nouveau. La boite ne connait pas les onglets, et n'a pas a les connaitre.
+ */
+export function newSpriteDialog(ed: Editor, poser?: (s: Sprite) => void): void {
   const name = el('input', { type: 'text', value: 'nouveau_sprite' })
   const width = numberInput(32, () => {}, { min: 1, max: 4096 })
   const height = numberInput(32, () => {}, { min: 1, max: 4096 })
@@ -125,7 +129,8 @@ export function newSpriteDialog(ed: Editor): void {
           const sprite = new Sprite(w, h, Palette.preset(paletteSelect.value))
           sprite.name = name.value.trim() || 'sans-titre'
           sprite.grid = { x: 0, y: 0, w: Math.min(16, w), h: Math.min(16, h) }
-          ed.loadSprite(sprite)
+          if (poser) poser(sprite)
+          else ed.loadSprite(sprite)
           showToast(`Sprite ${w}×${h} créé`, 'success')
         },
       },

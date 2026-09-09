@@ -44,7 +44,15 @@ export function buildCommands(app: App): Command[] {
 
   add({
     id: 'file.new', label: 'Nouveau sprite…', group: 'Fichier', keys: 'Ctrl+N', icon: 'plus',
-    run: () => { app.oublierDemo(); app.oublierProjetCourant(); void retenirPoignee(null); dlg.newSpriteDialog(ed) },
+    // Un nouveau sprite ouvre un ONGLET, il ne remplace pas celui qu'on a
+    // sous les yeux : c'est ce que font tous les editeurs a onglets, et
+    // ecraser un document sans le dire serait la pire des surprises.
+    run: () => {
+      dlg.newSpriteDialog(ed, (sprite) => {
+        void retenirPoignee(null)
+        app.ouvrirDansUnOnglet(sprite)
+      })
+    },
   })
 
   add({
@@ -77,9 +85,16 @@ export function buildCommands(app: App): Command[] {
           const poignee = await choisirFichierOuverture()
           if (!poignee) return
           const sprite = await deserializeSprite(await (await poignee.getFile()).text())
-          app.oublierDemo()
-          app.oublierProjetCourant()
-          ed.loadSprite(sprite)
+          // Un fichier deja ouvert ne s'ouvre pas deux fois : deux onglets
+          // sur le meme fichier, ce sont deux historiques qui s'ecrasent l'un
+          // l'autre au premier Ctrl+S.
+          const ouvert = app.documents.dejaOuvert(poignee)
+          if (ouvert) {
+            app.basculerDocument(ouvert.id)
+            showToast(`« ${sprite.name} » est deja ouvert`, 'info')
+            return
+          }
+          app.ouvrirDansUnOnglet(sprite, poignee)
           await retenirPoignee(poignee)
           showToast(`« ${sprite.name} » ouvert — Ctrl+S reecrira ${poignee.name}`, 'success')
           return
@@ -113,10 +128,16 @@ export function buildCommands(app: App): Command[] {
       // Un fichier choisi une fois est reecrit sans rien demander : c'est ce
       // qu'on attend d'un Ctrl+S. Sinon le projet va dans la bibliotheque —
       // et personne ne se retrouve avec « heros (7).pixelforge ».
-      const poignee = await poigneeRetenue()
+      // La poignee appartient au DOCUMENT, pas a l'application : avec
+      // plusieurs onglets, une poignee globale ferait ecrire le sprite d'un
+      // onglet dans le fichier d'un autre.
+      const poignee = app.documents.actif.poignee ?? await poigneeRetenue()
       if (poignee) {
         try {
           if (await ecrireFichier(poignee, serializeSprite(ed.sprite))) {
+            app.documents.actif.poignee = poignee
+            app.documents.marquerPropre()
+            ed.events.emit('documents', undefined)
             showToast(`Enregistre dans ${poignee.name}`, 'success')
             return
           }
@@ -153,8 +174,28 @@ export function buildCommands(app: App): Command[] {
         return
       }
       await retenirPoignee(poignee)
+      app.documents.actif.poignee = poignee
+      app.documents.marquerPropre()
+      ed.events.emit('documents', undefined)
       showToast(`Ctrl+S reecrira ${poignee.name}`, 'success')
     },
+  })
+
+  add({
+    id: 'doc.next', label: 'Document suivant', group: 'Fichier', keys: 'Ctrl+Tab', icon: 'next',
+    enabled: () => app.documents.nombre > 1,
+    run: () => app.decalerDocument(1),
+  })
+
+  add({
+    id: 'doc.prev', label: 'Document precedent', group: 'Fichier', keys: 'Ctrl+Maj+Tab', icon: 'prev',
+    enabled: () => app.documents.nombre > 1,
+    run: () => app.decalerDocument(-1),
+  })
+
+  add({
+    id: 'doc.close', label: 'Fermer le document', group: 'Fichier', keys: 'Ctrl+W', icon: 'close',
+    run: () => { void app.fermerDocument(app.documents.actif.id) },
   })
 
   add({

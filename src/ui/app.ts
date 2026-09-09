@@ -15,6 +15,9 @@ import { installShortcuts } from './shortcuts'
 import { toolById, syncRestFromCanvas, invalidateBake } from '../tools'
 import { buildCommands, type Command } from './commands'
 import { openCommandPalette } from './command-palette'
+import { Documents } from '../core/documents'
+import type { PoigneeFichier } from '../io/disque'
+import { DocTabs } from './doc-tabs'
 import { ColorPanel } from './color-panel'
 import { LayersPanel } from './layers-panel'
 import { PreviewPanel } from './preview'
@@ -69,6 +72,10 @@ export class App {
    */
   private projetId: string | null = null
 
+  /** Les documents ouverts. L'editeur reste unique, c'est son etat qui bouge. */
+  readonly documents = new Documents(this.ed)
+  private docTabs: DocTabs | null = null
+
   private commands: Command[] = []
   private commandMap = new Map<string, Command>()
   private lastAutosave = 0
@@ -97,6 +104,9 @@ export class App {
       if (reason === 'layout') requestAnimationFrame(() => this.viewport.ensureVisible())
       else this.viewport.invalidate()
     })
+
+    this.docTabs = new DocTabs(this, qs('#doctabs'))
+    void this.docTabs
 
     this.tutorial = new Tutorial(this)
     this.commands = buildCommands(this)
@@ -367,6 +377,59 @@ export class App {
 
   /** Detache le document de son entree : le prochain enregistrement en cree une. */
   oublierProjetCourant(): void { this.projetId = null }
+
+  /* ---------------------------------------------------------------- */
+  /* Documents ouverts                                                  */
+  /* ---------------------------------------------------------------- */
+
+  /** Ouvre un sprite dans un nouvel onglet et s'y place. */
+  ouvrirDansUnOnglet(sprite: Sprite, poignee: PoigneeFichier | null = null): void {
+    this.oublierDemo()
+    this.documents.ouvrir(sprite, poignee)
+    this.projetId = null
+    this.viewport.fit()
+    this.renderTitle()
+  }
+
+  /** Onglet suivant ou precedent, en boucle. */
+  decalerDocument(pas: number): void {
+    this.documents.decaler(pas)
+    if (this.ed.view.panX === 0 && this.ed.view.panY === 0) this.viewport.fit()
+    this.renderTitle()
+  }
+
+  basculerDocument(id: string): void {
+    if (!this.documents.basculer(id)) return
+    // Chaque document garde son zoom et sa position : on ne recadre pas, on
+    // retrouve la vue laissee. Mais un document jamais affiche n'a pas encore
+    // de cadrage utile.
+    if (this.ed.view.panX === 0 && this.ed.view.panY === 0) this.viewport.fit()
+    this.renderTitle()
+  }
+
+  /**
+   * Ferme un onglet, apres confirmation s'il porte du travail non enregistre.
+   *
+   * Fermer le dernier onglet ne ferme rien : on repart sur un document neuf.
+   * Une application sans document ouvert n'a plus rien a montrer, et ce vide
+   * demanderait un ecran d'accueil entier pour un cas qui n'interesse
+   * personne.
+   */
+  async fermerDocument(id: string): Promise<void> {
+    const doc = this.documents.tous.find((d) => d.id === id)
+    if (!doc) return
+    if (this.documents.modifie(doc)) {
+      const nom = this.documents.nom(doc)
+      if (!await confirmDialog(`Fermer « ${nom} » ?`,
+        'Ce document porte des modifications qui ne sont pas enregistrees.',
+        'Fermer sans enregistrer')) return
+    }
+    if (!this.documents.fermer(id)) {
+      this.runCommand('file.new')
+      return
+    }
+    this.renderTitle()
+  }
 
   /** Lecons disponibles, construites a la demande. */
   /** Nom de la demonstration affichee, ou null si c'est le projet de l'auteur. */

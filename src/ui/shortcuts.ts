@@ -28,6 +28,9 @@ const BINDINGS: Record<string, string> = {
   'ctrl+s': 'file.save',
   'ctrl+e': 'file.export',
   'ctrl+shift+e': 'file.export-png',
+  'ctrl+w': 'doc.close',
+  'ctrl+tab': 'doc.next',
+  'ctrl+shift+tab': 'doc.prev',
 
   'ctrl+z': 'edit.undo',
   'ctrl+shift+z': 'edit.redo',

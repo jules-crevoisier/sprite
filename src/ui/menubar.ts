@@ -11,6 +11,7 @@ const MENUS: { label: string; items: string[] }[] = [
     label: 'Fichier',
     items: [
       'file.new', 'file.library', 'file.open', '---',
+      'doc.next', 'doc.prev', 'doc.close', '---',
       'file.save', 'file.save-as', '---',
       'file.mascotte', 'file.mascotte-armee', '---',
       'file.import-image', 'file.import-layer', 'file.import-palette', '---',
