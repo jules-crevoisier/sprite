@@ -1745,3 +1745,57 @@ canvas.pixl {
   background: transparent; color: var(--text-dim); cursor: pointer;
 }
 .doctab-plus:hover { background: var(--bg-2); color: var(--text); }
+
+/* ------------------------------------------------------------------ */
+/* Panneau du dossier de travail                                       */
+/* ------------------------------------------------------------------ */
+
+.dos-panneau { display: flex; flex-direction: column; min-height: 0; }
+
+.dos-fil {
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+  padding: 4px 6px; border-bottom: 1px solid var(--line);
+  font-size: 11px; color: var(--text-dim);
+}
+.dos-seg {
+  border: none; background: transparent; color: inherit; cursor: pointer;
+  padding: 2px 5px; border-radius: var(--radius-xs); font-size: 11px;
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dos-seg:hover { background: var(--bg-2); color: var(--text); }
+.dos-seg.actif { color: var(--text); font-weight: 600; }
+
+.dos-liste { overflow-y: auto; min-height: 0; padding: 4px; }
+
+.dos-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 4px 6px; border: none; border-radius: var(--radius-xs);
+  background: transparent; color: var(--text-dim); cursor: pointer;
+  font-size: 12px; text-align: left;
+}
+.dos-item:hover { background: var(--bg-2); color: var(--text); }
+
+/* La vignette garde sa place meme vide : sans cela toute la liste sursaute
+   au fur et a mesure que les images arrivent. */
+.dos-vignette {
+  width: 24px; height: 24px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-3); border-radius: var(--radius-xs);
+}
+.dos-vignette img {
+  max-width: 22px; max-height: 22px; image-rendering: pixelated; display: block;
+}
+.dos-ic { width: 24px; display: flex; align-items: center; justify-content: center; flex: none; }
+
+.dos-nom { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dos-genre { flex: none; font-size: 10px; color: var(--text-dim); opacity: 0.7; }
+.dos-dossier .dos-nom { font-weight: 600; }
+
+.dos-accueil { padding: 14px 10px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.dos-choisir {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-2); color: var(--text); cursor: pointer; font-size: 12px;
+}
+.dos-choisir:hover { border-color: var(--accent); }
+.dos-vide { margin: 0; font-size: 11px; color: var(--text-dim); line-height: 1.5; }

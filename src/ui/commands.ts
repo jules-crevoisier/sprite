@@ -182,6 +182,12 @@ export function buildCommands(app: App): Command[] {
   })
 
   add({
+    id: 'file.dossier', label: 'Ouvrir un dossier de travail…', group: 'Fichier', icon: 'folder',
+    hint: () => 'Tous les sprites du dossier, ouvrables d\'un clic',
+    run: () => { void app.dossierPanel.ouvrirUnDossier() },
+  })
+
+  add({
     id: 'doc.next', label: 'Document suivant', group: 'Fichier', keys: 'Ctrl+Tab', icon: 'next',
     enabled: () => app.documents.nombre > 1,
     run: () => app.decalerDocument(1),

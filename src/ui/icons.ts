@@ -18,6 +18,7 @@ import {
   PanelBottom, PanelRight, PanelLeft, Columns2, Sparkles, Bone, PersonStanding,
   Shuffle, SlidersHorizontal, Image as ImageIcon, Package, Scissors,
   ClipboardPaste, Leaf, Dices, RefreshCw, Maximize2, Group, ZoomOut, Scan,
+  FolderTree,
   FolderOpen, HardDriveDownload,
   Swords,
 } from 'lucide'
@@ -124,6 +125,7 @@ const SOURCE: Record<string, IconNode> = {
   detail: Leaf as IconNode,
   dice: Dices as IconNode,
   refresh: RefreshCw as IconNode,
+  folder: FolderTree as IconNode,
 }
 
 /** Serialise les enfants d'une icone Lucide en balises SVG. */

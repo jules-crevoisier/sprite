@@ -18,6 +18,7 @@ import { openCommandPalette } from './command-palette'
 import { Documents } from '../core/documents'
 import type { PoigneeFichier } from '../io/disque'
 import { DocTabs } from './doc-tabs'
+import { DossierPanel } from './dossier-panel'
 import { ColorPanel } from './color-panel'
 import { LayersPanel } from './layers-panel'
 import { PreviewPanel } from './preview'
@@ -75,6 +76,7 @@ export class App {
   /** Les documents ouverts. L'editeur reste unique, c'est son etat qui bouge. */
   readonly documents = new Documents(this.ed)
   private docTabs: DocTabs | null = null
+  readonly dossierPanel: DossierPanel
 
   private commands: Command[] = []
   private commandMap = new Map<string, Command>()
@@ -90,6 +92,7 @@ export class App {
     this.layersPanel = new LayersPanel(this.ed)
     this.preview = new PreviewPanel(this.ed)
     this.rigPanel = new RigPanel(this.ed)
+    this.dossierPanel = new DossierPanel(this)
     this.timeline = new TimelinePanel(this.ed, this.playback, qs('#timeline'))
 
     this.workspace = new Workspace(this.panelDefs(), {
@@ -133,6 +136,7 @@ export class App {
   private panelDefs(): PanelDef[] {
     return [
       { id: 'preview', title: 'Aperçu', icon: 'film', content: this.preview.content },
+      { id: 'dossier', title: 'Dossier', icon: 'folder', content: this.dossierPanel.content },
       {
         id: 'layers', title: 'Calques', icon: 'layers',
         content: this.layersPanel.content, actions: this.layersPanel.actions,
