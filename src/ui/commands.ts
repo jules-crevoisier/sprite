@@ -11,6 +11,11 @@ import { invertColors, desaturate } from '../core/operations'
 import { genId as newSliceId } from '../core/document'
 import { fromHex } from '../core/color'
 import { EFFECT_KINDS, createEffect, renderEffects } from '../core/effects'
+import {
+  accountLabel, driveAccountDialog, driveMenuHint, driveSettingsDialog,
+  openFromDriveDialog, saveToDrive,
+} from './cloud-dialogs'
+import { isConfigured } from '../cloud/google-auth'
 
 export interface Command {
   id: string
@@ -21,6 +26,8 @@ export interface Command {
   run: () => void | Promise<void>
   enabled?: () => boolean
   checked?: () => boolean
+  /** Seconde ligne dans les menus : etat courant, ou ce qui manque pour agir. */
+  hint?: () => string | undefined
 }
 
 /** Toutes les actions de l'application, partagees par les menus, les
@@ -35,6 +42,25 @@ export function buildCommands(app: App): Command[] {
   add({
     id: 'file.new', label: 'Nouveau sprite…', group: 'Fichier', keys: 'Ctrl+N', icon: 'plus',
     run: () => dlg.newSpriteDialog(ed),
+  })
+
+  add({
+    id: 'file.mascotte', label: 'Ouvrir la mascotte animee', group: 'Fichier', icon: 'film',
+    run: async () => {
+      const { spritePixl } = await import('./mascot-clips')
+      ed.loadSprite(spritePixl())
+      ed.toast('Pixl et ses six cycles — les tags sont deja poses', 'success')
+    },
+  })
+
+  add({
+    id: 'file.mascotte-armee', label: 'Ouvrir la mascotte armee', group: 'Fichier', icon: 'armes',
+    run: async () => {
+      const { spritePixlArme } = await import('./mascot-armes')
+      const { CLIPS_PIXL } = await import('./mascot-clips')
+      ed.loadSprite(spritePixlArme(CLIPS_PIXL))
+      ed.toast('Trois armes sur deux calques — masquez « Arme » pour retrouver Pixl nu', 'success')
+    },
   })
 
   add({
@@ -125,6 +151,40 @@ export function buildCommands(app: App): Command[] {
         showToast('Le navigateur a refuse l\'acces au presse-papiers', 'error')
       }
     },
+  })
+
+  /* ---------------- Google Drive ---------------- */
+
+  // Ces entrees restent actives meme sans identifiant client : cliquer
+  // dessus ouvre alors la marche a suivre. Une entree grisee sans un mot
+  // d'explication ne dit pas quoi faire pour la degriser.
+  add({
+    id: 'cloud.open', label: 'Ouvrir depuis Google Drive…', group: 'Fichier', icon: 'cloud-download',
+    hint: driveMenuHint,
+    run: () => openFromDriveDialog(app),
+  })
+
+  add({
+    id: 'cloud.save', label: 'Enregistrer dans Google Drive', group: 'Fichier', keys: 'Ctrl+Maj+S', icon: 'cloud-upload',
+    hint: driveMenuHint,
+    run: () => saveToDrive(app),
+  })
+
+  add({
+    id: 'cloud.save-copy', label: 'Deposer une copie dans Google Drive', group: 'Fichier', icon: 'cloud',
+    hint: driveMenuHint,
+    run: () => saveToDrive(app, { copy: true }),
+  })
+
+  add({
+    id: 'cloud.account', label: 'Compte Google Drive…', group: 'Fichier', icon: 'account',
+    hint: () => (isConfigured() ? accountLabel() : driveMenuHint()),
+    run: () => driveAccountDialog(),
+  })
+
+  add({
+    id: 'cloud.settings', label: 'Identifiant client Google…', group: 'Fichier', icon: 'key',
+    run: () => driveSettingsDialog(),
   })
 
   /* ---------------- Edition ---------------- */

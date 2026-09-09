@@ -2,6 +2,7 @@ import type { Editor } from '../core/editor'
 import { toHex } from '../core/color'
 import { el, clear } from './dom'
 import { toolById } from '../tools'
+import { onSessionChange, session } from '../cloud/google-auth'
 
 /** Ligne d'etat : position du curseur, taille, zoom, selection, historique. */
 export class StatusBar {
@@ -18,6 +19,9 @@ export class StatusBar {
     editor.events.on('settings', () => this.render())
     editor.events.on('selection', () => this.render())
     editor.events.on('reload', () => this.render())
+    // Le compte Google ne passe par aucun evenement de l'editeur : il change
+    // au gre des connexions et des jetons renouveles.
+    onSessionChange(() => this.render())
     this.render()
   }
 
@@ -61,6 +65,11 @@ export class StatusBar {
     parts.push(el('span', null, `calque ${ed.activeLayer + 1}/${ed.sprite.layers.length}`))
     parts.push(el('span', null, `frame ${ed.activeFrame + 1}/${ed.frameCount}`))
     if (ed.history.canUndo) parts.push(el('span', null, `${ed.history.depth} actions`))
+    const drive = session()
+    if (drive.connected) {
+      parts.push(el('span', { title: 'Projets synchronises avec Google Drive' },
+        `drive ${drive.account?.email || drive.account?.name || 'connecte'}`))
+    }
     if (this.savedAt) {
       parts.push(el('span', null, `sauvegarde ${this.savedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`))
     }

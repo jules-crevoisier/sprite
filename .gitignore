@@ -4,3 +4,6 @@ dist/
 *.local
 .vite/
 video/
+
+# Worktrees des agents : jamais dans le depot
+.claude/worktrees/

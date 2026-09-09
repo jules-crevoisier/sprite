@@ -14,7 +14,24 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-const PORT = 4319
+// Vite lance directement, sans passer par npx : le wrapper npx encaisse
+// le kill et laisse le serveur derriere lui, un par execution.
+const VITE = 'node_modules/.bin/vite'
+
+/**
+ * Un port different a chaque execution, sauf demande explicite.
+ *
+ * Avec un port fixe et sans `--strictPort`, deux bancs d'essai lances en
+ * meme temps — sur deux copies du depot, par exemple — se marchent dessus
+ * en silence : le second serveur choisit un autre port, mais le test
+ * continue d'interroger le premier. On teste alors l'autre copie sans que
+ * rien ne le dise. Un port tire au sort et `--strictPort` transforment ce
+ * piege en erreur franche.
+ */
+const argPort = process.argv.indexOf('--port')
+const PORT = argPort >= 0 && process.argv[argPort + 1]
+  ? Number(process.argv[argPort + 1])
+  : Number(process.env.SMOKE_PORT ?? 41000 + Math.floor(Math.random() * 2000))
 const URL = `http://127.0.0.1:${PORT}/`
 
 /**
@@ -47,19 +64,27 @@ const check = (name, ok, detail = '') => {
 
 // Le serveur de developpement sert les modules source : le test peut donc
 // importer directement les modules d'export pour les verifier un par un.
-const server = spawn('npx', ['vite', '--port', String(PORT), '--host', '127.0.0.1'], {
+// `--strictPort` : sans lui, un port deja pris fait glisser Vite sur le
+// suivant, et le test irait interroger l'application de quelqu'un d'autre en
+// annoncant que tout va bien.
+const server = spawn(VITE, ['--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
   stdio: 'ignore',
   detached: false,
 })
 process.on('exit', () => server.kill())
 
 // Attend que le serveur reponde.
-for (let i = 0; i < 40; i++) {
+let vivant = false
+for (let i = 0; i < 60; i++) {
   try {
     const res = await fetch(URL)
-    if (res.ok) break
+    if (res.ok) { vivant = true; break }
   } catch { /* pas encore pret */ }
   await sleep(250)
+}
+if (!vivant) {
+  console.error(`le serveur de developpement ne repond pas sur le port ${PORT}`)
+  process.exit(1)
 }
 
 const browser = await chromium.launch(launchOptions)
@@ -77,8 +102,16 @@ check('l\'application demarre', await page.evaluate(() => !!window.pixelforge))
 // retrouver un editeur vierge.
 const welcome = await page.locator('.modal-head h2').first().textContent().catch(() => null)
 check('la visite guidee est proposee au premier lancement', welcome?.includes('Bienvenue') ?? false, welcome ?? 'absente')
+// La mascotte se presente elle-meme sur le tout premier ecran : sans elle,
+// la boite d'accueil est un paragraphe qui ne montre pas le logiciel.
+check('la mascotte accueille au premier lancement',
+  await page.locator('.modal canvas.pixl').count() === 1)
 await page.keyboard.press('Escape')
-await sleep(250)
+await sleep(400)
+
+/* --- la carte d'accueil occupe la place vide, et la rend au premier trait --- */
+check('la carte d\'accueil apparait sur un document vierge',
+  await page.locator('.pixl-accueil canvas.pixl').count() === 1)
 
 /* --- dessin au crayon --- */
 const box = await page.locator('#canvas').boundingBox()
@@ -95,6 +128,22 @@ const painted = await page.evaluate(() => {
   return n
 })
 check('le crayon ecrit des pixels', painted > 0, `${painted} px`)
+
+// La regle qui protege le travail : passe le premier trait, plus aucune
+// mascotte ne bouge dans la zone de dessin.
+await sleep(400)
+const zoneLibre = await page.evaluate(() => {
+  const aire = document.getElementById('canvas-area').getBoundingClientRect()
+  const dedans = [...document.querySelectorAll('canvas.pixl')].filter((c) => {
+    const r = c.getBoundingClientRect()
+    return r.width > 0 && r.right > aire.left && r.left < aire.right
+      && r.bottom > aire.top && r.top < aire.bottom
+  })
+  return { accueil: !!document.querySelector('.pixl-accueil'), dedans: dedans.length }
+})
+check('la carte d\'accueil s\'efface au premier trait', !zoneLibre.accueil)
+check('aucune mascotte ne reste dans la zone de dessin', zoneLibre.dedans === 0,
+  `${zoneLibre.dedans} mascotte(s)`)
 
 /* --- historique --- */
 const undoOk = await page.evaluate(() => {
@@ -1453,7 +1502,9 @@ const menus = await page.evaluate(async () => {
   for (const btn of barres) {
     btn.click()
     await new Promise((r) => setTimeout(r, 60))
-    const items = [...document.querySelectorAll('.dropdown .menu-item .label')]
+    // Le libelle est le premier span : une entree peut porter une seconde
+    // ligne d'explication, qui n'a pas a entrer dans la comparaison.
+    const items = [...document.querySelectorAll('.dropdown .menu-item .label > span:first-child')]
       .map((n) => n.textContent.trim())
     listes.push({ menu: btn.textContent.trim(), items })
     document.body.click()
@@ -1735,6 +1786,978 @@ check('les apercus des dialogues se zooment', zoomables.every((a) => a.zoomable 
   zoomables.map((a) => `${a.nom}:${a.zoomable ? (a.zoom ? 'ok' : 'fige') : 'absent'}`).join(' '))
 check('les apercus se deplacent en les tirant', zoomables.every((a) => a.deplace))
 check('le double-clic rajuste l\'apercu', zoomables.every((a) => a.ajuste))
+
+/* --- mascotte et ses cycles --- */
+const mascotte = await page.evaluate(async () => {
+  const { CLIPS_PIXL, corpsEcrase, debordsDePatte, decollageSansPoussee, ecartDePattes, lignesDePatteVisibles, masseDessinee, patteDecrochee, piedAuSol, semellesQuiGlissent, spritePixl } = await import('/src/ui/mascot-clips.ts')
+  const { imageDePose, PIECES, TAILLE } = await import('/src/ui/mascot-anim.ts')
+
+  /**
+   * Nombre de morceaux separes dans une image. Au-dela d'un, quelque chose
+   * s'est detache du personnage — une tete qui flotte, une queue decrochee.
+   * C'est le defaut qu'on remarque avant tous les autres.
+   */
+  const morceaux = (bm) => {
+    const vu = new Uint8Array(bm.length)
+    let n = 0
+    for (let d = 0; d < bm.length; d++) {
+      if (vu[d] || !(bm.u32[d] >>> 24)) continue
+      n++
+      const pile = [d]
+      vu[d] = 1
+      while (pile.length) {
+        const i = pile.pop()
+        const x = i % TAILLE, y = (i / TAILLE) | 0
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= TAILLE || ny >= TAILLE) continue
+          const j = ny * TAILLE + nx
+          if (vu[j] || !(bm.u32[j] >>> 24)) continue
+          vu[j] = 1
+          pile.push(j)
+        }
+      }
+    }
+    return n
+  }
+
+  const bilan = { cycles: 0, images: 0, detachees: [], jumelles: [], debords: 0, horsCadre: [], masseMax: 0, pattesAvalees: [], pattesPendantes: [], piedsEnLair: [], glissements: [], levitations: [], lignesMin: 99, degagementMin: 99, pattesFondues: [], queuesInegales: [], pattesElastiques: [], masseDessineeMax: 0 }
+  for (const clip of CLIPS_PIXL) {
+    bilan.cycles++
+    const bmps = clip.poses.map(imageDePose)
+    const masses = []
+    bmps.forEach((bm, i) => {
+      bilan.images++
+      if (morceaux(bm) !== 1) bilan.detachees.push(`${clip.id}#${i + 1}`)
+      bilan.debords += debordsDePatte(clip.poses[i])
+      // Une patte avalee par le torse ne pese que douze pixels sur trois
+      // cents : l'ecart de masse totale ne la voit pas disparaitre.
+      const lignes = lignesDePatteVisibles(clip.poses[i])
+      if (lignes < 2) bilan.pattesAvalees.push(`${clip.id}#${i + 1} (${lignes})`)
+      // Une patte restee au sol pendant que le corps monte pend dans le vide.
+      if (patteDecrochee(clip.poses[i])) bilan.pattesPendantes.push(`${clip.id}#${i + 1}`)
+      // Deux pattes qui se rejoignent ne changent ni la masse ni le nombre
+      // de morceaux : rien d'autre ne peut voir le personnage perdre une
+      // jambe.
+      const ecart = ecartDePattes(clip.poses[i])
+      if (ecart < 2) bilan.pattesFondues.push(`${clip.id}#${i + 1} (${ecart})`)
+      bilan.lignesMin = Math.min(bilan.lignesMin, lignes)
+      let n = 0, x0 = 99, x1 = -1, y0 = 99, y1 = -1
+      for (let y = 0; y < TAILLE; y++) for (let x = 0; x < TAILLE; x++) {
+        if (!(bm.u32[y * TAILLE + x] >>> 24)) continue
+        n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+      }
+      masses.push(n)
+      // Une image de contact sans semelle au sol fait clignoter le bas de la
+      // silhouette : sur un cycle a cent dix millisecondes, quatre fois par
+      // seconde. Le vol est tolere quand il se voit — au moins deux pixels de
+      // jour sous le point bas. La regle se mesure sur l'image : une liste
+      // d'index se serait tue au premier renumerotage.
+      const auSol = piedAuSol(clip.poses[i])
+      const decolle = y1 <= 29
+      if (!auSol && !decolle) bilan.piedsEnLair.push(`${clip.id}#${i + 1} (bas ${y1})`)
+      // Le degagement le plus juste du lot : une regle qu'on frole partout
+      // n'est plus une garantie, et seul le releve le dit.
+      if (!auSol) bilan.degagementMin = Math.min(bilan.degagementMin, 31 - y1)
+      // Les pieds touchent la derniere ligne : c'est le pivot au sol.
+      // Sortir par le haut ou les cotes, en revanche, coupe le dessin.
+      if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1}`)
+    })
+    // Un pied qui porte ne se deplace pas : c'est le corps qui passe
+    // au-dessus de lui. Une semelle qui derape fait patiner le personnage.
+    for (let i = 0; i < clip.poses.length; i++) {
+      const suivant = (i + 1) % clip.poses.length
+      if (!clip.loop && suivant === 0) continue
+      const n = semellesQuiGlissent(clip.poses[i], clip.poses[suivant])
+      if (n) bilan.glissements.push(`${clip.id} ${i + 1}->${suivant + 1}`)
+      if (decollageSansPoussee(clip.poses[i], clip.poses[suivant])) {
+        bilan.levitations.push(`${clip.id} ${i + 1}->${suivant + 1}`)
+      }
+    }
+    for (let a = 0; a < bmps.length; a++) for (let b = a + 1; b < bmps.length; b++) {
+      let d = 0
+      for (let k = 0; k < bmps[a].u32.length; k++) if (bmps[a].u32[k] !== bmps[b].u32[k]) d++
+      if (d === 0) bilan.jumelles.push(`${clip.id} ${a + 1}=${b + 1}`)
+    }
+    // La queue disparait sous le torse sans que rien ne le signale : sa
+    // surface visible se mesure en la sortant du cadre et en comparant.
+    // Ce qui se voit n'est pas l'ecart sur tout le cycle — les cinq dessins
+    // de queue n'ont deja pas la meme taille — mais le saut d'une image a
+    // la suivante. La queue du saut perdait un quart de sa surface sur une
+    // seule image, pile a l'atterrissage : c'est un clignotement.
+    const queues = clip.poses.map((p, i) => {
+      const sans = imageDePose({ ...p, queue: [p.queue[0], -60, -60] })
+      let n = 0
+      for (let k = 0; k < bmps[i].u32.length; k++) {
+        if ((bmps[i].u32[k] >>> 24) && !(sans.u32[k] >>> 24)) n++
+      }
+      return n
+    })
+    for (let i = 0; i < queues.length; i++) {
+      const suivant = (i + 1) % queues.length
+      if (!clip.loop && suivant === 0) continue
+      // Seuil relatif : passer de huit a douze pixels, c'est perdre un
+      // tiers de la queue, et une borne absolue de quatre le laissait
+      // passer. Plus un plancher : sous douze pixels visibles, la queue ne
+      // se lit plus comme une queue.
+      const d = Math.abs(queues[suivant] - queues[i])
+      const seuil = Math.max(3, 0.25 * Math.min(queues[i], queues[suivant]))
+      if (d > seuil) bilan.queuesInegales.push(`${clip.id} ${i + 1}->${suivant + 1} (${d} px)`)
+      if (queues[i] < 12) bilan.queuesInegales.push(`${clip.id}#${i + 1} (${queues[i]} px seulement)`)
+    }
+
+    // Une patte peut perdre les deux tiers de sa longueur sans jamais
+    // passer sous le plancher de deux lignes. C'est l'ecart d'une image a
+    // l'autre qui se voit, pas la valeur absolue — sauf apres un
+    // ecrasement, ou le torse se retire d'un coup et la decouvre.
+    const lignesParImage = clip.poses.map(lignesDePatteVisibles)
+    for (let i = 0; i < clip.poses.length; i++) {
+      const suivant = (i + 1) % clip.poses.length
+      if (!clip.loop && suivant === 0) continue
+      // Deux moments ou la patte se decouvre pour de vrai : quand le torse
+      // ecrase se retire, et quand le personnage retombe sur ses pieds.
+      if (corpsEcrase(clip.poses[i])) continue
+      if (!piedAuSol(clip.poses[i]) && piedAuSol(clip.poses[suivant])) continue
+      const d = Math.abs(lignesParImage[suivant] - lignesParImage[i])
+      if (d > 2) bilan.pattesElastiques.push(`${clip.id} ${i + 1}->${suivant + 1} (${d})`)
+    }
+
+    // La vraie masse constante : celle des pieces posees, pas celle de
+    // l'image composee, qui melange la matiere et ce qui la cache.
+    const posees = clip.poses.map(masseDessinee)
+    bilan.masseDessineeMax = Math.max(bilan.masseDessineeMax,
+      (Math.max(...posees) - Math.min(...posees)) / Math.min(...posees))
+
+    // Ce qui se voit d'une image a l'autre n'est pas l'ecart sur tout le
+    // cycle — un personnage accroupi se cache legitimement plus qu'un
+    // personnage etire — mais le saut entre deux images voisines.
+    let saut = 0
+    for (let i = 0; i < masses.length; i++) {
+      const suivant = (i + 1) % masses.length
+      if (!clip.loop && suivant === 0) continue
+      saut = Math.max(saut, Math.abs(masses[suivant] - masses[i]) / masses[i])
+    }
+    const ecart = (Math.max(...masses) - Math.min(...masses)) / Math.min(...masses)
+    bilan.masseMax = Math.max(bilan.masseMax, saut)
+    bilan.masses = (bilan.masses ?? []).concat(
+      `${clip.id} ${(saut * 100).toFixed(1)}% (${(ecart * 100).toFixed(1)}% sur le cycle)`)
+  }
+
+  // Un ecrasement deplace la matiere, il ne l'efface pas. C'etait ecrit
+  // dans le code et ce n'etait verifie nulle part : les variantes ecrasees
+  // pesaient deux pixels de moins que les normales, et la tolerance de
+  // quatre pour cent laissait passer.
+  const masseDArt = (art) => art.join('').split('').filter((c) => c !== '.').length
+  const familles = {
+    tetes: ['TETE', 'TETE_CLIN', 'TETE_MI_CLOS', 'TETE_ECRASEE', 'TETE_ECRASEE_CLIN'],
+    corps: ['CORPS', 'CORPS_ECRASE', 'CORPS_ETIRE'],
+  }
+  bilan.variantes = Object.entries(familles).map(([nom, cles]) => {
+    const masses = cles.map((c) => masseDArt(PIECES[c]))
+    return { nom, masses, egales: new Set(masses).size === 1 }
+  })
+
+  const sprite = spritePixl()
+  bilan.tags = sprite.tags.length
+  bilan.frames = sprite.frameCount
+  bilan.tagsCouvrent = sprite.tags.every((t) => t.from <= t.to && t.to < sprite.frameCount)
+  return bilan
+})
+check('la mascotte a ses six cycles', mascotte.cycles === 6 && mascotte.tags === 6,
+  `${mascotte.cycles} cycles, ${mascotte.images} images, ${mascotte.tags} tags`)
+check('chaque tag couvre des frames existantes', mascotte.tagsCouvrent && mascotte.frames === mascotte.images)
+check('aucun morceau ne se detache du personnage', mascotte.detachees.length === 0,
+  mascotte.detachees.join(', '))
+check('aucune image n\'en repete une autre', mascotte.jumelles.length === 0,
+  mascotte.jumelles.join(', '))
+check('aucune patte ne deborde du torse', mascotte.debords === 0, `${mascotte.debords} pixels`)
+check('rien ne sort du cadre', mascotte.horsCadre.length === 0, mascotte.horsCadre.join(', '))
+// Deux mesures differentes, et il faut les deux : la premiere dit que le
+// personnage garde sa matiere, la seconde combien il s'en cache lui-meme.
+check('les variantes d\'une piece pesent le meme poids',
+  mascotte.variantes.every((v) => v.egales),
+  mascotte.variantes.map((v) => `${v.nom} ${v.masses.join('/')}`).join(' · '))
+// Ce qui reste vient des cinq dessins de queue, qui ne sont pas des
+// variantes d'une meme forme mais cinq positions differentes.
+check('la matiere posee ne varie pas', mascotte.masseDessineeMax < 0.02,
+  `${(mascotte.masseDessineeMax * 100).toFixed(1)}% au pire`)
+// La matiere posee est verifiee juste au-dessus et ne bouge pas. Ce qui
+// reste ici est de l'occlusion : le personnage se cache lui-meme. Ce n'est
+// un defaut que si ca change d'un coup, donc on borne le saut entre deux
+// images voisines et non l'ecart sur le cycle entier — un accroupissement
+// se cache legitimement plus qu'une detente.
+check('la surface visible ne saute pas d\'une image a l\'autre', mascotte.masseMax < 0.12,
+  mascotte.masses.join(' · '))
+check('les deux pattes ne fusionnent jamais', mascotte.pattesFondues.length === 0,
+  mascotte.pattesFondues.join(', '))
+check('la queue garde sa longueur visible', mascotte.queuesInegales.length === 0,
+  mascotte.queuesInegales.join(', '))
+check('la patte ne s\'allonge pas d\'un coup', mascotte.pattesElastiques.length === 0,
+  mascotte.pattesElastiques.join(', '))
+check('les images de contact gardent un pied au sol', mascotte.piedsEnLair.length === 0,
+  mascotte.piedsEnLair.join(', '))
+// Plus aucune exception : le choc arrache le personnage du sol au lieu de
+// le faire riper, donc une semelle qui bouge est toujours du patinage.
+check('aucune semelle ne patine',
+  mascotte.glissements.length === 0,
+  mascotte.glissements.join(', ') || 'aucun glissement')
+check('les deux semelles ne decollent jamais sans poussee',
+  mascotte.levitations.length === 0,
+  mascotte.levitations.join(', ') || 'aucune levitation')
+check('le vol garde sa marge au sol',
+  mascotte.degagementMin >= 2,
+  `${mascotte.degagementMin} px de degagement au plus juste`)
+check('aucune patte ne pend sous un corps monte', mascotte.pattesPendantes.length === 0,
+  mascotte.pattesPendantes.join(', '))
+check('aucune patte n\'est avalee par le torse', mascotte.pattesAvalees.length === 0,
+  mascotte.pattesAvalees.length ? mascotte.pattesAvalees.join(', ') : `${mascotte.lignesMin} lignes au minimum`)
+
+/* ---------------------------------------------------------------- */
+/* La mascotte armee                                                  */
+/* ---------------------------------------------------------------- */
+const armee = await page.evaluate(async () => {
+  const { ARMES, POSITIONS_ARME, armeSeule, clipsArmes, imageDePoseArmee, masseDArme } =
+    await import('/src/ui/mascot-armes.ts')
+  const { CLIPS_PIXL } = await import('/src/ui/mascot-clips.ts')
+  const { TAILLE, imageDePose } = await import('/src/ui/mascot-anim.ts')
+
+  const morceaux = (bm) => {
+    const vu = new Uint8Array(bm.length)
+    let n = 0
+    for (let d = 0; d < bm.length; d++) {
+      if (vu[d] || !(bm.u32[d] >>> 24)) continue
+      n++
+      const pile = [d]
+      vu[d] = 1
+      while (pile.length) {
+        const i = pile.pop()
+        const x = i % TAILLE, y = (i / TAILLE) | 0
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= TAILLE || ny >= TAILLE) continue
+          const j = ny * TAILLE + nx
+          if (vu[j] || !(bm.u32[j] >>> 24)) continue
+          vu[j] = 1
+          pile.push(j)
+        }
+      }
+    }
+    return n
+  }
+
+  const bilan = {
+    armes: ARMES.length, cycles: 0, images: 0,
+    detachees: [], horsCadre: [], jumelles: [], armeInvisible: [], visibleMin: 999,
+    armesBasses: [], gainHauteurMin: 99,
+    positions: Object.keys(POSITIONS_ARME).length,
+    massesArmes: ARMES.map((a) => masseDArme(a.art)),
+    // Le dessin abattu est une rotation du dessin porte : la masse doit
+    // etre identique au pixel pres, sans quoi la lame maigrit en tombant.
+    armesInegales: ARMES
+      .filter((a) => masseDArme(a.art) !== masseDArme(a.abattue))
+      .map((a) => `${a.id} ${masseDArme(a.art)} vs ${masseDArme(a.abattue)}`),
+  }
+
+  for (const arme of ARMES) {
+    for (const clip of clipsArmes(arme, CLIPS_PIXL)) {
+      bilan.cycles++
+      const bmps = clip.images.map((img) => imageDePoseArmee(img.pose, arme, img.position))
+      // L'armement monte : c'est son SOMMET qui doit casser la ligne du
+      // haut, pas chacun de ses paliers. Exiger le depassement des la
+      // premiere image interdirait justement de monter progressivement.
+      const gainsArmement = []
+      bmps.forEach((bm, i) => {
+        bilan.images++
+        // Une arme posee a cote du personnage fait deux morceaux. C'est le
+        // risque propre a l'arme : elle n'a pas d'os qui la relie au corps.
+        if (morceaux(bm) !== 1) bilan.detachees.push(`${clip.id}#${i + 1}`)
+        let x0 = 99, x1 = -1, y0 = 99, y1 = -1
+        for (let y = 0; y < TAILLE; y++) for (let x = 0; x < TAILLE; x++) {
+          if (!(bm.u32[y * TAILLE + x] >>> 24)) continue
+          if (x < x0) x0 = x; if (x > x1) x1 = x
+          if (y < y0) y0 = y; if (y > y1) y1 = y
+        }
+        // Meme severite que pour le personnage nu : plus permissif sur les
+        // cotes, une arme pourrait un jour coller la colonne zero alors que
+        // le personnage ne le peut pas.
+        if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1} (${x0},${y0},${x1})`)
+        // Ce qui compte n'est pas le nombre de pixels d'arme peints, c'est
+        // ce que l'arme AJOUTE a la silhouette du personnage. Une arme
+        // brandie qui laisse le contour inchange n'existe pas en aplat, et
+        // le compte de pixels peints, lui, l'annonce fierement visible.
+        const nu = imageDePose(clip.images[i].pose)
+        let ajoutes = 0
+        for (let k = 0; k < bm.u32.length; k++) {
+          if ((bm.u32[k] >>> 24) && !(nu.u32[k] >>> 24)) ajoutes++
+        }
+        if (ajoutes < 8) bilan.armeInvisible.push(`${clip.id}#${i + 1} (${ajoutes} px)`)
+        bilan.visibleMin = Math.min(bilan.visibleMin, ajoutes)
+        // Le compte d'ajout au contour sature : des que l'arme est
+        // entierement degagee du corps, il ne distingue plus une arme
+        // brandie d'une arme baissee de deux pixels. Sur les images
+        // d'armement, on exige donc qu'elle casse la ligne du HAUT — c'est
+        // ce qui fait qu'un personnage a l'air arme sur une vignette.
+        if (clip.images[i].position.startsWith('armement')) {
+          let hautNu = 99
+          for (let y = 0; y < TAILLE && hautNu === 99; y++) {
+            for (let x = 0; x < TAILLE; x++) if (nu.u32[y * TAILLE + x] >>> 24) { hautNu = y; break }
+          }
+          gainsArmement.push(hautNu - y0)
+        }
+      })
+      for (let a = 0; a < bmps.length; a++) for (let b = a + 1; b < bmps.length; b++) {
+        let d = 0
+        for (let k = 0; k < bmps[a].u32.length; k++) if (bmps[a].u32[k] !== bmps[b].u32[k]) d++
+        if (d === 0) bilan.jumelles.push(`${clip.id} ${a + 1}=${b + 1}`)
+      }
+      if (gainsArmement.length) {
+        const sommet = Math.max(...gainsArmement)
+        bilan.gainHauteurMin = Math.min(bilan.gainHauteurMin, sommet)
+        if (sommet < 1) bilan.armesBasses.push(`${clip.id} (${sommet} px)`)
+      }
+    }
+  }
+  return bilan
+})
+check('chaque arme a ses cycles', armee.armes === 3 && armee.cycles === 9,
+  `${armee.armes} armes, ${armee.cycles} cycles, ${armee.images} images`)
+check('l\'arme reste accrochee au personnage', armee.detachees.length === 0,
+  armee.detachees.join(', ') || 'aucun morceau detache')
+check('rien ne sort du cadre, arme comprise', armee.horsCadre.length === 0,
+  armee.horsCadre.join(', '))
+check('aucune image armee n\'en repete une autre', armee.jumelles.length === 0,
+  armee.jumelles.join(', '))
+// Les positions sont des deplacements du meme dessin : la masse de l'arme
+// est constante par construction, et c'est ce que ce releve confirme.
+check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0) && armee.armesInegales.length === 0,
+  armee.armesInegales.join(', ')
+    || `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions, dessin abattu compris`)
+check('l\'arme change toujours la silhouette', armee.armeInvisible.length === 0,
+  armee.armeInvisible.join(', ') || `${armee.visibleMin} px ajoutes au contour au minimum`)
+check('l\'arme brandie depasse au-dessus de la tete', armee.armesBasses.length === 0,
+  armee.armesBasses.join(', ') || `${armee.gainHauteurMin} px au-dessus au plus juste`)
+
+/* --- Pixl dans l'application --- */
+// Une mascotte peut disparaitre d'un coin sans que rien ne casse : plus
+// personne ne la voit, et le test reste vert. On verifie donc sa presence
+// aux endroits prevus, et surtout qu'elle bouge vraiment.
+
+const identite = await page.evaluate(async () => {
+  const { imagesDuClip } = await import('/src/ui/mascot-view.ts')
+  const lien = document.querySelector('link[rel="icon"]')
+  // L'icone doit etre la pose de repos, pas un dessin recopie a cote qui
+  // vieillirait tout seul des que les poses sont retouchees.
+  const attendu = document.createElement('canvas')
+  attendu.width = 64
+  attendu.height = 64
+  const ctx = attendu.getContext('2d')
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(imagesDuClip('repos')[0], 0, 0, 64, 64)
+  // Echelles : un facteur fractionnaire flouterait le bord des pixels.
+  const fractionnaires = [...document.querySelectorAll('canvas.pixl')]
+    .map((c) => c.getBoundingClientRect().width / c.width)
+    .filter((f) => Math.abs(f - Math.round(f)) > 0.01)
+  return {
+    favicon: lien?.href.startsWith('data:image/png') ?? false,
+    memeIcone: lien?.href === attendu.toDataURL('image/png'),
+    titre: document.title,
+    marque: document.querySelectorAll('.brand-mark canvas.pixl').length,
+    natif: [...document.querySelectorAll('canvas.pixl')].every((c) => c.width === 32 && c.height === 32),
+    fractionnaires: fractionnaires.length,
+  }
+})
+check('l\'onglet porte la mascotte', identite.favicon && identite.memeIcone)
+check('l\'onglet porte le nom du document', identite.titre.startsWith(await page.evaluate(() => window.pixelforge.ed.sprite.name)),
+  identite.titre)
+check('la marque est la mascotte', identite.marque === 1)
+check('les mascottes gardent leur taille native', identite.natif)
+check('les mascottes sont mises a l\'echelle par des entiers',
+  identite.fractionnaires === 0, `${identite.fractionnaires} echelle(s) fractionnaire(s)`)
+
+// La marque est en permanence sous les yeux : elle doit rester immobile
+// tant qu'on ne s'en occupe pas, et repondre au survol.
+const marque = page.locator('.brand-mark canvas.pixl')
+const imageMarque = () => marque.getAttribute('data-image')
+const repos1 = await imageMarque()
+await sleep(700)
+const repos2 = await imageMarque()
+await page.locator('.brand-mark').hover()
+await sleep(700)
+const survol = await imageMarque()
+await page.mouse.move(700, 500)
+await sleep(400)
+check('la marque ne s\'anime pas toute seule', repos1 === '0' && repos2 === '0',
+  `${repos1} puis ${repos2}`)
+check('la marque s\'anime au survol', survol !== repos2, `image ${survol} au survol`)
+
+/* --- l'etat vide d'une recherche sans resultat --- */
+await page.keyboard.press('Control+k')
+await sleep(300)
+await page.keyboard.type('zzzzqqq')
+await sleep(300)
+check('une recherche sans resultat montre la mascotte',
+  await page.locator('.cmdk-list .pixl-vide canvas.pixl').count() === 1)
+await page.keyboard.press('Escape')
+await sleep(300)
+
+/* --- l'easter egg : cinq clics rapproches sur la marque, pas quatre --- */
+const boiteMarque = await page.locator('.brand-mark').boundingBox()
+const cliquerMarque = async (n) => {
+  for (let i = 0; i < n; i++) {
+    await page.mouse.click(boiteMarque.x + boiteMarque.width / 2, boiteMarque.y + boiteMarque.height / 2)
+    await sleep(80)
+  }
+}
+await cliquerMarque(4)
+await sleep(500)
+const apresQuatre = await page.evaluate(() => ({
+  traversee: !!document.querySelector('.pixl-traversee'),
+  planche: !!document.querySelector('.pixl-planche'),
+}))
+check('quatre clics ne declenchent pas l\'easter egg',
+  !apresQuatre.traversee && !apresQuatre.planche)
+
+// La fenetre de trois secondes doit vraiment expirer : cinq clics espaces
+// ne sont pas le geste.
+await sleep(3300)
+await cliquerMarque(4)
+await sleep(400)
+check('des clics espaces ne declenchent pas l\'easter egg',
+  !(await page.evaluate(() => !!document.querySelector('.pixl-traversee') || !!document.querySelector('.pixl-planche'))))
+
+await cliquerMarque(1)
+await sleep(300)
+const traversee = await page.evaluate(() => {
+  const piste = document.querySelector('.pixl-traversee')
+  if (!piste) return null
+  const r = piste.getBoundingClientRect()
+  const dessous = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+  return {
+    x: r.left,
+    image: piste.querySelector('canvas.pixl')?.dataset.image ?? null,
+    // Declenchee par megarde, elle ne doit interrompre aucun geste.
+    transparente: dessous !== piste && !piste.contains(dessous),
+  }
+})
+check('le cinquieme clic lance la traversee', traversee !== null)
+
+// Position et image relevees plusieurs fois : deux mesures pourraient
+// tomber par hasard sur la meme image du cycle.
+const releves = []
+for (let i = 0; i < 8; i++) {
+  releves.push(await page.evaluate(() => {
+    const piste = document.querySelector('.pixl-traversee')
+    return piste
+      ? { x: piste.getBoundingClientRect().left, image: piste.querySelector('canvas.pixl')?.dataset.image ?? null }
+      : null
+  }))
+  await sleep(120)
+}
+const vus = releves.filter(Boolean)
+const avance = vus.length > 1 && vus[vus.length - 1].x > vus[0].x
+const imagesVues = new Set(vus.map((r) => r.image))
+check('la mascotte traverse l\'ecran', avance,
+  vus.length ? `de ${Math.round(vus[0].x)} a ${Math.round(vus[vus.length - 1].x)} px` : 'traversee perdue')
+check('la traversee ne prend pas la souris', traversee?.transparente ?? false)
+check('la traversee change d\'image en chemin', imagesVues.size > 1,
+  `${imagesVues.size} images vues`)
+
+// La recompense : les six cycles, chacun a sa cadence.
+await page.waitForSelector('.pixl-planche', { timeout: 6000 })
+const planche = await page.evaluate(() => [...document.querySelectorAll('.pixl-planche canvas.pixl')]
+  .map((c) => ({ clip: c.dataset.pixl, image: c.dataset.image })))
+// Ecart plus long que la pause qui separe deux passages d'un cycle sans
+// boucle : sinon deux releves pourraient tomber tous deux sur l'arret.
+await sleep(600)
+const planche2 = await page.evaluate(() => [...document.querySelectorAll('.pixl-planche canvas.pixl')]
+  .map((c) => c.dataset.image))
+const figes = planche.filter((c, i) => c.image === planche2[i]).map((c) => c.clip)
+check('la planche montre les six cycles', planche.length === 6,
+  planche.map((c) => c.clip).join(', '))
+check('chaque cycle de la planche s\'anime', figes.length === 0,
+  figes.length ? `fige : ${figes.join(', ')}` : 'les six avancent')
+await page.keyboard.press('Escape')
+await sleep(300)
+
+/* --- mouvement reduit : une pose fixe, et rien d'autre --- */
+// Onglet a part : la preference se lit au chargement de la page.
+const pageCalme = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+await pageCalme.emulateMedia({ reducedMotion: 'reduce' })
+await pageCalme.goto(URL, { waitUntil: 'networkidle' })
+await sleep(600)
+await pageCalme.keyboard.press('Escape')
+await sleep(400)
+const calme1 = await pageCalme.evaluate(() =>
+  [...document.querySelectorAll('canvas.pixl')].map((c) => c.dataset.image))
+await pageCalme.locator('.brand-mark').hover()
+await sleep(1200)
+const calme2 = await pageCalme.evaluate(() =>
+  [...document.querySelectorAll('canvas.pixl')].map((c) => c.dataset.image))
+check('mouvement reduit : les mascottes sont presentes', calme1.length > 0, `${calme1.length} mascotte(s)`)
+check('mouvement reduit : aucune mascotte ne s\'anime',
+  calme1.every((i) => i === '0') && calme2.every((i) => i === '0'),
+  `${calme1.join(',')} puis ${calme2.join(',')}`)
+
+// Meme l'easter egg se plie a la regle : la course est remplacee par la
+// recompense, pas jouee moins vite.
+const boiteCalme = await pageCalme.locator('.brand-mark').boundingBox()
+for (let i = 0; i < 5; i++) {
+  await pageCalme.mouse.click(boiteCalme.x + boiteCalme.width / 2, boiteCalme.y + boiteCalme.height / 2)
+  await sleep(80)
+}
+await sleep(600)
+const eggCalme = await pageCalme.evaluate(() => ({
+  traversee: !!document.querySelector('.pixl-traversee'),
+  planche: !!document.querySelector('.pixl-planche'),
+}))
+check('mouvement reduit : l\'easter egg saute la course', !eggCalme.traversee && eggCalme.planche)
+await pageCalme.close()
+
+/* --- la mascotte accompagne la lecon --- */
+await page.evaluate(() => window.pixelforge.runCommand('help.tutorials'))
+await sleep(400)
+check('la mascotte guide le choix d\'une lecon',
+  await page.locator('.pixl-guide canvas.pixl').count() === 1)
+await page.locator('.modal .layer-row').first().click()
+await sleep(400)
+// La lecon charge une demo par-dessus le travail en cours : elle demande
+// confirmation avant de le remplacer.
+if (await page.locator('.modal-foot .btn.primary').count()) {
+  await page.locator('.modal-foot .btn.primary').first().click()
+  await sleep(600)
+}
+const compagne = page.locator('.tutor-card canvas.pixl')
+check('la mascotte accompagne la lecon', await compagne.count() === 1)
+// La premiere etape attend un changement de zoom. La reaction ne dure que
+// le temps d'un saut : on la guette au lieu de la mesurer une seule fois.
+await page.evaluate(() => window.pixelforge.runCommand('view.zoom-in'))
+const reactions = new Set()
+for (let i = 0; i < 25; i++) {
+  reactions.add(await compagne.getAttribute('data-pixl'))
+  await sleep(60)
+}
+check('la mascotte reagit a la reussite d\'une etape', reactions.has('saut'),
+  [...reactions].join(' → '))
+await page.evaluate(() => window.pixelforge.tutorial.stop())
+await sleep(200)
+
+/* --- Google Drive : entrees de menu, configuration manquante, API simulee --- */
+
+// Etat de depart : aucun identifiant client configure.
+await page.evaluate(() => {
+  for (const cle of ['pixelforge.google.client-id', 'pixelforge.google.connected', 'pixelforge.google.folder-id']) {
+    localStorage.removeItem(cle)
+  }
+})
+
+// Le menu Fichier doit montrer les entrees Drive, actives, avec la raison
+// pour laquelle elles ne peuvent pas encore agir.
+await page.evaluate(() => {
+  ;[...document.querySelectorAll('.menu-btn')].find((b) => b.textContent === 'Fichier')?.click()
+})
+await sleep(200)
+const menuDrive = await page.evaluate(() => {
+  const items = [...document.querySelectorAll('.dropdown .menu-item')].map((b) => ({
+    label: b.querySelector('.label > span')?.textContent ?? '',
+    hint: b.querySelector('.label .hint')?.textContent ?? '',
+    disabled: b.disabled,
+  }))
+  return items.filter((i) => /Drive|Google/.test(i.label))
+})
+await page.keyboard.press('Escape')
+await sleep(150)
+check('le menu Fichier propose Google Drive', menuDrive.length >= 4,
+  menuDrive.map((i) => i.label).join(' | '))
+check('les entrees Drive restent actives et disent ce qui manque',
+  menuDrive.length > 0 && menuDrive.every((i) => !i.disabled) &&
+  menuDrive.some((i) => /identifiant client/i.test(i.hint)),
+  menuDrive.map((i) => i.hint).filter(Boolean)[0] ?? 'aucune explication')
+
+// Sans identifiant, « Ouvrir depuis Drive » doit expliquer, pas planter.
+const erreursAvant = errors.length
+await page.evaluate(() => window.pixelforge.runCommand('cloud.open'))
+await sleep(350)
+const aide = await page.evaluate(() => ({
+  titre: document.querySelector('.modal-head h2')?.textContent ?? '',
+  corps: document.querySelector('.modal-body')?.textContent ?? '',
+  champ: !!document.querySelector('.modal-body input[type=text]'),
+}))
+await page.keyboard.press('Escape')
+await sleep(200)
+check('sans identifiant client, Drive ouvre la marche a suivre',
+  /identifiant client/i.test(aide.titre) && /console Google Cloud/i.test(aide.corps) &&
+  errors.length === erreursAvant,
+  aide.titre || 'aucun dialogue')
+check('la marche a suivre nomme le type d\'application et l\'origine',
+  /Application Web/.test(aide.corps) && aide.corps.includes('Origines JavaScript') &&
+  aide.corps.includes(URL.replace(/\/$/, '')) && aide.champ,
+  aide.champ ? 'champ present' : 'champ absent')
+
+// Google est simule de bout en bout : le banc d'essai ne doit joindre ni
+// accounts.google.com ni googleapis.com.
+const drive = await page.evaluate(async () => {
+  const auth = await import('/src/cloud/google-auth.ts')
+  const api = await import('/src/cloud/google-drive.ts')
+  const { serializeSprite, deserializeSprite } = await import('/src/io/project.ts')
+  const app = window.pixelforge
+  const out = {}
+  const CLES = ['pixelforge.google.client-id', 'pixelforge.google.connected', 'pixelforge.google.folder-id']
+  const oublier = () => CLES.forEach((c) => localStorage.removeItem(c))
+  oublier()
+
+  /* --- rien n'est configure --- */
+  out.nonConfigure = !auth.isConfigured()
+  out.etapes = auth.setupSteps().length
+  out.origineCitee = auth.setupSteps().some((e) => e.includes(location.origin))
+  try {
+    await api.listProjects()
+    out.sansId = 'aucune erreur levee'
+  } catch (e) {
+    out.sansId = e.name === 'DriveError' && e.kind === 'config' ? 'explique' : `inattendu: ${e.message}`
+    out.sansIdMessage = e.message
+  }
+  // Le script de connexion ne doit pas avoir ete telecharge : ni au
+  // demarrage, ni pour un appel qui ne peut pas aboutir.
+  out.scriptAbsent = !document.querySelector('script[src*="gsi/client"]')
+
+  /* --- faux Google Identity Services --- */
+  const clients = []
+  let jetonSuivant = 'jeton-1'
+  window.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: (cfg) => {
+          clients.push(cfg)
+          return { requestAccessToken: () => cfg.callback({ access_token: jetonSuivant, expires_in: 3600 }) }
+        },
+        revoke: (jeton, fait) => { out.jetonRevoque = jeton; if (fait) fait() },
+      },
+    },
+  }
+  auth.setClientId('000000-test.apps.googleusercontent.com')
+  out.configure = auth.isConfigured()
+
+  /* --- faux Drive --- */
+  const requetes = []
+  const vraiFetch = window.fetch
+  const json = (data, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+  const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files'
+  const COMPTE = { user: { displayName: 'Test Pixel', emailAddress: 'test@example.com' } }
+  let coupe = false
+  let repondre = () => json({}, 404)
+  window.fetch = async (url, init = {}) => {
+    if (coupe) throw new TypeError('Failed to fetch')
+    const req = {
+      url: String(url),
+      methode: init.method || 'GET',
+      corps: typeof init.body === 'string' ? init.body : '',
+      entetes: init.headers || {},
+    }
+    requetes.push(req)
+    return repondre(req)
+  }
+  const derniere = () => requetes[requetes.length - 1]
+
+  /* --- connexion --- */
+  repondre = (req) => (req.url.includes('/about') ? json(COMPTE) : json({}, 404))
+  const compte = await api.connectDrive()
+  out.compte = compte.email
+  out.scope = clients[0]?.scope
+  out.clientId = clients[0]?.client_id
+  out.connecte = auth.session().connected
+  out.barreEtat = (document.querySelector('#statusbar')?.textContent ?? '').includes('test@example.com')
+
+  /* --- premier envoi : creation du dossier puis du fichier --- */
+  repondre = (req) => {
+    if (req.url.startsWith(UPLOAD)) {
+      return json({ id: 'fichier-1', name: 'test.pixelforge', modifiedTime: '2024-01-02T09:30:00.000Z', size: '2048' })
+    }
+    if (req.url.includes('/files?') && req.methode === 'POST') return json({ id: 'dossier-1' })
+    if (req.url.includes('/files?')) return json({ files: [] })
+    return json({}, 404)
+  }
+  const cree = await api.saveProject('test', '{"format":"pixelforge"}', null)
+  const envoi = derniere()
+  const dossier = requetes.find((r) => r.methode === 'POST' && r.url.includes('/files?fields=id'))
+  out.creation = {
+    id: cree.id,
+    methode: envoi.methode,
+    multipart: envoi.url.startsWith(UPLOAD) && envoi.url.includes('uploadType=multipart'),
+    frontiere: /multipart\/related; boundary=/.test(envoi.entetes['Content-Type'] ?? ''),
+    range: envoi.corps.includes('"parents":["dossier-1"]'),
+    nom: envoi.corps.includes('test.pixelforge'),
+    contenu: envoi.corps.includes('{"format":"pixelforge"}'),
+    dossier: (dossier?.corps ?? '').includes('application/vnd.google-apps.folder') &&
+      (dossier?.corps ?? '').includes('"name":"PixelForge"'),
+    jeton: (envoi.entetes.Authorization ?? '') === 'Bearer jeton-1',
+  }
+
+  /* --- second envoi : le meme fichier est ecrase --- */
+  await api.saveProject('test', '{"format":"pixelforge","v":2}', 'fichier-1')
+  const maj = derniere()
+  out.ecrasement = {
+    methode: maj.methode,
+    cible: maj.url.includes('/files/fichier-1'),
+    sansParent: !maj.corps.includes('parents'),
+  }
+
+  /* --- le fichier a disparu de Drive : on en recree un --- */
+  repondre = (req) => {
+    if (req.url.startsWith(UPLOAD) && req.methode === 'PATCH') {
+      return json({ error: { message: 'File not found: fichier-1.', errors: [{ reason: 'notFound' }] } }, 404)
+    }
+    if (req.url.startsWith(UPLOAD)) {
+      return json({ id: 'fichier-2', name: 'test.pixelforge', modifiedTime: '2024-01-03T09:30:00.000Z', size: '2048' })
+    }
+    if (/\/files\/[^?]+\?fields=id,trashed/.test(req.url)) return json({ id: 'dossier-1', trashed: false })
+    return json({}, 404)
+  }
+  const recree = await api.saveProject('test', '{"format":"pixelforge"}', 'fichier-1')
+  out.recree = recree.id === 'fichier-2' && requetes.filter((r) => r.methode === 'POST' && r.url.startsWith(UPLOAD)).length === 2
+
+  /* --- jeton expire : renouvele en silence, requete rejouee --- */
+  jetonSuivant = 'jeton-2'
+  let premier = true
+  repondre = (req) => {
+    if (!req.url.includes('/about')) return json({}, 404)
+    if (premier) {
+      premier = false
+      return json({ error: { message: 'Invalid Credentials', errors: [{ reason: 'authError' }] } }, 401)
+    }
+    return json(COMPTE)
+  }
+  const avant = requetes.length
+  const relu = await api.driveAccount()
+  out.jetonRenouvele = requetes.length - avant === 2 &&
+    (derniere().entetes.Authorization ?? '') === 'Bearer jeton-2' &&
+    relu.email === 'test@example.com'
+
+  /* --- Drive plein --- */
+  repondre = () => json({
+    error: { message: 'The user has exceeded their Drive storage quota.', errors: [{ reason: 'storageQuotaExceeded' }] },
+  }, 403)
+  try {
+    await api.saveProject('test', '{}', 'fichier-2')
+    out.quota = 'aucune erreur levee'
+  } catch (e) {
+    out.quota = e.kind
+    out.quotaMessage = e.message
+  }
+
+  /* --- hors ligne --- */
+  coupe = true
+  try {
+    await api.listProjects()
+    out.horsLigne = 'aucune erreur levee'
+  } catch (e) {
+    out.horsLigne = e.kind
+    out.horsLigneMessage = e.message
+  }
+  coupe = false
+
+  /* --- fichier supprime a l'ouverture --- */
+  repondre = () => json({ error: { message: 'File not found.', errors: [{ reason: 'notFound' }] } }, 404)
+  try {
+    await api.downloadProject('fichier-disparu')
+    out.absent = 'aucune erreur levee'
+  } catch (e) {
+    out.absent = e.kind
+    out.absentMessage = e.message
+  }
+
+  /* --- listage et telechargement --- */
+  const projet = serializeSprite(app.ed.sprite)
+  repondre = (req) => {
+    if (req.url.includes('alt=media')) return new Response(projet, { status: 200 })
+    if (req.url.includes('/files?')) {
+      return json({
+        files: [
+          { id: 'fichier-1', name: 'heros.pixelforge', modifiedTime: '2024-05-04T12:00:00.000Z', size: '4096' },
+          { id: 'fichier-2', name: 'decor.pixelforge', modifiedTime: '2024-05-01T08:00:00.000Z', size: '128' },
+        ],
+      })
+    }
+    return json({}, 404)
+  }
+  const liste = await api.listProjects()
+  const parametres = new URLSearchParams(derniere().url.split('?')[1])
+  out.liste = {
+    nombre: liste.length,
+    nom: liste[0]?.name,
+    date: liste[0]?.modifiedTime,
+    taille: liste[0]?.size,
+    filtre: (parametres.get('q') ?? '').includes(".pixelforge'"),
+    ordre: parametres.get('orderBy') === 'modifiedTime desc',
+  }
+  const contenu = await api.downloadProject('fichier-1')
+  const rouvert = await deserializeSprite(contenu)
+  out.allerRetour = rouvert.width === app.ed.sprite.width &&
+    rouvert.layers.length === app.ed.sprite.layers.length &&
+    rouvert.frameCount === app.ed.sprite.frameCount
+
+  /* --- le lien vers le fichier Drive suit le projet --- */
+  app.ed.sprite.driveFileId = 'fichier-42'
+  const relie = await deserializeSprite(serializeSprite(app.ed.sprite))
+  out.lienConserve = relie.driveFileId === 'fichier-42'
+
+  /* --- la commande de menu enregistre et retient le fichier --- */
+  app.ed.sprite.driveFileId = null
+  repondre = (req) => {
+    if (req.url.startsWith(UPLOAD)) {
+      return json({ id: 'fichier-9', name: 'heros.pixelforge', modifiedTime: '2024-05-04T12:00:00.000Z', size: '4096' })
+    }
+    if (/\/files\/[^?]+\?fields=id,trashed/.test(req.url)) return json({ id: 'dossier-1', trashed: false })
+    if (req.url.includes('/about')) return json(COMPTE)
+    return json({}, 404)
+  }
+  await app.command('cloud.save').run()
+  out.commandeLie = app.ed.sprite.driveFileId === 'fichier-9'
+  await app.command('cloud.save').run()
+  out.commandeEcrase = derniere().methode === 'PATCH' && derniere().url.includes('/files/fichier-9')
+
+  /* --- remise en etat : rien ne doit survivre a ce test --- */
+  window.fetch = vraiFetch
+  await auth.disconnect()
+  out.deconnecte = !auth.session().connected && out.jetonRevoque === 'jeton-2'
+  auth.setClientId('')
+  oublier()
+  delete window.google
+  app.ed.sprite.driveFileId = null
+  out.scriptJamaisCharge = !document.querySelector('script[src*="gsi/client"]')
+  out.requetesLocales = requetes.every((r) => r.url.startsWith('https://www.googleapis.com/'))
+  return out
+})
+
+check('sans identifiant client, l\'API Drive explique au lieu d\'echouer',
+  drive.nonConfigure && drive.sansId === 'explique', drive.sansIdMessage ?? drive.sansId)
+check('la marche a suivre est complete et cite l\'origine du site',
+  drive.etapes >= 5 && drive.origineCitee, `${drive.etapes} etapes`)
+check('le script Google n\'est charge qu\'a la demande', drive.scriptAbsent && drive.scriptJamaisCharge)
+check('la connexion demande le seul scope drive.file',
+  drive.scope === 'https://www.googleapis.com/auth/drive.file' &&
+  drive.clientId === '000000-test.apps.googleusercontent.com', drive.scope)
+check('le compte connecte s\'affiche dans la barre d\'etat',
+  drive.connecte && drive.compte === 'test@example.com' && drive.barreEtat)
+check('l\'envoi est un multipart depose dans le dossier PixelForge',
+  drive.creation.methode === 'POST' && drive.creation.multipart && drive.creation.frontiere &&
+  drive.creation.range && drive.creation.nom && drive.creation.contenu &&
+  drive.creation.dossier && drive.creation.jeton,
+  JSON.stringify(drive.creation))
+check('enregistrer a nouveau ecrase le fichier au lieu de le dupliquer',
+  drive.ecrasement.methode === 'PATCH' && drive.ecrasement.cible && drive.ecrasement.sansParent,
+  JSON.stringify(drive.ecrasement))
+check('un fichier supprime cote Drive est recree a l\'enregistrement', drive.recree)
+check('un jeton expire est renouvele et la requete rejouee', drive.jetonRenouvele)
+check('un Drive plein est explique', drive.quota === 'quota' && /plein/i.test(drive.quotaMessage ?? ''),
+  drive.quotaMessage ?? drive.quota)
+check('hors ligne, le message parle de la connexion',
+  drive.horsLigne === 'reseau' && /connexion/i.test(drive.horsLigneMessage ?? ''),
+  drive.horsLigneMessage ?? drive.horsLigne)
+check('un projet disparu de Drive est signale comme tel',
+  drive.absent === 'absent' && /supprime|corbeille/i.test(drive.absentMessage ?? ''),
+  drive.absentMessage ?? drive.absent)
+check('la liste ne demande que les projets PixelForge, les plus recents d\'abord',
+  drive.liste.nombre === 2 && drive.liste.filtre && drive.liste.ordre &&
+  drive.liste.taille === 4096 && drive.liste.date === '2024-05-04T12:00:00.000Z',
+  JSON.stringify(drive.liste))
+check('un projet telecharge depuis Drive se relit sans perte', drive.allerRetour)
+check('le fichier Drive reste lie au projet enregistre', drive.lienConserve)
+check('la commande Drive lie puis reecrit le meme fichier',
+  drive.commandeLie && drive.commandeEcrase)
+check('la deconnexion revoque le jeton', drive.deconnecte)
+check('les requetes Drive visent les endpoints officiels', drive.requetesLocales)
+
+/* --- le dialogue « Ouvrir depuis Drive » : connexion, liste, ouverture --- */
+await page.evaluate(async () => {
+  const auth = await import('/src/cloud/google-auth.ts')
+  const { serializeSprite } = await import('/src/io/project.ts')
+  const app = window.pixelforge
+
+  const nomInitial = app.ed.sprite.name
+  app.ed.sprite.name = 'projet-drive'
+  const projet = serializeSprite(app.ed.sprite)
+  app.ed.sprite.name = nomInitial
+
+  window.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: (cfg) => ({ requestAccessToken: () => cfg.callback({ access_token: 'jeton-ui', expires_in: 3600 }) }),
+        revoke: (_jeton, fait) => { if (fait) fait() },
+      },
+    },
+  }
+  auth.setClientId('000000-test.apps.googleusercontent.com')
+
+  const json = (data) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  window.__driveFake = { fetch: window.fetch, nomInitial }
+  window.fetch = async (url) => {
+    const u = String(url)
+    if (u.includes('/about')) return json({ user: { displayName: 'Test Pixel', emailAddress: 'test@example.com' } })
+    if (u.includes('alt=media')) return new Response(projet, { status: 200 })
+    if (u.includes('/files?')) {
+      return json({ files: [{ id: 'fichier-ui', name: 'projet-drive.pixelforge', modifiedTime: '2024-03-09T14:25:00.000Z', size: '3072' }] })
+    }
+    return json({})
+  }
+})
+
+await page.evaluate(() => window.pixelforge.runCommand('cloud.open'))
+await sleep(300)
+const avantConnexion = await page.evaluate(() => ({
+  titre: document.querySelector('.modal-head h2')?.textContent ?? '',
+  bouton: document.querySelector('.modal-body .form-row button')?.textContent ?? '',
+}))
+await page.evaluate(() => document.querySelector('.modal-body .form-row button')?.click())
+await sleep(400)
+const listeUI = await page.evaluate(() =>
+  [...document.querySelectorAll('.modal-body .layer-row .lname')].map((n) => n.textContent ?? ''))
+await page.evaluate(() => document.querySelector('.modal-body .layer-row button')?.click())
+await sleep(500)
+const ouvert = await page.evaluate(() => ({
+  nom: window.pixelforge.ed.sprite.name,
+  lien: window.pixelforge.ed.sprite.driveFileId,
+  fermee: !document.querySelector('.modal-backdrop'),
+}))
+await page.evaluate(async () => {
+  const auth = await import('/src/cloud/google-auth.ts')
+  window.fetch = window.__driveFake.fetch
+  window.pixelforge.ed.sprite.name = window.__driveFake.nomInitial
+  window.pixelforge.ed.sprite.driveFileId = null
+  delete window.__driveFake
+  // La deconnexion revoque le jeton par le script Google : il doit encore
+  // etre en place, sinon le vrai script serait telecharge pour de bon.
+  await auth.disconnect()
+  delete window.google
+  auth.setClientId('')
+  for (const cle of ['pixelforge.google.client-id', 'pixelforge.google.connected', 'pixelforge.google.folder-id']) {
+    localStorage.removeItem(cle)
+  }
+})
+
+check('le dialogue Drive demande d\'abord la connexion',
+  /Ouvrir depuis Google Drive/.test(avantConnexion.titre) && /connecter/i.test(avantConnexion.bouton),
+  avantConnexion.bouton || avantConnexion.titre)
+check('le dialogue liste les projets avec leur date',
+  listeUI.length === 1 && listeUI[0].includes('projet-drive') && /09\/03\/2024/.test(listeUI[0]) &&
+  listeUI[0].includes('3 Ko'),
+  listeUI[0] ?? 'liste vide')
+check('ouvrir un projet du Drive le charge et retient son fichier',
+  ouvert.nom === 'projet-drive' && ouvert.lien === 'fichier-ui' && ouvert.fermee,
+  `${ouvert.nom} / ${ouvert.lien}`)
+
+// `ClipId` est une union figee et `clipDe` retombe silencieusement sur le
+// premier cycle quand l'identifiant lui est inconnu : un septieme cycle
+// ajoute a CLIPS_PIXL s'afficherait donc en repos sans que rien ne le dise.
+const cyclesNommables = await page.evaluate(async () => {
+  const { imagesDuClip } = await import('/src/ui/mascot-view.ts')
+  const { CLIPS_PIXL } = await import('/src/ui/mascot-clips.ts')
+  return CLIPS_PIXL
+    .filter((c) => imagesDuClip(c.id).length !== c.poses.length)
+    .map((c) => c.id)
+})
+check('chaque cycle est joignable par son identifiant', cyclesNommables.length === 0,
+  cyclesNommables.join(', ') || 'les six repondent')
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 

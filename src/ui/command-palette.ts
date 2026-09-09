@@ -3,6 +3,7 @@ import { el, clear } from './dom'
 import { openModal } from './overlay'
 import { icon } from './icons'
 import { keyLabel } from './shortcuts'
+import { videAvecPixl } from './mascot-ui'
 
 /** Score de correspondance approximative : les lettres doivent apparaitre dans l'ordre. */
 function fuzzyScore(text: string, query: string): number {
@@ -47,7 +48,10 @@ export function openCommandPalette(commands: Command[]): void {
     selected = Math.min(selected, Math.max(0, filtered.length - 1))
     clear(list)
     if (!filtered.length) {
-      list.appendChild(el('div', { class: 'cmdk-empty' }, 'Aucune commande'))
+      // Une recherche sans resultat renvoyait une ligne de texte au milieu
+      // du vide, impossible a distinguer d'un champ qui ne repond plus.
+      list.appendChild(videAvecPixl('Aucune commande', 'degats',
+        `« ${query} » ne correspond a rien`))
       return
     }
     filtered.forEach((c, i) => {

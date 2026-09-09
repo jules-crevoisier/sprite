@@ -1,7 +1,8 @@
 import { fromHex } from '../core/color'
 import { isBound } from '../smart/rig'
 
-import { demoBall, demoCharacter, demoGrassBlock } from './demo-content'
+import { demoCharacter, demoGrassBlock } from './demo-content'
+import { spritePixl } from './mascot-clips'
 import type { App } from './app'
 import type { Lesson } from './tutorial'
 
@@ -92,13 +93,20 @@ export function buildLessons(app: App): Lesson[] {
       title: 'Animer',
       hint: 'Frames, pelure d\'oignon, tags',
       icon: 'film',
-      setup: () => ed.loadSprite(demoBall()),
+      setup: () => {
+        ed.loadSprite(spritePixl())
+        // On entre par le cycle de marche : c'est le plus long et celui ou
+        // la pelure d'oignon sert le plus.
+        const marche = ed.sprite.tags.find((t) => t.name === 'Marche')
+        if (marche) ed.setActiveFrame(marche.from)
+      },
       steps: [
         {
-          text: 'Cette balle occupe quatre frames. La timeline, en bas, montre une colonne par frame. Cliquez-en une autre pour vous y placer.',
+          text: 'Voici Pixl, la mascotte, et ses six cycles : repos, marche, course, saut, attaque, degats. '
+            + 'La timeline montre une colonne par image et une bande par cycle. Cliquez une autre image pour vous y placer.',
           target: q('#timeline'),
-          enter: () => { app.workspace.setTimelineVisible(true); ed.setActiveFrame(0) },
-          done: () => ed.activeFrame !== 0,
+          enter: () => { app.workspace.setTimelineVisible(true); zoomDepart = ed.activeFrame },
+          done: () => ed.activeFrame !== zoomDepart,
         },
         {
           text: 'Lancez la lecture. Le rendu s\'anime aussi sur la toile, pas seulement dans l\'apercu.',
@@ -118,18 +126,16 @@ export function buildLessons(app: App): Lesson[] {
         {
           text: 'Le bouton + ajoute une frame en reprenant le dessin courant : on repart du precedent et on le modifie. Le bouton voisin cree une frame vide.',
           target: q('#timeline button[title*="Nouvelle frame"]'),
-          enter: setMark,
-          done: () => ed.frameCount > 4,
+          enter: () => { profondeur = ed.frameCount },
+          done: () => ed.frameCount > profondeur,
         },
         {
-          text: 'Un tag nomme une plage de frames — idle, run, hit. Ce nom devient celui de l\'animation a l\'export, dans Unity comme dans Godot.',
+          text: 'Chaque bande coloree est un tag : il nomme une plage d\'images. Ce nom devient celui de '
+            + 'l\'animation a l\'export, dans Unity comme dans Godot. Ajoutez-en un de plus sur les images '
+            + 'de votre choix.',
           target: q('#timeline button[title*="tag"]'),
-          auto: () => {
-            ed.frameSelection = new Set([0, 1, 2, 3])
-            ed.addTag('idle', 0, 3)
-          },
-          autoLabel: 'Creer le tag idle',
-          done: () => ed.sprite.tags.length > 0,
+          enter: () => { profondeur = ed.sprite.tags.length },
+          done: () => ed.sprite.tags.length > profondeur,
         },
         {
           text: 'Le tag se manipule a la souris : glissez-le pour le deplacer, tirez ses bords pour l\'etendre. Essayez — deux tags qui se chevauchent s\'empilent sur deux bandes.',
@@ -314,7 +320,7 @@ export function buildLessons(app: App): Lesson[] {
       title: 'Effets de calque',
       hint: 'Ombre, contour, biseau, teinte — sans toucher aux pixels',
       icon: 'shading',
-      setup: () => ed.loadSprite(demoCharacter()),
+      setup: () => ed.loadSprite(spritePixl()),
       steps: [
         {
           text: 'Les effets de calque se posent par-dessus le dessin sans jamais le modifier : '
@@ -377,13 +383,15 @@ export function buildLessons(app: App): Lesson[] {
       title: 'Exporter vers un moteur',
       hint: 'Planche, Unity, Godot',
       icon: 'download',
-      setup: () => ed.loadSprite(demoBall()),
+      setup: () => ed.loadSprite(spritePixl()),
       steps: [
         {
-          text: 'Un tag nomme l\'animation. Sans tag, tout le sprite forme une seule animation.',
-          auto: () => { ed.addTag('bounce', 0, 3) },
-          autoLabel: 'Ajouter le tag bounce',
-          done: () => ed.sprite.tags.length > 0,
+          text: 'Pixl arrive avec ses six cycles deja tagues. Un tag nomme une plage d\'images, et c\'est '
+            + 'ce nom qui deviendra celui de l\'animation dans le moteur. Sans tag, tout le sprite ne '
+            + 'formerait qu\'une seule animation. Ouvrez la timeline pour les voir.',
+          target: q('#timeline'),
+          enter: () => { app.workspace.setTimelineVisible(true) },
+          done: () => ed.sprite.tags.length >= 6,
         },
         {
           text: 'Ouvrez l\'export (Ctrl+E). La planche generee s\'affiche en direct : disposition, espacement, echelle.',
@@ -393,7 +401,9 @@ export function buildLessons(app: App): Lesson[] {
           done: () => !!document.querySelector('.modal'),
         },
         {
-          text: 'Choisissez Unity : l\'archive contient le PNG, le .meta de decoupe et un AnimationClip par tag. Godot donne une ressource SpriteFrames prete pour AnimatedSprite2D.',
+          text: 'Choisissez Unity : l\'archive contient le PNG, le .meta de decoupe et un AnimationClip '
+            + 'par tag — donc six clips ici, Repos, Marche, Course, Saut, Attaque, Degats, prets a poser '
+            + 'sur un Animator. Godot donne une ressource SpriteFrames prete pour AnimatedSprite2D.',
         },
         {
           text: 'Pensez a l\'extrusion si votre moteur filtre les textures : elle duplique les pixels de bord et supprime les lisieres entre tuiles.',
