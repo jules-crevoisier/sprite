@@ -1,0 +1,26 @@
+{
+  "name": "pixelforge-video",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Film de presentation de PixelForge, monte avec Remotion.",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "verifier": "node verifier.mjs",
+    "rendu": "node rendu.mjs",
+    "studio": "remotion studio src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.522",
+    "@remotion/cli": "4.0.522",
+    "@remotion/renderer": "4.0.522",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.522"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "typescript": "5.6.3"
+  }
+}

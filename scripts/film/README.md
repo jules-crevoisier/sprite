@@ -1,4 +1,12 @@
-# Film de présentation
+# Film de présentation (première version)
+
+> **Remplacée.** Le film livré dans `media/` est désormais monté avec Remotion
+> dans `video-remotion/`. Cette version-ci enchaînait des panneaux qui
+> apparaissaient et disparaissaient sur place : la matière était bonne, mais
+> le résultat se regardait comme une suite de diapositives. La nouvelle
+> déplace une caméra dans un plan et garde le personnage à l'écran d'un bout
+> à l'autre. Le code ci-dessous reste en place pour ses scripts npm
+> (`npm run film`) et pour référence ; il n'est plus la source du film publié.
 
 Le film est rendu image par image à partir de l'application réelle. Rien n'y
 est redessiné à la main : les cycles d'animation sortent du moteur de
