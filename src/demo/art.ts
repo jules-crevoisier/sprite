@@ -93,6 +93,8 @@ const PAL_HEROS: Palette = {
   P: '#5e6d8c',
   q: '#1f3468',
   B: '#2e2018',
+  A: '#dce6f0',
+  a: '#8b9cb0',
 }
 
 /**
@@ -168,6 +170,37 @@ const PAL_HEROS: Palette = {
  * des jambes de largeur inegale. Les deux reductions ont longtemps ete
  * confondues dans ce commentaire.
  *
+ * ## Ce que le tour 6 a change : le budget de largeur
+ *
+ * Cinq tours de critique ont corrige tout ce qui se corrigeait a douze
+ * colonnes. Il restait un defaut qu'aucun ne pouvait atteindre : rien dans ce
+ * sprite ne disait « heros de donjon » plutot que « villageois ». Pas d'arme,
+ * pas de capuche, et la seule surface libre — le rang de la ceinture — ne
+ * pouvait rien porter : une boucle de deux pixels y creuse un trou au vote de
+ * mi-taille, chaque cellule tombant a un pixel sur quatre.
+ *
+ * La conclusion etait donc que l'identite ne peut pas venir de la palette ni
+ * du detail a cette taille : elle vient de la silhouette, et la silhouette
+ * demande de la largeur. Le budget est rouvert : dix-sept colonnes au lieu de
+ * douze, une epee tenue au poing droit.
+ *
+ * La lame fait deux colonnes d'acier entre deux colonnes de contour. Deux, et
+ * pas une : a une colonne, elle perd le vote de mi-taille contre ses propres
+ * contours et l'arme se reduit a un baton noir. Ces deux colonnes sont calees
+ * sur une cellule de vote, si bien que l'acier survit a la reduction.
+ *
+ * Au-dessus des epaules, deux colonnes de vide separent la lame de la tete :
+ * c'est ce qu'il faut pour survivre a la compression a soixante pour cent, et
+ * c'est la que se joue l'evenement de silhouette. Plus bas, la lame longe le
+ * corps et le vide tombe a une colonne : elle s'y confond avec le contour a la
+ * rotation, ce qui est aussi ce qu'on voit d'une epee tenue contre soi.
+ *
+ * Les bras restent attaches. Les detacher demanderait dix-huit colonnes pour
+ * le seul corps, et vingt-deux avec l'epee — un personnage aussi large que
+ * haut. Entre les deux depenses possibles, l'arme achete l'identite, que rien
+ * d'autre ne pouvait acheter, quand le vide entre bras et torse n'aurait
+ * achete qu'une redite de ce que la couleur fait deja.
+ *
  * ## Ce qui a ete refuse, et pourquoi
  *
  * Detacher les bras du torse par du vide. Il y faut deux pixels de part et
@@ -186,37 +219,33 @@ const PAL_HEROS: Palette = {
  * la coquille de contour est reposee apres rotation.
  */
 export const HEROS: Dessin = {
-  largeur: 20,
-  hauteur: 22,
+  largeur: 24,
+  hauteur: 24,
   palette: PAL_HEROS,
   lignes: [
-    '.....oooooo.....',
-    '....oHHHhhho....',
-    '...oHHHHhhhho...',
-    '...oHsssssmho...',
-    '...oHsossomho...',
-    '...oHsssssmho...',
-    '....osssssmo....',
-    '.....oooooo.....',
-    '..ooTTTTttuuoo..',
-    '..oTutTttuuqqo..',
-    '..oTutTttuuqqo..',
-    '..oTutTttuuqqo..',
-    '...osbbbbbbmo...',
-    '...ostTttuumo...',
-    '...ootTttuuoo...',
-    '....oPppppqo....',
-    '....oPp..pqo....',
-    '....oPp..pqo....',
-    '....oBB..BBo....',
-    '....oBB..BBo....',
-    '....ooo..ooo....',
+    '.....oooooo.....oo..',
+    '....oHHHhhho...oAao.',
+    '...oHHHHhhhho..oAao.',
+    '...oHsssssmho..oAao.',
+    '...oHsossomho..oAao.',
+    '...oHsssssmho..oAao.',
+    '....osssssmo...oAao.',
+    '.....oooooo....oAao.',
+    '..ooTTTTttuuoo.oAao.',
+    '..oTutTttuuqqo.oAao.',
+    '..oTutTttuuqqo.oAao.',
+    '..oTutTttuuqqo.oAao.',
+    '...osbbbbbbmoobbbbo.',
+    '...ostTttuumo..obbo.',
+    '...ootTttuuoo..obbo.',
+    '....oPppppqo....oo..',
+    '....oPp..pqo........',
+    '....oPp..pqo........',
+    '....oBB..BBo........',
+    '....oBB..BBo........',
+    '....ooo..ooo........',
   ],
 }
-
-/* ------------------------------------------------------------------ */
-/* La creature                                                         */
-/* ------------------------------------------------------------------ */
 
 const PAL_SLIME: Palette = {
   o: '#0f2318',
