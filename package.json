@@ -12,11 +12,15 @@
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:rotation": "node scripts/rotation-bench.mjs",
     "test:vues": "node scripts/vues-bench.mjs",
-    "test": "npm run test:smoke && npm run test:rotation && npm run test:vues",
+    "test": "npm run test:smoke && npm run test:qualite && npm run test:rotation && npm run test:vues && npm run test:combler && npm run test:formats",
     "film:capture": "node scripts/film/capture.mjs --out video/assets",
     "film:render": "node scripts/film/render.mjs --assets video/assets --out video/pixelforge.mp4",
     "film:verifier": "node scripts/film/render.mjs --assets video/assets --verifier",
-    "film": "npm run film:capture && npm run film:render"
+    "film": "npm run film:capture && npm run film:render",
+    "test:qualite": "node scripts/qualite-bench.mjs",
+    "test:combler": "node scripts/combler-bench.mjs",
+    "test:formats": "node scripts/formats-bench.mjs",
+    "planche": "node scripts/planche-critique.mjs"
   },
   "devDependencies": {
     "playwright": "^1.49.1",
