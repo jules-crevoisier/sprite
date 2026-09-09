@@ -3011,6 +3011,82 @@ check('aucune lecon ne charge sa demo par-dessus le document',
   chargementsDirects.length === 0,
   chargementsDirects.join(' | ').slice(0, 120) || 'toutes passent par ouvrirDemo')
 
+// L'editeur de niveaux : les frames deviennent des tuiles, on peint, on joue.
+// C'est le seul endroit ou l'application produit autre chose qu'une image, et
+// le seul moyen de verifier que le moteur du jeu et l'editeur parlent bien du
+// meme jeu — ils partagent le meme fichier.
+const niveauFait = await page.evaluate(async () => {
+  const art = await import('/src/demo/art.ts')
+  const { Sprite, Layer } = await import('/src/core/document.ts')
+  const { jouer } = await import('/src/jeu/moteur.ts')
+  const { manquePour } = await import('/src/jeu/niveau.ts')
+  const { calque } = await import('/src/demo/jeu.ts')
+
+  const dessins = [art.SOL, art.MUR, art.CAISSE, art.PLAQUE, art.PORTE, art.SORTIE, art.HEROS, art.SLIME]
+  const roles = ['sol', 'mur', 'caisse', 'plaque', 'porte', 'sortie', 'depart', 'creature']
+  const sp = new Sprite(16, 16)
+  sp.name = 'tileset'
+  sp.frameDurations = dessins.map(() => 100)
+  const couche = new Layer('Tuiles', dessins.length)
+  const images = dessins.map((d, i) => {
+    const bm = art.bitmapDe({ ...d, largeur: 16, hauteur: 16 })
+    couche.cels[i] = { bitmap: bm, opacity: 255 }
+    return calque(bm, 2)
+  })
+  sp.layers = [couche]
+
+  const plan = [
+    '#########',
+    '#...P...#',
+    '#...C...#',
+    '#...@...#',
+    '####D####',
+    '####S####',
+  ]
+  const lettres = { '.': 0, '#': 1, C: 2, P: 3, D: 4, S: 5, '@': 6, s: 7 }
+  const niveau = {
+    largeur: plan[0].length, hauteur: plan.length, tuile: 16,
+    cases: plan.flatMap((l) => [...l].map((c) => lettres[c])),
+  }
+  const decor = { images, roles, heros: [images[6]], fond: 0 }
+
+  // Un niveau sans depart doit etre refuse, et dire pourquoi.
+  const sansDepart = { ...niveau, cases: niveau.cases.map((c) => (c === 6 ? 0 : c)) }
+  const refus = manquePour(sansDepart, decor)
+
+  // On joue la solution : pousser la caisse sur la plaque ouvre la porte,
+  // puis on descend jusqu'a la sortie.
+  const touche = (code) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }))
+  const relache = (code) => window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }))
+  const attendre = (ms) => new Promise((r) => setTimeout(r, ms))
+  let dernierEtat = ''
+  const partie = jouer(niveau, decor, { echelle: 2, surEtat: (t) => { dernierEtat = t } })
+  for (const code of ['ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowDown']) {
+    touche(code); relache(code)
+    await attendre(190)
+  }
+  partie.arreter()
+
+  // Le niveau se range dans le document, donc il survit a l'enregistrement.
+  sp.niveau = { ...niveau, roles }
+  const { serializeSprite, deserializeSprite } = await import('/src/io/project.ts')
+  const relu = await deserializeSprite(await serializeSprite(sp))
+
+  return {
+    refus,
+    dernierEtat,
+    survit: relu.niveau ? relu.niveau.cases.join(',') === niveau.cases.join(',') : false,
+    roleSurvit: relu.niveau ? relu.niveau.roles.join(',') === roles.join(',') : false,
+  }
+})
+check('un niveau sans depart est refuse, et dit pourquoi',
+  niveauFait.refus.some((m) => /départ/.test(m)), niveauFait.refus.join(' | '))
+check('le moteur fait vraiment finir un niveau peint',
+  /terminé/.test(niveauFait.dernierEtat), niveauFait.dernierEtat || 'aucun etat')
+check('un niveau survit a l\'enregistrement du projet',
+  niveauFait.survit && niveauFait.roleSurvit,
+  `grille ${niveauFait.survit ? 'ok' : 'perdue'}, roles ${niveauFait.roleSurvit ? 'ok' : 'perdus'}`)
+
 // La planche de directions : elle doit s'ouvrir, montrer autant de vignettes
 // que de directions, dire de combien chacune devine, et poser ses images en
 // frames. C'est le seul ecran qui expose la scene multi-vues — sans lui, tout

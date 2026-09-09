@@ -412,6 +412,15 @@ export function buildCommands(app: App): Command[] {
     run: () => rotationDialog(ed),
   })
   add({
+    id: 'sprite.niveau', label: 'Éditeur de niveau…', group: 'Assisté', keys: 'Ctrl+Maj+N', icon: 'grid',
+    hint: () => 'Vos frames deviennent des tuiles, et le niveau se joue ici',
+    run: async () => {
+      const { niveauDialog } = await import('./niveau-dialog')
+      niveauDialog(ed)
+    },
+  })
+
+  add({
     id: 'help.demo', label: 'Jouer à la salle du gardien', group: 'Aide', icon: 'rig',
     hint: () => 'Une salle de donjon faite entierement ici, dans un onglet',
     run: () => { window.open('./demo.html', '_blank', 'noopener') },

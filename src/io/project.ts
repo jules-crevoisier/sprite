@@ -53,6 +53,7 @@ interface ProjectJson {
   height: number
   grid: { x: number; y: number; w: number; h: number }
   pivot: { x: number; y: number }
+  niveau?: { largeur: number; hauteur: number; tuile: number; cases: number[]; roles: string[] } | null
   frameDurations: number[]
   palette: { name: string; colors: string[] }
   tags: (Omit<Tag, 'color'> & { color: string })[]
@@ -71,6 +72,7 @@ export function serializeSprite(sprite: Sprite): string {
     height: sprite.height,
     grid: { ...sprite.grid },
     pivot: { ...sprite.pivot },
+    niveau: sprite.niveau ? { ...sprite.niveau, cases: [...sprite.niveau.cases], roles: [...sprite.niveau.roles] } : null,
     frameDurations: [...sprite.frameDurations],
     palette: { name: sprite.palette.name, colors: sprite.palette.toHexList() },
     tags: sprite.tags.map((t) => ({ ...t, color: toHex(t.color) })),
@@ -132,6 +134,9 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
   sprite.name = data.name
   sprite.grid = { ...sprite.grid, ...data.grid }
   sprite.pivot = { ...sprite.pivot, ...data.pivot }
+  // Un projet enregistre avant l'editeur de niveaux n'en a pas : c'est un
+  // champ facultatif, pas une erreur de lecture.
+  sprite.niveau = data.niveau && Array.isArray(data.niveau.cases) ? data.niveau : null
   sprite.frameDurations = [...data.frameDurations]
   sprite.tags = (data.tags ?? []).map((t) => ({ ...t, id: genId(), color: fromHex(t.color) }))
   sprite.slices = (data.slices ?? []).map((s) => ({ ...s, id: genId(), color: fromHex(s.color) }))

@@ -1060,6 +1060,45 @@ input[type="range"]::-moz-range-thumb {
 }
 .form-subsection:first-child { margin-top: 0; }
 
+/*
+   Editeur de niveaux : une palette de tuiles a gauche, la grille a droite.
+   La grille garde ses pixels nets et ne pousse jamais la fenetre : elle
+   defile dans son cadre.
+*/
+.niv-corps { min-width: 0; }
+.niv-plan { display: flex; gap: 14px; align-items: flex-start; min-width: 0; }
+.niv-colonne { min-width: 0; }
+.niv-colonne.large { flex: 1; min-width: 0; }
+.niv-palette {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  gap: 7px; width: 178px; max-height: 46vh; overflow-y: auto; padding-right: 4px;
+}
+.niv-case-palette { display: flex; flex-direction: column; gap: 3px; }
+.niv-tuile {
+  position: relative; padding: 4px; background: var(--bg-0);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  display: grid; place-items: center;
+}
+.niv-tuile.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.niv-tuile canvas { image-rendering: pixelated; max-width: 100%; height: auto; display: block; }
+.niv-num {
+  position: absolute; top: 2px; right: 4px; font: 9px var(--mono); color: var(--text-faint);
+}
+.niv-role { width: 100%; font-size: 10px; padding: 2px 4px; }
+.niv-scene {
+  background: var(--bg-0); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 8px; overflow: auto; max-height: 52vh;
+  display: grid; place-items: center;
+}
+.niv-grille, .niv-scene .jeu-canvas {
+  image-rendering: pixelated; max-width: 100%; height: auto; touch-action: none; outline: none;
+}
+.niv-barre {
+  display: flex; align-items: center; gap: 8px; margin-top: 9px; flex-wrap: wrap;
+}
+.niv-barre label { font-size: 11px; color: var(--text-faint); }
+.niv-barre input { width: 62px; }
+
 /* Ce que le dessin a de genant, dit avant le rendu et non apres. */
 .vues-alertes:empty { display: none; }
 .vues-alerte {

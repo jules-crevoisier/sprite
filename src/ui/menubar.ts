@@ -42,6 +42,7 @@ const MENUS: { label: string; items: string[] }[] = [
     items: [
       'rig.open', '---',
       'sprite.ramp', 'sprite.shade', 'sprite.rotate3d', 'sprite.vues', 'sprite.combler', '---',
+      'sprite.niveau', '---',
       'sprite.variants', 'sprite.detail',
     ],
   },

@@ -81,6 +81,14 @@ export class Sprite {
   pivot = { x: 0.5, y: 0.5 }
   /** Squelette optionnel, pour poser le dessin plutot que le redessiner. */
   rig: Rig = emptyRig()
+  /**
+   * Niveau construit avec les frames de ce sprite comme tuiles.
+   *
+   * Il vit dans le document et non a cote : un niveau perdu au rechargement
+   * serait un piege, et c'est exactement le defaut qu'on a deja corrige sur
+   * les lecons. `roles` dit ce que fait chaque frame ; `cases` est la grille.
+   */
+  niveau: { largeur: number; hauteur: number; tuile: number; cases: number[]; roles: string[] } | null = null
 
   constructor(width = 32, height = 32, palette?: Palette) {
     this.width = width
