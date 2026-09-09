@@ -1060,6 +1060,15 @@ input[type="range"]::-moz-range-thumb {
 }
 .form-subsection:first-child { margin-top: 0; }
 
+/* Apercu d'un fichier texte dans un dialogue : quelques lignes, en chasse
+   fixe, sans jamais pousser la fenetre. */
+.code-apercu {
+  margin: 10px 0 0; padding: 8px 10px; max-height: 190px; overflow: auto;
+  background: var(--bg-0); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); font-family: var(--mono);
+  font-size: 11px; line-height: 1.5; color: var(--text-dim); white-space: pre;
+}
+
 .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 7px; }
 .preset {
   border: 1px solid var(--line); background: var(--bg-2);

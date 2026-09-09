@@ -4,13 +4,12 @@ import { Sprite } from '../core/document'
 import { Palette } from '../core/palette'
 import { Viewport } from '../render/viewport'
 import { DEFAULT_EXPORT, type ExportRequest } from '../export'
-import { deserializeSprite } from '../io/project'
 import {
   chargerProjet, enregistrerProjet, listerProjets, nouvelIdProjet,
   reprendreAncienneSauvegarde, type FicheProjet,
 } from '../io/library'
 import { loadImageBitmap } from '../export/files'
-import { imageToBitmap, spriteFromImage } from '../io/import'
+import { imageToBitmap } from '../io/import'
 import { pasteClipboard } from '../core/operations'
 import { installShortcuts } from './shortcuts'
 import { toolById, syncRestFromCanvas, invalidateBake } from '../tools'
@@ -236,16 +235,25 @@ export class App {
       e.preventDefault()
       const file = (e as DragEvent).dataTransfer?.files?.[0]
       if (!file) return
-      if (file.name.endsWith('.pixelforge')) {
-        try {
-          ed.loadSprite(await deserializeSprite(await file.text()))
-          showToast('Projet ouvert', 'success')
-        } catch { showToast('Projet illisible', 'error') }
-        return
+      // Un seul chemin pour tous les formats : projet, Aseprite, GIF, Piskel,
+      // image ou palette. Deposer un fichier et s'entendre repondre « format
+      // inconnu » alors qu'il s'ouvre par le menu serait incomprehensible.
+      try {
+        const { ouvrirFichier } = await import('../io/formats')
+        const lu = await ouvrirFichier(file)
+        if (lu.genre === 'palette') {
+          ed.run('Palette importée', () => {
+            ed.sprite.palette = new Palette(lu.palette.nom, lu.palette.couleurs)
+          })
+        } else {
+          this.oublierDemo()
+          this.oublierProjetCourant()
+          ed.loadSprite(lu.sprite)
+        }
+        showToast(lu.message, 'success')
+      } catch (err) {
+        showToast(`Fichier non importé : ${(err as Error).message}`, 'error')
       }
-      if (!file.type.startsWith('image/')) return
-      ed.loadSprite(spriteFromImage(await loadImageBitmap(file), file.name.replace(/\.[^.]+$/, '')))
-      showToast('Image importée', 'success')
     })
 
     // Le vrai filet, c'est celui-ci et non `beforeunload` : une ecriture

@@ -8,7 +8,8 @@ import {
   type ExportRequest, type SheetLayout,
 } from '../export'
 import { spriteFromImage, layerFromImage } from '../io/import'
-import { loadImageBitmap, pickFiles } from '../export/files'
+import { download, downloadText, loadImageBitmap, pickFiles, safeName } from '../export/files'
+import { FORMATS_PALETTE, ecrirePalette } from '../io/formats/palettes'
 import { el, checkbox, numberInput, select, slider } from './dom'
 import { ICONS } from './icons'
 import { zoomablePreview } from './preview-zoom'
@@ -740,4 +741,68 @@ export function slicesDialog(ed: Editor): void {
   }
   render()
   openModal({ title: 'Zones et pivots', icon: 'crop', body, actions: [{ label: 'Fermer', primary: true }] })
+}
+
+/* ------------------------------------------------------------------ */
+/* Export de palette                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sort la palette du sprite dans le format d'un autre logiciel.
+ *
+ * Une palette est ce qui s'echange le plus : entre deux logiciels, entre deux
+ * personnes d'une meme equipe, ou vers un moteur. Six formats couvrent a peu
+ * pres tout ce qui existe, et l'apercu evite d'avoir a ouvrir le fichier pour
+ * savoir ce qu'on vient d'ecrire.
+ */
+export function exportPaletteDialog(ed: Editor): void {
+  let format = 'gpl'
+  const apercu = el('pre', { class: 'code-apercu' })
+  const info = el('p', { class: 'form-note' })
+
+  const rafraichir = (): void => {
+    const def = FORMATS_PALETTE.find((f) => f.id === format)
+    const sortie = ecrirePalette(format, ed.sprite.palette.name, ed.sprite.palette.colors)
+    apercu.textContent = sortie.texte
+      ? sortie.texte.split('\n').slice(0, 12).join('\n')
+        + (sortie.texte.split('\n').length > 12 ? '\n…' : '')
+      : `${sortie.octets?.length ?? 0} octets — format binaire`
+    info.textContent = `${ed.sprite.palette.size} couleur(s) · ${safeName(ed.sprite.palette.name)}.${def?.ext ?? 'txt'}`
+  }
+
+  const body = el('div', null,
+    el('div', { class: 'form-grid' },
+      el('label', null, 'Format'),
+      select(FORMATS_PALETTE.map((f) => ({ value: f.id, label: f.label })), format,
+        (v) => { format = v; rafraichir() }),
+    ),
+    info,
+    apercu,
+  )
+  rafraichir()
+
+  openModal({
+    title: 'Exporter la palette',
+    icon: 'palette',
+    body,
+    actions: [
+      { label: 'Annuler' },
+      {
+        label: 'Enregistrer',
+        primary: true,
+        onClick: () => {
+          const def = FORMATS_PALETTE.find((f) => f.id === format)
+          const nom = `${safeName(ed.sprite.palette.name)}.${def?.ext ?? 'txt'}`
+          const sortie = ecrirePalette(format, ed.sprite.palette.name, ed.sprite.palette.colors)
+          if (sortie.octets) {
+            download(new Blob([sortie.octets.buffer as ArrayBuffer],
+              { type: 'application/octet-stream' }), nom)
+          } else {
+            downloadText(sortie.texte ?? '', nom)
+          }
+          showToast(`Palette exportée : ${nom}`, 'success')
+        },
+      },
+    ],
+  })
 }

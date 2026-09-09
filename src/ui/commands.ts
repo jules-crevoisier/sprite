@@ -67,7 +67,8 @@ export function buildCommands(app: App): Command[] {
   })
 
   add({
-    id: 'file.open', label: 'Ouvrir un projet…', group: 'Fichier', keys: 'Ctrl+O', icon: 'upload',
+    id: 'file.open', label: 'Ouvrir un fichier…', group: 'Fichier', keys: 'Ctrl+O', icon: 'upload',
+    hint: () => 'Projet, .aseprite, GIF anime, .piskel, image ou palette',
     run: async () => {
       try {
         // Avec l'API du disque, le fichier ouvert devient celui que Ctrl+S
@@ -83,13 +84,22 @@ export function buildCommands(app: App): Command[] {
           showToast(`« ${sprite.name} » ouvert — Ctrl+S reecrira ${poignee.name}`, 'success')
           return
         }
-        const files = await pickFiles(`.${PROJECT_EXT},.json`)
+        const { EXTENSIONS_OUVERTURE, ouvrirFichier } = await import('../io/formats')
+        const files = await pickFiles(EXTENSIONS_OUVERTURE)
         if (!files.length) return
-        const sprite = await deserializeSprite(await files[0].text())
+        const lu = await ouvrirFichier(files[0])
+        if (lu.genre === 'palette') {
+          const { Palette } = await import('../core/palette')
+          ed.run('Palette importée', () => {
+            ed.sprite.palette = new Palette(lu.palette.nom, lu.palette.couleurs)
+          })
+          showToast(lu.message, 'success')
+          return
+        }
         app.oublierDemo()
         app.oublierProjetCourant()
-        ed.loadSprite(sprite)
-        showToast(`« ${sprite.name} » ouvert`, 'success')
+        ed.loadSprite(lu.sprite)
+        showToast(`« ${lu.sprite.name} » ouvert — ${lu.message}`, 'success')
       } catch (err) {
         showToast(`Ouverture impossible : ${(err as Error).message}`, 'error')
       }
@@ -160,6 +170,51 @@ export function buildCommands(app: App): Command[] {
   add({
     id: 'file.import-layer', label: 'Importer comme calque…', group: 'Fichier', icon: 'layers',
     run: () => dlg.importImageDialog(ed, true),
+  })
+
+  add({
+    id: 'file.export-aseprite', label: 'Exporter en .aseprite', group: 'Fichier', icon: 'download',
+    hint: () => 'Calques, durees, tags et palette, relisibles par Aseprite',
+    run: async () => {
+      try {
+        const { ecrireAseprite } = await import('../io/formats/aseprite')
+        const { download, safeName } = await import('../export/files')
+        const octets = await ecrireAseprite(ed.sprite)
+        download(new Blob([octets.buffer as ArrayBuffer], { type: 'application/octet-stream' }),
+          `${safeName(ed.sprite.name)}.aseprite`)
+        showToast('Fichier .aseprite enregistré', 'success')
+      } catch (err) {
+        showToast(`Export impossible : ${(err as Error).message}`, 'error')
+      }
+    },
+  })
+
+  add({
+    id: 'file.export-palette', label: 'Exporter la palette…', group: 'Fichier', icon: 'palette',
+    hint: () => 'GIMP, JASC, Adobe, hexadecimal, Paint.NET ou CSS',
+    run: () => dlg.exportPaletteDialog(ed),
+  })
+
+  add({
+    id: 'file.import-palette', label: 'Importer une palette…', group: 'Fichier', icon: 'palette',
+    hint: () => '.gpl, .pal, .act, .hex, .txt ou le JSON de lospec',
+    run: async () => {
+      try {
+        const { lirePalette } = await import('../io/formats/palettes')
+        const files = await pickFiles('.gpl,.pal,.act,.hex,.txt,.json,.ase')
+        if (!files.length) return
+        const octets = new Uint8Array(await files[0].arrayBuffer())
+        const lue = lirePalette(files[0].name, octets)
+        if (!lue.couleurs.length) { showToast('Aucune couleur trouvée dans ce fichier', 'error'); return }
+        const { Palette } = await import('../core/palette')
+        ed.run('Palette importée', () => {
+          ed.sprite.palette = new Palette(lue.nom, lue.couleurs)
+        })
+        showToast(`Palette « ${lue.nom} » — ${lue.couleurs.length} couleurs`, 'success')
+      } catch (err) {
+        showToast(`Palette illisible : ${(err as Error).message}`, 'error')
+      }
+    },
   })
 
   add({
