@@ -193,7 +193,7 @@ export function ecartDePattes(p: Pose): number {
 /**
  * Masse reellement posee par une pose : la somme des pixels de ses pieces.
  *
- * C'est la vraie réglé de masse constante. Celle qu'on mesurait jusqu'ici
+ * C'est la vraie règle de masse constante. Celle qu'on mesurait jusqu'ici
  * comparait les images composees, donc elle mesurait surtout combien du
  * personnage se cache lui-meme — de l'occlusion, pas de la matiere. Une
  * pose qui choisirait une variante de tete deux fois plus legere passerait

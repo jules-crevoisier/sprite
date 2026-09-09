@@ -305,7 +305,7 @@ const IMPACTS = new Set<string>(['impact', 'retombee'])
  * silhouette : l'arme brandie n'ajoutait plus que quatre a cinq pixels au
  * contour du personnage, et effacait une dizaine de pixels de son trait
  * noir. En aplat, le personnage n'etait plus arme au moment meme ou il
- * frappe. Sortir l'arme du corps réglé les deux d'un coup ; passer devant
+ * frappe. Sortir l'arme du corps règle les deux d'un coup ; passer devant
  * ne reglait que le second.
  */
 const DEVANT = new Set<string>([])

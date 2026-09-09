@@ -2588,7 +2588,13 @@ check('les numéros d\'image s\'annoncent comme deplacables', tireur)
 // Les sections precedentes ont pu laisser un dialogue ouvert par-dessus.
 await page.keyboard.press('Escape')
 await sleep(300)
-await page.evaluate(() => { window.pixelforge.ed.sprite.name = 'mon-projet' })
+// Les lecons ouvrent desormais leur demonstration par la meme porte : on
+// s'assure qu'aucune n'est restee ouverte avant de mesurer celle-ci.
+await page.evaluate(() => {
+  window.pixelforge.tutorial.stop()
+  window.pixelforge.quitterDemo()
+  window.pixelforge.ed.sprite.name = 'mon-projet'
+})
 const avantDemo = await page.locator('.demo-retour').count()
 await page.evaluate(() => window.pixelforge.runCommand('file.mascotte'))
 await sleep(800)
@@ -2892,7 +2898,13 @@ const SANS_ACCENT = [
   'Portee', 'Degrade', 'Diametre', 'Extremite', 'Tolerance', 'Hierarchie',
   'Frequence', 'Demonstration', 'Zero', 'Moitie', 'Preenregistre',
 ]
-const fautes = await page.evaluate(async (mots) => {
+// Et ces graphies-la sont des verbes passes au participe par erreur : une
+// passe d'accentuation automatique confond « la regle » avec « il a réglé ».
+const FAUX_PARTICIPES = [
+  'se réglé', 'la réglé', 'une réglé', 'même réglé', 'Z annulé',
+  'voisin créé', 'clic relié', 'oeil coupé', 'ombre s\'écarté',
+]
+const fautes = await page.evaluate(async ({ mots, participes }) => {
   const vus = new Set()
   const lire = (el) => {
     for (const n of el.querySelectorAll('*')) {
@@ -2921,11 +2933,83 @@ const fautes = await page.evaluate(async (mots) => {
     for (const m of mots) {
       if (new RegExp(`\\b${m}\\b`).test(t)) trouves.push(`${m} → « ${t.slice(0, 60)} »`)
     }
+    for (const m of participes) {
+      if (t.includes(m)) trouves.push(`${m} → « ${t.slice(0, 60)} »`)
+    }
   }
   return [...new Set(trouves)]
-}, SANS_ACCENT)
+}, { mots: SANS_ACCENT, participes: FAUX_PARTICIPES })
 check('aucun libelle francais ne perd ses accents', fautes.length === 0,
   fautes.slice(0, 6).join(' | ') || `${SANS_ACCENT.length} mots surveilles`)
+
+/* ------------------------------------------------------------------ */
+/* Le halo des lecons designe quelque chose                            */
+/* ------------------------------------------------------------------ */
+
+// Une etape dont la cible ne resout pas n'a AUCUN halo : la consigne dit
+// « le bouton voisin » et rien n'est designe. C'est arrive pour de vrai,
+// et de la pire facon : une passe d'accentuation a renomme les titres des
+// boutons sans toucher aux selecteurs des lecons, qui commencaient par
+// « # » et etaient donc epargnes. Deux etapes ont perdu leur halo et un
+// bouton de secours cliquait dans le vide.
+await page.keyboard.press('Escape')
+await sleep(300)
+const selecteursDeTitre = await page.evaluate(async () => {
+  // On lit les selecteurs a la source plutot que de les resoudre a l'ecran :
+  // beaucoup de cibles n'existent qu'apres un geste manuel que le banc ne
+  // peut pas produire — `.fx-row` n'apparait qu'une fois un effet ajoute —
+  // et exiger qu'elles resolvent tout de suite donnerait des faux positifs.
+  //
+  // En revanche un selecteur qui designe un bouton PAR SON TITRE peut etre
+  // verifie sans jouer la lecon : il suffit que ce titre existe quelque part
+  // dans l'application. C'est exactement la classe de defaut qui s'est
+  // produite, quand une passe d'accentuation a renomme « Appliquer cette
+  // duree » en « durée » sans toucher au selecteur.
+  const source = await (await fetch('/src/ui/lessons.ts')).text()
+  const titres = [...source.matchAll(/title([\^*]?)=\\?"([^"\\]+)/g)]
+    .map((m) => ({ op: m[1], texte: m[2] }))
+  const app = window.pixelforge
+  // Tous les libelles que l'application sait produire.
+  const connus = []
+  for (const c of app.commandes()) connus.push(c.label)
+  for (const n of document.querySelectorAll('[title]')) connus.push(n.getAttribute('title'))
+  // La timeline et le panneau squelette ne sont pas montes en permanence.
+  app.workspace.setTimelineVisible(true)
+  await new Promise((r) => setTimeout(r, 200))
+  for (const n of document.querySelectorAll('[title]')) connus.push(n.getAttribute('title'))
+  app.setMode('rig')
+  await new Promise((r) => setTimeout(r, 250))
+  for (const n of document.querySelectorAll('[title]')) connus.push(n.getAttribute('title'))
+  app.setMode('draw')
+  const orphelins = titres
+    .filter(({ op, texte }) => !connus.some((c) => {
+      if (!c) return false
+      return op === '*' ? c.includes(texte) : c.startsWith(texte)
+    }))
+    .map((t) => t.texte)
+  return { total: titres.length, orphelins: [...new Set(orphelins)] }
+})
+check('chaque bouton designe par son titre existe vraiment',
+  selecteursDeTitre.orphelins.length === 0,
+  selecteursDeTitre.orphelins.join(' | ')
+  || `${selecteursDeTitre.total} titres verifies`)
+
+// Une lecon ne doit pas emporter le document de la personne. Elles
+// chargeaient leur demonstration par `ed.loadSprite` : on sortait d'une lecon
+// en ayant perdu son dessin, sans retour possible, et l'enregistrement
+// automatique — qui ne s'abstient que devant une demo declaree — ecrivait la
+// demo par-dessus l'entree de bibliotheque.
+//
+// On lit la source plutot que de jouer une lecon : la demarrer ici lance une
+// boucle et charge un document dont il faudrait ensuite defaire l'etat, pour
+// verifier une propriete qui se lit en une ligne.
+const sourceLecons = await (await fetch(`${URL}src/ui/lessons.ts`)).text()
+const chargementsDirects = [...sourceLecons.matchAll(/setup:.{0,120}/gs)]
+  .map((m) => m[0].replace(/\s+/g, ' '))
+  .filter((t) => t.includes('ed.loadSprite'))
+check('aucune lecon ne charge sa demo par-dessus le document',
+  chargementsDirects.length === 0,
+  chargementsDirects.join(' | ').slice(0, 120) || 'toutes passent par ouvrirDemo')
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 

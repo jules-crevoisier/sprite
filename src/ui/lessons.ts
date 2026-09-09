@@ -14,10 +14,21 @@ const q = (selector: string) => (): Element | null => document.querySelector(sel
  * Chercher « un dialogue » ne suffit pas : celui de l'etape precedente, reste
  * ouvert, validait la suivante avant qu'on ait rien ouvert du tout.
  */
+/**
+ * Vrai quand la derniere action annulable porte ce nom.
+ *
+ * Compter les actions ne suffisait pas : `pushes > repere` se satisfaisait de
+ * n'importe quel geste, et un seul pixel pose au crayon validait l'etape
+ * « Rampe de couleurs » sans qu'on ait jamais ouvert le dialogue. On regarde
+ * donc CE qui a ete fait, pas COMBIEN.
+ */
+const aFaitDans = (ed: { history: { undoLabel: string | null } }, nom: string): boolean =>
+  (ed.history.undoLabel ?? '').startsWith(nom)
+
 const estOuvert = (titre: string): boolean =>
   [...document.querySelectorAll('.modal-head h2')].some((h) => h.textContent?.trim() === titre)
 
-/** Les cinq lecons proposees, de la prise en main a l'export moteur. */
+/** Les cinq lecons proposees, de la prise en main à l'export moteur. */
 export function buildLessons(app: App): Lesson[] {
   const ed = app.ed
 
@@ -31,6 +42,7 @@ export function buildLessons(app: App): Lesson[] {
    */
   let mark = 0
   const setMark = () => { mark = ed.history.pushes }
+  const aFait = (nom: string) => aFaitDans(ed, nom)
   // Reperes pris a l'entrée d'une etape : chaque etape se valide en comparant
   // l'état courant a celui d'avant, plutot qu'a une valeur figee.
   let zoomDepart = 0
@@ -47,7 +59,7 @@ export function buildLessons(app: App): Lesson[] {
       title: 'Prise en main',
       hint: 'Dessiner, choisir une couleur, corriger',
       icon: 'pencil',
-      setup: () => ed.loadSprite(demoGrassBlock()),
+      setup: () => app.ouvrirDemo('Prise en main', demoGrassBlock()),
       steps: [
         {
           text: 'Voici une tuile de 16 pixels de cote. La molette zoome, la barre espace déplace la vue. Essayez : changez le zoom.',
@@ -56,7 +68,7 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.view.zoom !== zoomDepart,
         },
         {
-          text: 'Choisissez une couleur dans la palette, a droite. Un clic la met en couleur principale, un clic droit en secondaire.',
+          text: 'Choisissez une couleur dans la palette, à droite. Un clic la met en couleur principale, un clic droit en secondaire.',
           target: q('[data-panel="palette"]'),
           enter: () => { app.workspace.setVisible('palette', true); couleurDepart = ed.primary },
           done: () => ed.primary !== couleurDepart,
@@ -68,7 +80,7 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.history.pushes > mark,
         },
         {
-          text: 'Ctrl+Z annulé, Ctrl+Y retablit. L\'historique remonte loin : n\'ayez pas peur d\'essayer. Annulez votre trait.',
+          text: 'Ctrl+Z annule, Ctrl+Y rétablit. L\'historique remonte loin : n\'ayez pas peur d\'essayer. Annulez votre trait.',
           enter: () => { profondeur = ed.history.position },
           done: () => ed.history.position < profondeur,
         },
@@ -76,11 +88,15 @@ export function buildLessons(app: App): Lesson[] {
           text: 'Deux réglages de la barre du haut se ressemblent sans faire la même chose. '
             + 'La FORME du pinceau decide quels pixels sont poses a chaque point du trait : '
             + 'ronde, carrée, losange, ou une simple ligne. Montez la taille a 6 et changez de forme — '
-            + 'l\'aperçu, a cote, dessine le trait tel qu\'il sortira.',
+            + 'l\'aperçu, à côté, dessine le trait tel qu\'il sortira.',
           target: q('#optionsbar'),
           enter: () => {
             app.setTool('pencil')
-            ed.updateSettings({ brushSize: 6, brushShape: 'circle', ditherPattern: 'none' })
+            // On remet la forme ronde et on coupe le tramage — c'est l'etat
+            // de depart de l'exercice — mais on ne monte PAS la taille : la
+            // consigne le demande, et la trouver deja faite laisse chercher
+            // un curseur qui est au bon endroit.
+            ed.updateSettings({ brushShape: 'circle', ditherPattern: 'none' })
           },
           done: () => ed.settings.brushShape !== 'circle',
         },
@@ -115,7 +131,7 @@ export function buildLessons(app: App): Lesson[] {
       hint: 'Frames, pelure d\'oignon, tags',
       icon: 'film',
       setup: () => {
-        ed.loadSprite(spritePixl())
+        app.ouvrirDemo('Animer', spritePixl())
         // On entre par le cycle de marche : c'est le plus long et celui ou
         // la pelure d'oignon sert le plus.
         const marche = ed.sprite.tags.find((t) => t.name === 'Marche')
@@ -137,15 +153,18 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.playing,
         },
         {
-          text: 'Arretez la lecture, puis activez la pelure d\'oignon : les frames voisines apparaissent en transparence, teintees rouge pour le passe et bleu pour le futur.',
+          text: 'Activez la pelure d\'oignon : les frames voisines apparaissent en transparence, teintees rouge pour le passe et bleu pour le futur.',
           target: q('#timeline button[title*="oignon"]'),
-          enter: () => app.playback.stop(),
+          // La pelure est un reglage qui survit d'une session a l'autre :
+          // laissee active, l'etape se validait toute seule une seconde
+          // apres son affichage.
+          enter: () => { app.playback.stop(); ed.onion.enabled = false },
           auto: () => { app.runCommand('frame.onion') },
           autoLabel: 'Activer',
           done: () => ed.onion.enabled,
         },
         {
-          text: 'Le bouton + ajoute une frame en reprenant le dessin courant : on repart du précédent et on le modifie. Le bouton voisin créé une frame vide.',
+          text: 'Le bouton + ajoute une frame en reprenant le dessin courant : on repart du précédent et on le modifie. Le bouton voisin crée une frame vide.',
           target: q('#timeline button[title*="Nouvelle frame"]'),
           enter: () => { profondeur = ed.frameCount },
           done: () => ed.frameCount > profondeur,
@@ -154,28 +173,28 @@ export function buildLessons(app: App): Lesson[] {
           text: 'Chaque bande coloree est un tag : il nomme une plage d\'images. Ce nom devient celui de '
             + 'l\'animation a l\'export, dans Unity comme dans Godot. Ajoutez-en un de plus sur les images '
             + 'de votre choix.',
-          target: q('#timeline button[title*="tag"]'),
+          target: q('#timeline button[title^="Nouveau tag"]'),
           enter: () => { profondeur = ed.sprite.tags.length },
           done: () => ed.sprite.tags.length > profondeur,
         },
         {
-          text: 'Le tag se manipule a la souris : glissez-le pour le déplacer, tirez ses bords pour l\'étendre. Essayez — deux tags qui se chevauchent s\'empilent sur deux bandes.',
+          text: 'Le tag se manipule à la souris : glissez-le pour le déplacer, tirez ses bords pour l\'étendre. Essayez — deux tags qui se chevauchent s\'empilent sur deux bandes.',
           target: q('.tl-tag'),
           enter: () => { etendue = ed.sprite.tags.map((t) => `${t.from}-${t.to}`).join() },
           done: () => ed.sprite.tags.map((t) => `${t.from}-${t.to}`).join() !== etendue,
         },
         {
-          text: 'La durée se réglé par frame, et le bouton voisin l\'applique a toutes d\'un coup — c\'est le cas le plus courant : une seule cadence pour l\'animation entière. Appliquez-la.',
-          target: q('#timeline button[title^="Appliquer cette duree"]'),
+          text: 'La durée se règle par frame, et le bouton voisin l\'applique à toutes d\'un coup — c\'est le cas le plus courant : une seule cadence pour l\'animation entière. Appliquez-la.',
+          target: q('#timeline button[title^="Appliquer cette durée"]'),
           enter: () => { ed.sprite.frameDurations = ed.sprite.frameDurations.map((_, i) => 80 + i * 40); profondeur = ed.history.pushes },
           done: () => ed.history.pushes > profondeur && new Set(ed.sprite.frameDurations).size === 1,
         },
         {
-          text: 'La courbe de vitesse, a cote, repartit le temps autrement. Choisissez « Arrivee douce » puis appliquez-la : les dernières images durent plus longtemps, le mouvement se pose. La durée totale ne change pas.',
+          text: 'La courbe de vitesse, à côté, repartit le temps autrement. Choisissez « Arrivee douce » puis appliquez-la : les dernières images durent plus longtemps, le mouvement se pose. La durée totale ne change pas.',
           target: q('#timeline select'),
-          enter: () => { etendue = ed.sprite.frameDurations.join(); ed.easing = 'ease-out' },
+          enter: () => { etendue = ed.sprite.frameDurations.join(); ed.easing = 'linear' },
           auto: () => {
-            const btn = document.querySelector<HTMLElement>('#timeline button[title^="Repartir les durees"]')
+            const btn = document.querySelector<HTMLElement>('#timeline button[title^="Répartir les durées"]')
             btn?.click()
           },
           autoLabel: 'Répartir les durées',
@@ -190,7 +209,7 @@ export function buildLessons(app: App): Lesson[] {
       title: 'Squelette et pose',
       hint: 'Articuler un personnage au lieu de le redessiner',
       icon: 'rig',
-      setup: () => ed.loadSprite(demoCharacter()),
+      setup: () => app.ouvrirDemo('Squelette et pose', demoCharacter()),
       steps: [
         {
           text: 'Un personnage de face. Pour l\'animer, on ne va pas le redessiner pose par pose : on va lui poser un squelette. Basculez en mode Squelette, en haut de la fenêtre.',
@@ -269,13 +288,13 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.playing,
         },
         {
-          text: 'Arretez la lecture. Un personnage tient rarement sur un calque : dans « Calques reliés », un clic relié ou detache un calque. Corps, arme et cape suivent alors les mêmes os, chacun avec sa propre carte de poids.',
+          text: 'Arretez la lecture. Un personnage tient rarement sur un calque : dans « Calques reliés », un clic relie ou détache un calque. Corps, arme et cape suivent alors les mêmes os, chacun avec sa propre carte de poids.',
           enter: () => { app.playback.stop(); relies = ed.sprite.rig.parts.length },
           target: q('[data-panel="rig"]'),
           done: () => ed.sprite.rig.parts.length !== relies,
         },
         {
-          text: 'Enfin, choisissez un os et montez sa souplesse — pensez a une cape, une queue, une meche. Il cesse alors de suivre le corps a l\'image près : il traine derrière, dépasse a l\'arret, puis se stabilise. Ce retard se dessinait a la main ; ici il se calcule.',
+          text: 'Enfin, choisissez un os et montez sa souplesse — pensez a une cape, une queue, une meche. Il cesse alors de suivre le corps a l\'image près : il traine derrière, dépasse a l\'arret, puis se stabilise. Ce retard se dessinait à la main ; ici il se calcule.',
           target: q('[data-panel="rig"]'),
           done: () => ed.sprite.rig.bones.some((b) => b.softness > 0),
         },
@@ -286,10 +305,10 @@ export function buildLessons(app: App): Lesson[] {
       title: 'Dessin assisté',
       hint: 'Rampes, ombrage, détail et variantes',
       icon: 'smart',
-      setup: () => ed.loadSprite(demoGrassBlock()),
+      setup: () => app.ouvrirDemo('Dessin assisté', demoGrassBlock()),
       steps: [
         {
-          text: 'Une tuile d\'herbe a plat. Les quatre outils qui suivent font le travail ingrat : '
+          text: 'Une tuile d\'herbe à plat. Les quatre outils qui suivent font le travail ingrat : '
             + 'trouver des tons, poser des ombres, texturer, decliner. Aucun n\'invente de couleur '
             + 'qui ne soit déjà dans le dessin. Prenez la pipette et prelevez le vert de l\'herbe.',
           target: q('.toolbar'),
@@ -303,28 +322,28 @@ export function buildLessons(app: App): Lesson[] {
           enter: setMark,
           auto: () => { app.runCommand('sprite.ramp') },
           autoLabel: 'Ouvrir la rampe',
-          done: () => ed.history.pushes > mark,
+          done: () => aFait('Rampe de couleurs'),
         },
         {
-          text: 'Maintenant l\'ombrage. La silhouette suffit a deviner l\'orientation des surfaces : '
+          text: 'Maintenant l\'ombrage. La silhouette suffit à deviner l\'orientation des surfaces : '
             + 'un pixel près du bord gauche appartient a une paroi tournee vers la gauche. '
             + 'Ouvrez « Ombrage automatique » (Ctrl+Maj+O) et tirez dans le cadran de lumière.',
           enter: setMark,
           auto: () => { app.runCommand('sprite.shade') },
           autoLabel: 'Ouvrir l\'ombrage',
-          done: () => ed.history.pushes > mark,
+          done: () => aFait('Ombrage'),
         },
         {
           text: 'Chaque pixel a pris un autre ton de sa propre famille : la palette reste la votre, '
             + 'et la silhouette n\'a pas bouge. Le curseur « Adoucir » casse en plus les marches '
-            + 'd\'escalier des diagonales, avec la même réglé.',
+            + 'd\'escalier des diagonales, avec la même règle.',
         },
         {
           text: 'Ouvrez « Ajouter du détail » (Ctrl+Maj+D), choisissez la matière Herbe, puis cliquez Ajouter deux fois : les passes se cumulent. « Varier » relance le tirage.',
           enter: setMark,
           auto: () => { app.runCommand('sprite.detail') },
           autoLabel: 'Ouvrir',
-          done: () => ed.history.pushes > mark,
+          done: () => aFait('Détail'),
         },
         {
           text: 'Le détail ne reprend que les couleurs déjà presentes : chaque pixel se décale d\'un cran dans sa propre famille de teintes. Aucune couleur etrangere n\'apparait.',
@@ -336,7 +355,7 @@ export function buildLessons(app: App): Lesson[] {
           done: () => estOuvert('Variantes de couleur'),
         },
         {
-          text: 'Choisissez la famille des verts, une methode, puis appliquez : les variantes deviennent des frames taguees, pretes a partir dans une planche.',
+          text: 'Choisissez la famille des verts, une methode, puis appliquez : les variantes deviennent des frames taguees, pretes à partir dans une planche.',
           enter: () => { profondeur = ed.frameCount },
           done: () => ed.frameCount > profondeur,
         },
@@ -348,23 +367,24 @@ export function buildLessons(app: App): Lesson[] {
       title: 'Effets de calque',
       hint: 'Ombre, contour, biseau, teinte — sans toucher aux pixels',
       icon: 'shading',
-      setup: () => ed.loadSprite(spritePixl()),
+      setup: () => app.ouvrirDemo('Effets de calque', spritePixl()),
       steps: [
         {
           text: 'Les effets de calque se posent par-dessus le dessin sans jamais le modifier : '
             + 'ils sont recalcules au moment d\'afficher. On peut donc les régler en les regardant, '
-            + 'et changer d\'avis. Ouvrez le panneau Calques, en bas a droite.',
+            + 'et changer d\'avis. Ouvrez le panneau Calques, en bas à droite.',
           target: q('[data-panel="layers"]'),
-          // Ouvrir le panneau ici, c'etait faire le geste a la place de
-          // l'utilisateur : la consigne s'effacait avant d'etre lue.
-          enter: () => { app.workspace.setVisible('layers', false) },
-          auto: () => { app.workspace.setVisible('layers', true) },
-          autoLabel: 'Ouvrir le panneau',
-          done: () => !!document.querySelector('.fx-head'),
+          // Fermer le panneau pour que l'etape ait quelque chose a demander
+          // etait pire que le defaut qu'on voulait corriger : la cible
+          // n'existait plus, il n'y avait donc aucun halo, et la consigne
+          // disait « ouvrez le panneau Calques » sans que rien n'indique ou.
+          // Cette etape presente, elle ne fait pas faire — c'est la suivante
+          // qui demande le premier geste.
+          enter: () => { app.workspace.setVisible('layers', true) },
         },
         {
           text: 'Cliquez le + de la section EFFETS et choisissez « Contour ». '
-            + 'Un liseré se pose autour de la silhouette, sur toutes les frames a la fois.',
+            + 'Un liseré se pose autour de la silhouette, sur toutes les frames à la fois.',
           target: q('.fx-head'),
           done: () => ed.layer.effects.some((f) => f.kind === 'contour'),
         },
@@ -377,7 +397,7 @@ export function buildLessons(app: App): Lesson[] {
         },
         {
           text: 'Ajoutez maintenant une « Ombre portée ». L\'angle dit d\'ou vient la lumière, '
-            + 'la distance de combien de pixels l\'ombre s\'écarté.',
+            + 'la distance de combien de pixels l\'ombre s\'écarte.',
           target: q('.fx-head'),
           done: () => ed.layer.effects.some((f) => f.kind === 'ombre-portee'),
         },
@@ -397,7 +417,7 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.layer.effects.some((f) => f.kind === 'teinte'),
         },
         {
-          text: 'L\'oeil coupé un effet, la corbeille le retire, et vos pixels n\'ont pas bouge d\'un iota. '
+          text: 'L\'œil coupe un effet, la corbeille le retire, et vos pixels n\'ont pas bouge d\'un iota. '
             + 'Coupez-en un pour voir.',
           target: q('.fx-row'),
           enter: () => { relies = ed.layer.effects.length },
@@ -405,7 +425,7 @@ export function buildLessons(app: App): Lesson[] {
         },
         {
           text: 'L\'export applique les effets tout seul : planche, GIF, Unity, Godot. '
-            + 'Si vous voulez les retoucher a la main, « Calque > Graver les effets » les inscrit '
+            + 'Si vous voulez les retoucher à la main, « Calque > Graver les effets » les inscrit '
             + 'dans les pixels une bonne fois.',
         },
       ],
@@ -416,7 +436,7 @@ export function buildLessons(app: App): Lesson[] {
       title: 'Exporter vers un moteur',
       hint: 'Planche, Unity, Godot',
       icon: 'download',
-      setup: () => ed.loadSprite(spritePixl()),
+      setup: () => app.ouvrirDemo('Exporter', spritePixl()),
       steps: [
         {
           text: 'Pixl arrive avec ses six cycles déjà tagues. Un tag nomme une plage d\'images, et c\'est '

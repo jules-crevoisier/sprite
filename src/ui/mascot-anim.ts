@@ -153,7 +153,7 @@ const CORPS_ETIRE = [
 /**
  * La patte, en un seul dessin.
  *
- * C'est le choix qui garantit la réglé la plus dure d'un cycle : la masse
+ * C'est le choix qui garantit la règle la plus dure d'un cycle : la masse
  * ne change pas d'une image a l'autre. Une patte redessinee pour chaque
  * pose maigrit toujours quelque part ; la meme patte deplacee de deux
  * pixels, jamais. Avancer, reculer, lever le pied : tout se fait par

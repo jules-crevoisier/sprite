@@ -185,6 +185,11 @@ export class Tutorial {
     this.spotlight.hidden = true
     clearInterval(this.poll)
     cancelAnimationFrame(this.raf)
+    // Le document de la personne revient. Les lecons chargeaient leur
+    // demonstration par-dessus lui sans retour possible : on sortait d'une
+    // lecon en ayant perdu son dessin, et l'enregistrement automatique
+    // ecrivait la demo par-dessus l'entree de bibliotheque au passage.
+    this.app.quitterDemo()
   }
 
   /**
@@ -251,8 +256,14 @@ export class Tutorial {
       // attendait de repartir : `this.index` sort alors du tableau, et la
       // fete est deja a l'écran. Il n'y a plus rien a surveiller.
       if (!step) { clearInterval(this.poll); return }
-      // La cible peut apparaitre apres coup, par exemple a l'ouverture d'un panneau.
-      if (!this.target && step.target) this.target = step.target()
+      // La cible peut apparaitre apres coup — a l'ouverture d'un panneau — et
+      // elle peut aussi DISPARAITRE : un panneau se redessine a chaque
+      // modification du document, et le noeud qu'on tenait est alors detache.
+      // Sans cette seconde resolution, le halo s'eteignait definitivement des
+      // le premier trait, sur les trois quarts des lecons.
+      if (step.target && (!this.target || !document.contains(this.target))) {
+        this.target = step.target()
+      }
       if (step.done?.()) {
         // Le geste est fait : elle saute. La carte devient verte au meme
         // instant, la mascotte dit la meme chose plus vite que la couleur.
@@ -316,16 +327,40 @@ export class Tutorial {
       this.spotlight.hidden = true
       return
     }
+    // Une cible peut vivre dans un panneau defilant et se trouver hors de sa
+    // fenetre : le halo se posait alors sur du vide, parfois a moitie hors
+    // ecran. La palette de couleurs etait dans ce cas des qu'on descendait
+    // sous 900 pixels de haut, ce qui rendait la deuxieme etape de la
+    // premiere lecon impossible a suivre.
+    this.amenerDansLaVue(this.target)
+
     const r = this.target.getBoundingClientRect()
     if (r.width === 0 || r.height === 0) { this.spotlight.hidden = true; return }
     this.spotlight.hidden = false
     const pad = 5
+    // Un halo plus large que la fenetre ne designe rien : on le borne.
+    const gauche = Math.max(2, r.left - pad)
+    const haut = Math.max(2, r.top - pad)
     Object.assign(this.spotlight.style, {
-      left: `${r.left - pad}px`,
-      top: `${r.top - pad}px`,
-      width: `${r.width + pad * 2}px`,
-      height: `${r.height + pad * 2}px`,
+      left: `${gauche}px`,
+      top: `${haut}px`,
+      width: `${Math.min(r.width + pad * 2, window.innerWidth - gauche - 2)}px`,
+      height: `${Math.min(r.height + pad * 2, window.innerHeight - haut - 2)}px`,
     })
+  }
+
+  /**
+   * Fait defiler le conteneur d'une cible pour qu'elle soit visible.
+   *
+   * Seulement quand elle ne l'est pas : appeler `scrollIntoView` a chaque
+   * tour de boucle ferait sauter la vue en permanence.
+   */
+  private amenerDansLaVue(cible: Element): void {
+    const r = cible.getBoundingClientRect()
+    const dedans = r.top >= 0 && r.left >= 0
+      && r.bottom <= window.innerHeight && r.right <= window.innerWidth
+    if (dedans || (r.width === 0 && r.height === 0)) return
+    cible.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }
 
   /* ---------------------------------------------------------------- */
