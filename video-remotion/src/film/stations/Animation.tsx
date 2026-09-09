@@ -42,14 +42,14 @@ export const Animation: React.FC = () => {
   const frame = useCurrentFrame()
 
   // Le cycle mis en avant suit celui que le personnage joue au meme instant.
-  const actif = frame < t(3.6) ? 'walk' : frame < t(6.4) ? 'run' : frame < t(9) ? 'jump' : 'attack'
-  const iCourbe = Math.min(COURBES.length - 1, Math.floor(lin(frame, t(4.4), t(10.6)) * COURBES.length))
+  const actif = frame < t(4) ? 'walk' : frame < t(6.6) ? 'run' : frame < t(8.8) ? 'jump' : 'attack'
+  const iCourbe = Math.min(COURBES.length - 1, Math.floor(lin(frame, t(4.2), t(9.8)) * COURBES.length))
   const idCourbe = COURBES[iCourbe]
 
   const jalons: { a: number; b: number; texte: string; couleur: string }[] = [
-    { a: 1.7, b: 4.1, texte: 'pelure d\'oignon : les images voisines en fantomes', couleur: C.ambre },
-    { a: 4.1, b: 7.4, texte: 'inertie et suivi calcules apres coup', couleur: C.rose },
-    { a: 7.4, b: 12, texte: 'un cycle est une courbe par os, pas une suite d\'images', couleur: C.menthe },
+    { a: 1.8, b: 4.2, texte: 'pelure d\'oignon : les images voisines en fantomes', couleur: C.ambre },
+    { a: 4.2, b: 7, texte: 'inertie et suivi calcules apres coup', couleur: C.rose },
+    { a: 7, b: 10.5, texte: 'un cycle est une courbe par os, pas une suite d\'images', couleur: C.menthe },
   ]
 
   return (
@@ -134,7 +134,7 @@ export const Animation: React.FC = () => {
         <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2 }}>
           <div style={{
             height: 3, borderRadius: 2, background: C.ambre,
-            width: `${seg(frame, t(0.4), t(11.6)) * 100}%`,
+            width: `${seg(frame, t(0.4), t(10.2)) * 100}%`,
           }} />
         </div>
       </div>

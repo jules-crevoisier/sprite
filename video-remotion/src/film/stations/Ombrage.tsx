@@ -17,7 +17,7 @@ const t = tempsStation('ombrage')
  */
 export const Ombrage: React.FC = () => {
   const frame = useCurrentFrame()
-  const secondePasse = frame >= t(3.5)
+  const secondePasse = frame >= t(3.9)
 
   const stats: { valeur: number; nom: string; couleur: string; a: number }[] = [
     { valeur: D.ombrage.matieres, nom: 'matieres reconnues', couleur: C.ambre, a: 1.3 },

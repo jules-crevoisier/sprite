@@ -63,6 +63,33 @@ export interface Effet {
   champs: string[]
 }
 
+export interface ClipPixl {
+  id: string
+  nom: string
+  ms: number
+  loop: boolean
+  images: string[]
+}
+
+export interface ClipArme extends ClipPixl {
+  /** L'arme seule, sans le personnage : sa silhouette doit se reconnaitre. */
+  seule: string
+}
+
+export interface Arme {
+  id: string
+  nom: string
+  /** Ce que l'arme change au personnage quand il la porte. */
+  pitch: string
+  clips: ClipArme[]
+}
+
+export interface Pixl {
+  taille: number
+  clips: ClipPixl[]
+  armes: Arme[]
+}
+
 export interface Donnees {
   grille: { w: number; h: number; couleurs: string[]; cases: number[] }
   palette: string[]
@@ -88,6 +115,7 @@ export interface Donnees {
     gifOctets: number
     images: number
   }
+  pixl: Pixl
   cadrage: { x: number; y: number; w: number; h: number }
   dialogues: string[]
 }

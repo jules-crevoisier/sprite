@@ -1,9 +1,10 @@
 import React from 'react'
 import { AbsoluteFill, Sequence, useCurrentFrame } from 'remotion'
 import { C, POLICES } from './theme'
-import { DUREE, STATIONS, fenetreStation, s, type PlanVerifiable } from './plan'
+import { DUREE, STATIONS, dans, fenetreStation, s, type PlanVerifiable } from './plan'
 import { Decor, Monde, Plaque, Trame } from './Monde'
 import { Hero } from './Hero'
+import { Pixl } from './Pixl'
 import { Signature } from './Signature'
 import { fenetre, lin } from './mouvement'
 import { Amorce } from './stations/Amorce'
@@ -12,6 +13,7 @@ import { Variantes } from './stations/Variantes'
 import { Detail } from './stations/Detail'
 import { Squelette } from './stations/Squelette'
 import { Animation } from './stations/Animation'
+import { Mascotte } from './stations/Mascotte'
 import { Effets } from './stations/Effets'
 import { Ombrage } from './stations/Ombrage'
 import { Export } from './stations/Export'
@@ -24,6 +26,7 @@ const CONTENUS: Record<string, React.FC> = {
   detail: Detail,
   squelette: Squelette,
   animation: Animation,
+  mascotte: Mascotte,
   effets: Effets,
   ombrage: Ombrage,
   export: Export,
@@ -64,7 +67,7 @@ const GRAIN = ((): string => {
 /** Barre de progression discrete : elle donne la duree sans la commenter. */
 const Progression: React.FC = () => {
   const frame = useCurrentFrame()
-  const opacite = fenetre(frame, s(8), s(79.4), 30, 26)
+  const opacite = fenetre(frame, dans('dessin', 0.5), dans('final', 1.9), 30, 26)
   const station = STATIONS.filter((st) => frame >= s(st.debut)).slice(-1)[0]
   return (
     <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, opacity: opacite }}>
@@ -116,6 +119,7 @@ export const Film: React.FC<{ plan: PlanVerifiable }> = () => (
     </Monde>
 
     <Hero />
+    <Pixl />
     <Signature />
     <Progression />
 

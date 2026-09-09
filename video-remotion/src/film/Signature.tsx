@@ -4,7 +4,7 @@ import { C, POLICES } from '../film/theme'
 import { D } from '../donnees'
 import { fenetre, seg } from './mouvement'
 import { Kicker, Legende } from './atomes'
-import { s } from './plan'
+import { dans } from './plan'
 
 /**
  * Signature de fin, en espace ecran.
@@ -15,8 +15,8 @@ import { s } from './plan'
  */
 export const Signature: React.FC = () => {
   const frame = useCurrentFrame()
-  const entree = fenetre(frame, s(81.6), 1e9, 32, 1)
-  const ligne = seg(frame, s(82.3), s(83.6))
+  const entree = fenetre(frame, dans('final', 4.1), 1e9, 32, 1)
+  const ligne = seg(frame, dans('final', 4.8), dans('final', 6.1))
 
   if (entree < 0.01) return null
 
@@ -38,7 +38,7 @@ export const Signature: React.FC = () => {
           {[C.indigo, C.violet, C.rose].map((couleur, i) => (
             <div key={couleur} style={{
               width: 22, height: 46, background: couleur, borderRadius: 4,
-              transform: `translateY(${(1 - seg(frame, s(81.6) + i * 4, s(82.4) + i * 4)) * 40}px)`,
+              transform: `translateY(${(1 - seg(frame, dans('final', 4.1) + i * 4, dans('final', 4.9) + i * 4)) * 40}px)`,
             }} />
           ))}
         </div>
@@ -57,7 +57,9 @@ export const Signature: React.FC = () => {
       </Kicker>
 
       <Legende taille={17} couleur={C.faible} style={{ marginTop: 26, textAlign: 'center' }}>
-        {D.clips.length} cycles · {D.effets.length} effets de calque · {D.palette.length} couleurs
+        {D.clips.length} cycles riggues · {D.pixl.clips.length
+          + D.pixl.armes.reduce((n, a) => n + a.clips.length, 0)} cycles dessines
+        · {D.effets.length} effets de calque
         <br />chaque image de ce film sort de l&apos;application
       </Legende>
       </div>

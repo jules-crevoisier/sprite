@@ -1,7 +1,7 @@
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion'
 import { D, clip } from '../donnees'
-import { FIN_RECUL, HERO, s } from './plan'
+import { FIN_RECUL, HERO, dans, pendant, s } from './plan'
 import { fenetre, imageDeCycle, lin, piste, seg } from './mouvement'
 import { Sprite } from './atomes'
 import { C } from './theme'
@@ -183,13 +183,12 @@ export const Hero: React.FC = () => {
 
   const contenu = (): React.ReactNode => {
     /* --- ouverture : la grille s'allume, puis devient le sprite --- */
-    if (frame < s(5.9)) {
-      const avancement = avancementGrille(frame)
-      const bascule = lin(frame, s(5.1), s(5.8))
+    if (frame < dans('amorce', 5.9)) {
+      const bascule = lin(frame, dans('amorce', 5.1), dans('amorce', 5.8))
       return (
         <>
           <div style={{ opacity: 1 - bascule }}>
-            <Grille avancement={avancement} echelle={echelle} />
+            <Grille avancement={avancementGrille(frame)} echelle={echelle} />
           </div>
           <div style={{ position: 'absolute', inset: 0, opacity: bascule }}>
             <Sprite src={repos} w={W} h={H} echelle={echelle} />
@@ -199,17 +198,18 @@ export const Hero: React.FC = () => {
     }
 
     /* --- variantes : le personnage passe en revue ses declinaisons --- */
-    if (frame >= s(20.8) && frame < s(22.9)) {
+    if (pendant(frame, 'variantes', 4.8, 6.4)) {
       const n = D.variantes.length
-      const i = Math.min(n - 1, Math.floor(lin(frame, s(20.8), s(22.5)) * n))
+      const i = Math.min(n - 1,
+        Math.floor(lin(frame, dans('variantes', 4.8), dans('variantes', 6.1)) * n))
       return <Sprite src={D.variantes[i].image} w={W} h={H} echelle={echelle} />
     }
 
     /* --- squelette : ossature, poids, deformation, demi-tour --- */
-    if (frame >= s(30.2) && frame < s(40.5)) {
-      const os = fenetre(frame, s(30.2), s(34.4), 26, 22)
-      const poids = fenetre(frame, s(32.4), s(34.6), 22, 18)
-      if (frame < s(34.6)) {
+    if (pendant(frame, 'squelette', 2.2, 10)) {
+      const os = fenetre(frame, dans('squelette', 2.2), dans('squelette', 6.4), 26, 22)
+      const poids = fenetre(frame, dans('squelette', 4.4), dans('squelette', 6.6), 22, 18)
+      if (frame < dans('squelette', 6.6)) {
         return (
           <>
             <Sprite src={repos} w={W} h={H} echelle={echelle} />
@@ -220,7 +220,7 @@ export const Hero: React.FC = () => {
               <Sprite src="sprite/poids.png" w={W} h={H} echelle={echelle} />
             </div>
             <div style={{ opacity: os }}>
-              <Os avancement={seg(frame, s(30.4), s(32.2))} echelle={echelle} />
+              <Os avancement={seg(frame, dans('squelette', 2.4), dans('squelette', 4.2))} echelle={echelle} />
             </div>
           </>
         )
@@ -229,21 +229,24 @@ export const Hero: React.FC = () => {
       // que la matiere qui s'etire se voie, puis le demi-tour enchaine. Le pas
       // plutot que le coup : sur un coup, le bras qui part vite se disloque le
       // temps de deux images, et c'est cela qu'on lirait au lieu du principe.
-      if (frame < s(37)) {
+      if (frame < dans('squelette', 9)) {
         const im = marche.images
-        const i = Math.min(im.length - 1, Math.floor(lin(frame, s(34.8), s(36.6)) * im.length))
+        const i = Math.min(im.length - 1,
+          Math.floor(lin(frame, dans('squelette', 6.8), dans('squelette', 8.6)) * im.length))
         return <Sprite src={im[i]} w={W} h={H} echelle={echelle} />
       }
       const t = D.tour
-      const i = imageDeCycle(frame - s(37), t.length, 70, fps)
+      const i = imageDeCycle(frame - dans('squelette', 9), t.length, 70, fps)
       return <Sprite src={t[i]} w={W} h={H} echelle={echelle} />
     }
 
     /* --- animation : quatre cycles, avec la pelure sur le premier --- */
-    if (frame >= s(41) && frame < s(52.5)) {
-      const choix = frame < s(44.6) ? marche : frame < s(47.4) ? course : frame < s(50) ? saut : coup
-      const i = imageDeCycle(frame - s(41), choix.images.length, choix.ms, fps)
-      const pelure = fenetre(frame, s(42.2), s(44.4), 20, 16)
+    if (pendant(frame, 'animation', 1, 10.5)) {
+      const choix = frame < dans('animation', 4) ? marche
+        : frame < dans('animation', 6.6) ? course
+          : frame < dans('animation', 8.8) ? saut : coup
+      const i = imageDeCycle(frame - dans('animation', 1), choix.images.length, choix.ms, fps)
+      const pelure = fenetre(frame, dans('animation', 2), dans('animation', 4.2), 20, 16)
       return (
         <>
           {pelure > 0.01 ? (
@@ -256,39 +259,47 @@ export const Hero: React.FC = () => {
       )
     }
 
+    /* --- mascotte : il s'efface, mais il continue de respirer --- */
+    if (pendant(frame, 'mascotte', 1, 10)) {
+      const attente = clip('idle')
+      const i = imageDeCycle(frame, attente.images.length, attente.ms, fps)
+      return <Sprite src={attente.images[i]} w={W} h={H} echelle={echelle} />
+    }
+
     /* --- effets : la pile se monte, puis se coupe pour montrer le dessous --- */
-    if (frame >= s(54.2) && frame < s(62.5)) {
+    if (pendant(frame, 'effets', 1.7, 9.5)) {
       const etapes = D.pile.etapes
       // Coupure volontaire a la fin : les effets s'eteignent et le dessin
       // revient intact. C'est la demonstration meme du non destructif.
-      if (frame >= s(60.4) && frame < s(61.4)) {
+      if (pendant(frame, 'effets', 7.9, 8.9)) {
         return <Sprite src={repos} w={W} h={H} echelle={echelle} />
       }
-      const i = Math.min(etapes.length - 1, Math.floor(lin(frame, s(54.4), s(58.6)) * etapes.length))
+      const i = Math.min(etapes.length - 1,
+        Math.floor(lin(frame, dans('effets', 1.9), dans('effets', 6.1)) * etapes.length))
       return <Sprite src={etapes[i]} w={W} h={H} echelle={echelle} />
     }
 
     /* --- ombrage : deux volets sur le meme dessin --- */
-    if (frame >= s(63.6) && frame < s(69)) {
-      if (frame < s(66.4)) {
+    if (pendant(frame, 'ombrage', 1.1, 6)) {
+      if (frame < dans('ombrage', 3.9)) {
         return (
           <Volet
             avant="sprite/ombre-avant.png" apres="sprite/ombre-apres.png"
-            position={1 - seg(frame, s(63.9), s(65.9))} echelle={echelle}
+            position={1 - seg(frame, dans('ombrage', 1.4), dans('ombrage', 3.4))} echelle={echelle}
           />
         )
       }
       return (
         <Volet
           avant="sprite/ombre-apres.png" apres="sprite/ombre-lisse.png"
-          position={1 - seg(frame, s(66.6), s(68.4))} echelle={echelle}
+          position={1 - seg(frame, dans('ombrage', 4.1), dans('ombrage', 5.9))} echelle={echelle}
         />
       )
     }
 
     /* --- livraison et final : le cycle de marche, celui qui part dans le jeu --- */
-    if (frame >= s(69.6)) {
-      const i = imageDeCycle(frame - s(69.6), marche.images.length, marche.ms, fps)
+    if (frame >= dans('export', 0.6)) {
+      const i = imageDeCycle(frame - dans('export', 0.6), marche.images.length, marche.ms, fps)
       return <Sprite src={marche.images[i]} w={W} h={H} echelle={echelle} />
     }
 

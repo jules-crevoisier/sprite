@@ -41,7 +41,7 @@ function trouverChromium() {
   return null
 }
 
-for (const d of ['sprite', 'ui']) {
+for (const d of ['sprite', 'pixl', 'ui']) {
   rmSync(join(PUBLIC, d), { recursive: true, force: true })
   mkdirSync(join(PUBLIC, d), { recursive: true })
 }
@@ -96,6 +96,9 @@ const moteur = await page.evaluate(async () => {
   const { buildGodotSpriteFrames } = await import('/src/export/godot.ts')
   const { encodeGif } = await import('/src/export/gif.ts')
   const { TOOL_LIST } = await import('/src/tools/index.ts')
+  const { CLIPS_PIXL } = await import('/src/ui/mascot-clips.ts')
+  const { imageDePose, TAILLE: TAILLE_PIXL } = await import('/src/ui/mascot-anim.ts')
+  const { ARMES, clipsArmes, imageDePoseArmee, armeSeule } = await import('/src/ui/mascot-armes.ts')
 
   const versPng = (bm) => {
     const cv = document.createElement('canvas')
@@ -310,6 +313,36 @@ const moteur = await page.evaluate(async () => {
     out.data.pile = { etapes: cumul, noms: pile.map((e) => e.kind) }
   }
 
+  /* --- la mascotte, ses cycles et ses armes ---------------------------- */
+  {
+    // Pixl n'est pas produite par le moteur de deformation : ses cycles sont
+    // poses image par image dans le logiciel. On les prend donc tels quels,
+    // pose par pose, plutot que de les recalculer.
+    out.data.pixl = {
+      taille: TAILLE_PIXL,
+      clips: CLIPS_PIXL.map((clip) => ({
+        id: clip.id, nom: clip.nom, ms: clip.ms, loop: clip.loop,
+        images: clip.poses.map((pose, i) =>
+          pousser(`pixl/${clip.id}-${String(i).padStart(2, '0')}.png`, imageDePose(pose))),
+      })),
+      // Les armes sont une couche par-dessus les memes poses : le film le
+      // montre en affichant l'arme seule a cote du cycle arme.
+      armes: ARMES.map((arme) => ({
+        id: arme.id, nom: arme.nom, pitch: arme.pitch,
+        clips: clipsArmes(arme, CLIPS_PIXL).map((clip) => ({
+          id: clip.id, nom: clip.nom, ms: clip.ms, loop: clip.loop,
+          images: clip.images.map((im, i) =>
+            pousser(`pixl/${clip.id}-${String(i).padStart(2, '0')}.png`,
+              imageDePoseArmee(im.pose, arme, im.position))),
+          // L'arme seule, sur la premiere image : de quoi la reconnaitre a sa
+          // silhouette, ce qui est tout l'interet d'en avoir trois.
+          seule: pousser(`pixl/arme-${arme.id}.png`,
+            armeSeule(clip.images[0].pose, arme, clip.images[0].position)),
+        })),
+      })),
+    }
+  }
+
   /* --- export game dev ----------------------------------------------- */
   {
     // On monte un vrai sprite anime a partir du cycle de marche, puis on le
@@ -407,6 +440,19 @@ await page.evaluate(async () => {
 await sleep(600)
 await capturer('calques', '#dock-right .panel[data-panel="layers"]')
 await capturer('effets', '.fx-panel')
+
+// La planche de Pixl n'a pas de commande : elle se declenche a la souris dans
+// l'application. On appelle donc directement la fonction qui l'ouvre.
+try {
+  await page.evaluate(async () => {
+    const { plancheDePixl } = await import('/src/ui/mascot-ui.ts')
+    plancheDePixl(window.pixelforge)
+  })
+  await sleep(900)
+  await capturer('dlg-pixl', '.modal')
+  await page.keyboard.press('Escape')
+  await sleep(400)
+} catch (e) { console.log(`  planche de Pixl indisponible : ${e.message}`) }
 
 const dialogues = [
   ['sprite.ramp', 'dlg-rampe'], ['sprite.shade', 'dlg-ombrage'],

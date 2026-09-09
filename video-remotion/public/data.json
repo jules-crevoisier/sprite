@@ -4985,6 +4985,284 @@
    "degrade"
   ]
  },
+ "pixl": {
+  "taille": 32,
+  "clips": [
+   {
+    "id": "repos",
+    "nom": "Repos",
+    "ms": 150,
+    "loop": true,
+    "images": [
+     "pixl/repos-00.png",
+     "pixl/repos-01.png",
+     "pixl/repos-02.png",
+     "pixl/repos-03.png",
+     "pixl/repos-04.png",
+     "pixl/repos-05.png",
+     "pixl/repos-06.png",
+     "pixl/repos-07.png"
+    ]
+   },
+   {
+    "id": "marche",
+    "nom": "Marche",
+    "ms": 110,
+    "loop": true,
+    "images": [
+     "pixl/marche-00.png",
+     "pixl/marche-01.png",
+     "pixl/marche-02.png",
+     "pixl/marche-03.png",
+     "pixl/marche-04.png",
+     "pixl/marche-05.png",
+     "pixl/marche-06.png",
+     "pixl/marche-07.png"
+    ]
+   },
+   {
+    "id": "course",
+    "nom": "Course",
+    "ms": 80,
+    "loop": true,
+    "images": [
+     "pixl/course-00.png",
+     "pixl/course-01.png",
+     "pixl/course-02.png",
+     "pixl/course-03.png",
+     "pixl/course-04.png",
+     "pixl/course-05.png"
+    ]
+   },
+   {
+    "id": "saut",
+    "nom": "Saut",
+    "ms": 80,
+    "loop": false,
+    "images": [
+     "pixl/saut-00.png",
+     "pixl/saut-01.png",
+     "pixl/saut-02.png",
+     "pixl/saut-03.png",
+     "pixl/saut-04.png",
+     "pixl/saut-05.png",
+     "pixl/saut-06.png",
+     "pixl/saut-07.png",
+     "pixl/saut-08.png"
+    ]
+   },
+   {
+    "id": "attaque",
+    "nom": "Attaque",
+    "ms": 80,
+    "loop": false,
+    "images": [
+     "pixl/attaque-00.png",
+     "pixl/attaque-01.png",
+     "pixl/attaque-02.png",
+     "pixl/attaque-03.png",
+     "pixl/attaque-04.png",
+     "pixl/attaque-05.png",
+     "pixl/attaque-06.png",
+     "pixl/attaque-07.png",
+     "pixl/attaque-08.png"
+    ]
+   },
+   {
+    "id": "degats",
+    "nom": "Degats",
+    "ms": 90,
+    "loop": false,
+    "images": [
+     "pixl/degats-00.png",
+     "pixl/degats-01.png",
+     "pixl/degats-02.png",
+     "pixl/degats-03.png",
+     "pixl/degats-04.png",
+     "pixl/degats-05.png"
+    ]
+   }
+  ],
+  "armes": [
+   {
+    "id": "epee",
+    "nom": "Epee",
+    "pitch": "La lame double la hauteur de la silhouette et donne la direction du coup avant le corps.",
+    "clips": [
+     {
+      "id": "repos-epee",
+      "nom": "Repos · Epee",
+      "ms": 150,
+      "loop": true,
+      "images": [
+       "pixl/repos-epee-00.png",
+       "pixl/repos-epee-01.png",
+       "pixl/repos-epee-02.png",
+       "pixl/repos-epee-03.png",
+       "pixl/repos-epee-04.png",
+       "pixl/repos-epee-05.png",
+       "pixl/repos-epee-06.png",
+       "pixl/repos-epee-07.png"
+      ],
+      "seule": "pixl/arme-epee.png"
+     },
+     {
+      "id": "marche-epee",
+      "nom": "Marche · Epee",
+      "ms": 110,
+      "loop": true,
+      "images": [
+       "pixl/marche-epee-00.png",
+       "pixl/marche-epee-01.png",
+       "pixl/marche-epee-02.png",
+       "pixl/marche-epee-03.png",
+       "pixl/marche-epee-04.png",
+       "pixl/marche-epee-05.png",
+       "pixl/marche-epee-06.png",
+       "pixl/marche-epee-07.png"
+      ],
+      "seule": "pixl/arme-epee.png"
+     },
+     {
+      "id": "coup-epee",
+      "nom": "Coup · Epee",
+      "ms": 80,
+      "loop": false,
+      "images": [
+       "pixl/coup-epee-00.png",
+       "pixl/coup-epee-01.png",
+       "pixl/coup-epee-02.png",
+       "pixl/coup-epee-03.png",
+       "pixl/coup-epee-04.png",
+       "pixl/coup-epee-05.png",
+       "pixl/coup-epee-06.png",
+       "pixl/coup-epee-07.png",
+       "pixl/coup-epee-08.png"
+      ],
+      "seule": "pixl/arme-epee.png"
+     }
+    ]
+   },
+   {
+    "id": "marteau",
+    "nom": "Marteau",
+    "pitch": "La masse est au bout du bras de levier : le meme deplacement se lit plus lourd.",
+    "clips": [
+     {
+      "id": "repos-marteau",
+      "nom": "Repos · Marteau",
+      "ms": 150,
+      "loop": true,
+      "images": [
+       "pixl/repos-marteau-00.png",
+       "pixl/repos-marteau-01.png",
+       "pixl/repos-marteau-02.png",
+       "pixl/repos-marteau-03.png",
+       "pixl/repos-marteau-04.png",
+       "pixl/repos-marteau-05.png",
+       "pixl/repos-marteau-06.png",
+       "pixl/repos-marteau-07.png"
+      ],
+      "seule": "pixl/arme-marteau.png"
+     },
+     {
+      "id": "marche-marteau",
+      "nom": "Marche · Marteau",
+      "ms": 110,
+      "loop": true,
+      "images": [
+       "pixl/marche-marteau-00.png",
+       "pixl/marche-marteau-01.png",
+       "pixl/marche-marteau-02.png",
+       "pixl/marche-marteau-03.png",
+       "pixl/marche-marteau-04.png",
+       "pixl/marche-marteau-05.png",
+       "pixl/marche-marteau-06.png",
+       "pixl/marche-marteau-07.png"
+      ],
+      "seule": "pixl/arme-marteau.png"
+     },
+     {
+      "id": "coup-marteau",
+      "nom": "Coup · Marteau",
+      "ms": 80,
+      "loop": false,
+      "images": [
+       "pixl/coup-marteau-00.png",
+       "pixl/coup-marteau-01.png",
+       "pixl/coup-marteau-02.png",
+       "pixl/coup-marteau-03.png",
+       "pixl/coup-marteau-04.png",
+       "pixl/coup-marteau-05.png",
+       "pixl/coup-marteau-06.png",
+       "pixl/coup-marteau-07.png",
+       "pixl/coup-marteau-08.png"
+      ],
+      "seule": "pixl/arme-marteau.png"
+     }
+    ]
+   },
+   {
+    "id": "baton",
+    "nom": "Baton",
+    "pitch": "La gemme est le seul point clair : c'est elle qu'on suit, donc elle decrit le plus grand arc.",
+    "clips": [
+     {
+      "id": "repos-baton",
+      "nom": "Repos · Baton",
+      "ms": 150,
+      "loop": true,
+      "images": [
+       "pixl/repos-baton-00.png",
+       "pixl/repos-baton-01.png",
+       "pixl/repos-baton-02.png",
+       "pixl/repos-baton-03.png",
+       "pixl/repos-baton-04.png",
+       "pixl/repos-baton-05.png",
+       "pixl/repos-baton-06.png",
+       "pixl/repos-baton-07.png"
+      ],
+      "seule": "pixl/arme-baton.png"
+     },
+     {
+      "id": "marche-baton",
+      "nom": "Marche · Baton",
+      "ms": 110,
+      "loop": true,
+      "images": [
+       "pixl/marche-baton-00.png",
+       "pixl/marche-baton-01.png",
+       "pixl/marche-baton-02.png",
+       "pixl/marche-baton-03.png",
+       "pixl/marche-baton-04.png",
+       "pixl/marche-baton-05.png",
+       "pixl/marche-baton-06.png",
+       "pixl/marche-baton-07.png"
+      ],
+      "seule": "pixl/arme-baton.png"
+     },
+     {
+      "id": "coup-baton",
+      "nom": "Coup · Baton",
+      "ms": 80,
+      "loop": false,
+      "images": [
+       "pixl/coup-baton-00.png",
+       "pixl/coup-baton-01.png",
+       "pixl/coup-baton-02.png",
+       "pixl/coup-baton-03.png",
+       "pixl/coup-baton-04.png",
+       "pixl/coup-baton-05.png",
+       "pixl/coup-baton-06.png",
+       "pixl/coup-baton-07.png",
+       "pixl/coup-baton-08.png"
+      ],
+      "seule": "pixl/arme-baton.png"
+     }
+    ]
+   }
+  ]
+ },
  "export": {
   "planche": {
    "w": 391,

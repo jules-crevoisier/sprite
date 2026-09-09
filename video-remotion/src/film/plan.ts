@@ -6,10 +6,17 @@ import { RECUL, type Cle } from './mouvement'
  * Le montage : ou se trouve chaque sequence dans le temps et dans l'espace.
  *
  * Le film ne coupe pas d'un panneau a l'autre — il se deplace dans un plan.
- * Chaque sequence occupe une position dans un monde de treize mille pixels de
+ * Chaque sequence occupe une position dans un monde de quinze mille pixels de
  * large, et la camera va de l'une a l'autre. C'est ce qui permet, a la fin, de
  * reculer d'un seul mouvement et de montrer tout le chemin parcouru : un
  * enchainement de fondus ne raconterait rien de tel.
+ *
+ * Tout ce qui suit se deduit du tableau des stations. Aucun instant n'est
+ * ecrit en secondes absolues : ils le sont en secondes depuis le debut de leur
+ * station. Deplacer une sequence, ou en inserer une, ne demande alors que de
+ * corriger deux nombres ici, au lieu de retrouver quarante instants disperses
+ * dans dix fichiers — ce qui a ete appris en inserant la station de la
+ * mascotte au milieu d'un montage deja regle.
  */
 export const FPS = 60
 /** Secondes vers images. */
@@ -34,19 +41,29 @@ export interface Station {
  */
 export const STATIONS: Station[] = [
   { id: 'amorce', titre: 'Un pixel', kicker: 'PixelForge', debut: 0, fin: 7.5, monde: { x: 0, y: 0 }, accent: C.indigo },
-  { id: 'dessin', titre: 'Dessiner', kicker: 'Atelier', debut: 7.5, fin: 16.5, monde: { x: 2200, y: 0 }, accent: C.cyan },
-  { id: 'variantes', titre: 'Decliner', kicker: 'Assiste', debut: 16.5, fin: 23.5, monde: { x: 4400, y: 0 }, accent: C.violet },
-  { id: 'detail', titre: 'Matieres', kicker: 'Generateur', debut: 23.5, fin: 29.5, monde: { x: 4400, y: 1300 }, accent: C.menthe },
-  { id: 'squelette', titre: 'Rigger', kicker: 'Squelette', debut: 29.5, fin: 40.5, monde: { x: 6600, y: 1300 }, accent: C.rose },
-  { id: 'animation', titre: 'Animer', kicker: 'Banc de montage', debut: 40.5, fin: 52.5, monde: { x: 8800, y: 1300 }, accent: C.ambre },
-  { id: 'effets', titre: 'Habiller', kicker: 'Effets de calque', debut: 52.5, fin: 62.5, monde: { x: 8800, y: -1200 }, accent: C.indigo },
-  { id: 'ombrage', titre: 'Ombrer', kicker: 'Assiste', debut: 62.5, fin: 69, monde: { x: 11000, y: -1200 }, accent: C.ambre },
-  { id: 'export', titre: 'Livrer', kicker: 'Export moteur', debut: 69, fin: 77.5, monde: { x: 13200, y: -1200 }, accent: C.menthe },
-  { id: 'final', titre: 'PixelForge', kicker: 'Le chemin', debut: 77.5, fin: 84.5, monde: { x: 6600, y: 120 }, accent: C.violet },
+  { id: 'dessin', titre: 'Dessiner', kicker: 'Atelier', debut: 7.5, fin: 16, monde: { x: 2200, y: 0 }, accent: C.cyan },
+  { id: 'variantes', titre: 'Decliner', kicker: 'Assiste', debut: 16, fin: 22.5, monde: { x: 4400, y: 0 }, accent: C.violet },
+  { id: 'detail', titre: 'Matieres', kicker: 'Generateur', debut: 22.5, fin: 28, monde: { x: 4400, y: 1300 }, accent: C.menthe },
+  { id: 'squelette', titre: 'Rigger', kicker: 'Squelette', debut: 28, fin: 38, monde: { x: 6600, y: 1300 }, accent: C.rose },
+  { id: 'animation', titre: 'Animer', kicker: 'Banc de montage', debut: 38, fin: 48.5, monde: { x: 8800, y: 1300 }, accent: C.ambre },
+  { id: 'mascotte', titre: 'Pixl', kicker: 'Mascotte', debut: 48.5, fin: 58.5, monde: { x: 11000, y: 1300 }, accent: C.violet },
+  { id: 'effets', titre: 'Habiller', kicker: 'Effets de calque', debut: 58.5, fin: 68, monde: { x: 11000, y: -1200 }, accent: C.indigo },
+  { id: 'ombrage', titre: 'Ombrer', kicker: 'Assiste', debut: 68, fin: 74, monde: { x: 13200, y: -1200 }, accent: C.ambre },
+  { id: 'export', titre: 'Livrer', kicker: 'Export moteur', debut: 74, fin: 82, monde: { x: 15400, y: -1200 }, accent: C.menthe },
+  { id: 'final', titre: 'PixelForge', kicker: 'Le chemin', debut: 82, fin: 89, monde: { x: 7700, y: 120 }, accent: C.violet },
 ]
 
 export const DUREE_S = STATIONS[STATIONS.length - 1].fin
 export const DUREE = s(DUREE_S)
+
+const station = (id: string): Station => STATIONS.find((st) => st.id === id) ?? STATIONS[0]
+
+/** Instant absolu, exprime en secondes depuis le debut d'une station. */
+export const dans = (id: string, sec: number): number => s(station(id).debut + sec)
+
+/** Vrai pendant une tranche de station, bornes en secondes locales. */
+export const pendant = (frame: number, id: string, a: number, b: number): boolean =>
+  frame >= dans(id, a) && frame < dans(id, b)
 
 /**
  * Marge de montage : chaque sequence est montee un peu avant d'etre regardee
@@ -55,9 +72,9 @@ export const DUREE = s(DUREE_S)
  */
 export const MARGE = s(1.2)
 
-export const fenetreStation = (station: Station): { from: number; duree: number } => {
-  const from = Math.max(0, s(station.debut) - MARGE)
-  const fin = Math.min(DUREE, s(station.fin) + MARGE)
+export const fenetreStation = (st: Station): { from: number; duree: number } => {
+  const from = Math.max(0, s(st.debut) - MARGE)
+  const fin = Math.min(DUREE, s(st.fin) + MARGE)
   return { from, duree: fin - from }
 }
 
@@ -73,7 +90,10 @@ export const DEBUT_RECUL = s(1.3)
 export const REPOS_OUVERTURE = measureSpring({ fps: FPS, config: RECUL, threshold: 0.001 })
 export const FIN_RECUL = DEBUT_RECUL + REPOS_OUVERTURE
 
-const centre = (id: string) => STATIONS.find((st) => st.id === id)?.monde ?? { x: 0, y: 0 }
+/** Delai d'arrivee de la camera sur une station, en secondes. */
+const ARRIVEE_CAMERA = 0.85
+/** Le recul final est long : c'est lui le mouvement, pas un raccord. */
+const ARRIVEE_FINALE = 3.1
 
 /**
  * Camera : x, y du point regarde, puis zoom.
@@ -85,30 +105,25 @@ const centre = (id: string) => STATIONS.find((st) => st.id === id)?.monde ?? { x
  */
 export const CAMERA: Cle[] = (() => {
   const cles: Cle[] = []
-  const pose = (sec: number, id: string, mode: Cle['mode'], zoom = 1) => {
-    const m = centre(id)
-    cles.push({ f: s(sec), v: [m.x, m.y, zoom], mode })
-  }
-  pose(0, 'amorce', 'lineaire')
-  pose(7.5, 'amorce', 'lineaire')
-  pose(8.35, 'dessin', 'fouet')
-  pose(16.5, 'dessin', 'lineaire')
-  pose(17.35, 'variantes', 'fouet')
-  pose(23.5, 'variantes', 'lineaire')
-  pose(24.3, 'detail', 'fouet')
-  pose(29.5, 'detail', 'lineaire')
-  pose(30.4, 'squelette', 'fouet')
-  pose(40.5, 'squelette', 'lineaire')
-  pose(41.35, 'animation', 'fouet')
-  pose(52.5, 'animation', 'lineaire')
-  pose(53.4, 'effets', 'fouet')
-  pose(62.5, 'effets', 'lineaire')
-  pose(63.35, 'ombrage', 'fouet')
-  pose(69, 'ombrage', 'lineaire')
-  pose(69.85, 'export', 'fouet')
-  pose(77.5, 'export', 'lineaire')
-  pose(80.6, 'final', 'doux', 0.115)
-  pose(84.5, 'final', 'lineaire', 0.128)
+  STATIONS.forEach((st, i) => {
+    const finale = i === STATIONS.length - 1
+    const v = [st.monde.x, st.monde.y, finale ? 0.105 : 1]
+    if (i === 0) cles.push({ f: s(st.debut), v, mode: 'lineaire' })
+    else {
+      cles.push({
+        f: dans(st.id, finale ? ARRIVEE_FINALE : ARRIVEE_CAMERA),
+        v,
+        mode: finale ? 'doux' : 'fouet',
+      })
+    }
+    // Cle de tenue : sans elle la camera partirait vers la station suivante
+    // des son arrivee, au lieu de s'arreter sur celle qu'on regarde.
+    cles.push({
+      f: s(st.fin),
+      v: finale ? [st.monde.x, st.monde.y, 0.117] : v,
+      mode: 'lineaire',
+    })
+  })
   return cles
 })()
 
@@ -119,32 +134,82 @@ export const CAMERA: Cle[] = (() => {
  * espace ecran et non dans le monde, sinon chaque panoramique l'emporterait
  * hors champ et le film redeviendrait une suite de plans separes.
  */
-export const HERO: Cle[] = [
-  // On tient l'echelle extreme presque une seconde : le recul n'a de valeur
-  // que si l'on a d'abord eu le temps de ne voir que des carres de couleur.
-  { f: s(0), v: [960, 660, 26] },
-  { f: DEBUT_RECUL, v: [960, 660, 26], mode: 'lineaire' },
-  { f: FIN_RECUL, v: [960, 500, 13], mode: 'recul' },
-  { f: s(6.4), v: [960, 500, 13], mode: 'lineaire' },
-  { f: s(7.9), v: [372, 566, 10], mode: 'ressort' },
-  { f: s(16.5), v: [372, 566, 10], mode: 'lineaire' },
-  { f: s(17.5), v: [960, 452, 9], mode: 'ressort' },
-  { f: s(23.5), v: [960, 452, 9], mode: 'lineaire' },
-  { f: s(24.4), v: [1620, 258, 4], mode: 'ressort' },
-  { f: s(29.5), v: [1620, 258, 4], mode: 'lineaire' },
-  { f: s(30.5), v: [606, 546, 12], mode: 'ressort' },
-  { f: s(40.5), v: [606, 546, 12], mode: 'lineaire' },
-  { f: s(41.5), v: [576, 486, 11], mode: 'ressort' },
-  { f: s(52.5), v: [576, 486, 11], mode: 'lineaire' },
-  { f: s(53.5), v: [548, 540, 12], mode: 'ressort' },
-  { f: s(62.5), v: [548, 540, 12], mode: 'lineaire' },
-  { f: s(63.4), v: [960, 528, 14], mode: 'ressort' },
-  { f: s(69), v: [960, 528, 14], mode: 'lineaire' },
-  { f: s(70), v: [270, 640, 6], mode: 'ressort' },
-  { f: s(77.5), v: [270, 640, 6], mode: 'lineaire' },
-  { f: s(79.6), v: [960, 892, 6], mode: 'ressort' },
-  { f: s(84.5), v: [960, 892, 6], mode: 'lineaire' },
-]
+const POSES_HERO: Record<string, number[]> = {
+  dessin: [372, 566, 10],
+  variantes: [960, 452, 9],
+  detail: [1620, 258, 4],
+  squelette: [606, 546, 12],
+  animation: [576, 486, 11],
+  // Sur la station de la mascotte il s'efface dans un coin : c'est elle
+  // qu'on regarde, et deux sprites de meme taille se disputeraient le cadre.
+  mascotte: [1668, 246, 4],
+  effets: [548, 540, 12],
+  ombrage: [960, 528, 14],
+  export: [270, 640, 6],
+  final: [960, 892, 6],
+}
+
+/** Delai d'arrivee du personnage sur une station, en secondes. */
+const ARRIVEE_HERO: Record<string, number> = { final: 2.1 }
+
+export const HERO: Cle[] = (() => {
+  const cles: Cle[] = [
+    // On tient l'echelle extreme une seconde et demie : le recul n'a de
+    // valeur que si l'on a d'abord eu le temps de ne voir que des carres.
+    { f: s(0), v: [960, 660, 26] },
+    { f: DEBUT_RECUL, v: [960, 660, 26], mode: 'lineaire' },
+    { f: FIN_RECUL, v: [960, 500, 13], mode: 'recul' },
+    { f: s(STATIONS[0].fin), v: [960, 500, 13], mode: 'lineaire' },
+  ]
+  for (const st of STATIONS.slice(1)) {
+    const v = POSES_HERO[st.id]
+    if (!v) continue
+    cles.push({ f: dans(st.id, ARRIVEE_HERO[st.id] ?? 1), v, mode: 'ressort' })
+    cles.push({ f: s(st.fin), v, mode: 'lineaire' })
+  }
+  return cles
+})()
+
+/**
+ * Trajet de la mascotte.
+ *
+ * Elle entre une fois le dessin allume et ne repart plus : elle traverse tout
+ * le film au ras du cadre, prend le centre sur sa propre station, puis revient
+ * se ranger a cote du personnage. C'est l'identite du produit — elle ne peut
+ * pas se contenter d'un plan a elle au milieu du film.
+ */
+const POSES_PIXL: Record<string, number[]> = {
+  amorce: [960, 966, 4],
+  dessin: [790, 980, 4],
+  variantes: [1080, 968, 4],
+  detail: [1258, 950, 4],
+  squelette: [762, 990, 4],
+  animation: [1500, 950, 4],
+  mascotte: [520, 566, 10],
+  effets: [700, 986, 4],
+  ombrage: [900, 986, 4],
+  export: [1200, 950, 4],
+  final: [1214, 916, 4],
+}
+
+export const ENTREE_PIXL = dans('amorce', 5.5)
+
+export const PIXL: Cle[] = (() => {
+  const cles: Cle[] = [
+    // Elle arrive par la droite, hors cadre : on la voit entrer en courant
+    // plutot qu'apparaitre sur place.
+    { f: ENTREE_PIXL, v: [2060, 966, 4] },
+    { f: ENTREE_PIXL + s(1.2), v: POSES_PIXL.amorce, mode: 'fouet' },
+    { f: s(STATIONS[0].fin), v: POSES_PIXL.amorce, mode: 'lineaire' },
+  ]
+  for (const st of STATIONS.slice(1)) {
+    const v = POSES_PIXL[st.id]
+    if (!v) continue
+    cles.push({ f: dans(st.id, st.id === 'final' ? 2.1 : 1.1), v, mode: 'ressort' })
+    cles.push({ f: s(st.fin), v, mode: 'lineaire' })
+  }
+  return cles
+})()
 
 /** Plan serialisable, pour la verification hors navigateur. */
 export interface PlanVerifiable {

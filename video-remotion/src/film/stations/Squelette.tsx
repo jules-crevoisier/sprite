@@ -21,10 +21,10 @@ export const Squelette: React.FC = () => {
 
   /** Les etiquettes suivent ce que le personnage est en train de faire. */
   const jalons: { a: number; b: number; texte: string; couleur: string }[] = [
-    { a: 0.8, b: 3.2, texte: 'modele humanoide pose sur le dessin', couleur: C.rose },
-    { a: 3.0, b: 5.2, texte: 'liaison automatique : un os par pixel', couleur: C.ambre },
-    { a: 5.2, b: 7.6, texte: 'deformation pixel, membres a deux segments', couleur: C.menthe },
-    { a: 7.4, b: 11, texte: 'demi-tour pseudo-3D', couleur: C.cyan },
+    { a: 2, b: 4.4, texte: 'modele humanoide pose sur le dessin', couleur: C.rose },
+    { a: 4.3, b: 6.6, texte: 'liaison automatique : un os par pixel', couleur: C.ambre },
+    { a: 6.6, b: 8.9, texte: 'deformation pixel, membres a deux segments', couleur: C.menthe },
+    { a: 8.9, b: 10.2, texte: 'demi-tour pseudo-3D', couleur: C.cyan },
   ]
 
   return (
@@ -88,7 +88,7 @@ export const Squelette: React.FC = () => {
 
       <div style={{
         position: 'absolute', left: 120, top: 208,
-        opacity: fenetre(frame, t(5.4), t(7.4), 20, 14),
+        opacity: fenetre(frame, t(6.6), t(8.9), 20, 14),
       }}>
         <div style={{
           fontFamily: POLICES.pixel, fontSize: 30, color: C.menthe, letterSpacing: '0.04em',
