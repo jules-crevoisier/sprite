@@ -15,7 +15,7 @@ import {
   DEFAULT_RECIPE, DEFAULT_SHADE, antiAlias, autoShade, buildRamp,
 } from '../smart/shading'
 import {
-  champAuto, hauteurSuggeree, tourner, masse, trousInterieurs, couleursEtrangeres,
+  champAuto, hauteurSuggeree, tourner, masse, trousInterieurs, couleursEtrangeres, profilDe,
 } from '../smart/depth'
 import { comblerLesFentes, proprietaireUnique } from '../smart/combler'
 import { el, checkbox, numberInput, select, slider } from './dom'
@@ -609,6 +609,8 @@ export function rotationDialog(ed: Editor): void {
   const source = cel.bitmap.clone()
   const angles = { lacet: 0, tangage: 0, roulis: 0 }
   const relief = { hauteur: hauteurSuggeree(source), galbe: 0.5 }
+  // 0 = « au relief de decider ». Le curseur ne sert qu'a contredire ce choix.
+  let profilChoisi = 0
   const masseSource = masse(source)
   const trousSource = trousInterieurs(source)
 
@@ -620,25 +622,27 @@ export function rotationDialog(ed: Editor): void {
     const cible = ed.peekCel()
     if (!cible) return
     const champ = champAuto(source, relief)
-    const tourne = tourner(source, champ, angles)
+    const profil = profilChoisi || profilDe(source, champ)
+    const tourne = tourner(source, champ, angles, profilChoisi ? { profil } : {})
     cible.bitmap.copyFrom(tourne)
     ed.events.emit('doc', undefined)
     apercu.show(cible.bitmap)
 
-    // Les trois mesures du banc, sous les yeux : une pose qui perd de la
-    // matiere, se perce ou invente une couleur se voit ici avant d'etre
-    // posee, au lieu d'être decouverte a la lecture de l'animation.
+    // Ce qu'on annonce, et ce qu'on obtient. Comprimer un dessin lui retire
+    // de la largeur : perdre de la matiere est normal, en perdre bien plus
+    // que la compression ne le prevoit ne l'est pas.
     const m = masse(tourne)
-    const perte = masseSource ? Math.round((1 - m / masseSource) * 100) : 0
+    const prevu = profil + (1 - profil) * Math.abs(Math.cos(angles.lacet))
+    const reel = masseSource ? m / masseSource : 1
     const perces = trousInterieurs(tourne) - trousSource
     const etrangeres = couleursEtrangeres(source, tourne).length
     const alertes: string[] = []
-    if (perte > 12) alertes.push(`${perte}% de matière perdue`)
+    if (reel < prevu - 0.15) alertes.push(`${Math.round((prevu - reel) * 100)}% de matière perdue en trop`)
     if (perces > 0) alertes.push(`${perces} trou(s) ouvert(s)`)
     if (etrangeres > 0) alertes.push(`${etrangeres} couleur(s) etrangere(s)`)
     info.textContent = alertes.length
       ? `Attention : ${alertes.join(', ')}. Baissez l'angle, ou montez le relief.`
-      : `${m} pixels, palette intacte, silhouette pleine.`
+      : `${m} pixels, ${Math.round(prevu * 100)}% de la largeur de face, palette intacte.`
     info.style.color = alertes.length ? 'var(--warn, #e0a33e)' : 'var(--text-faint)'
   }
 
@@ -658,19 +662,23 @@ export function rotationDialog(ed: Editor): void {
     el('label', { title: 'Cone, dome, ou plateau a bords tombants' }, 'Galbe'),
     slider(0.15, 1.2, relief.galbe, 0.05, (v) => { relief.galbe = v; apply() },
       (v) => (v < 0.35 ? 'plateau' : v < 0.75 ? 'dome' : 'cone')),
+    el('label', { title: 'Largeur du personnage vu exactement de profil' }, 'Profil'),
+    slider(0, 0.85, 0, 0.05, (v) => { profilChoisi = v; apply() },
+      (v) => (v ? `${Math.round(v * 100)}% de la face` : 'depuis le relief')),
   )
 
   const body = el('div', null,
     el('p', { class: 'form-note', style: { margin: '0 0 8px', lineHeight: '1.6' } },
-      'Le dessin est la tranche du milieu d\'un volume : le relief dit de combien '
-      + 'la matière deborde de chaque cote, devine a partir de la silhouette. '
-      + 'Aucune couleur n\'est mélangée — les pixels sont deplaces, jamais interpoles.'),
+      'Le personnage reste dessiné de face et s\'amincit à mesure qu\'il se tourne, '
+      + 'pendant que son relief fait glisser ses volumes sur le côté. '
+      + 'Aucune couleur n\'est mélangée — les pixels sont déplacés, jamais interpolés.'),
     apercu.node,
     controls,
     info,
     el('p', { class: 'form-note' },
-      'Le dos n\'existe pas dans le dessin : au-dela d\'un demi-tour, le résultat '
-      + 'est une base a reprendre au crayon, pas une vue juste.'),
+      'Un dessin de face ne contient pas son profil : ce qu\'on obtient est une '
+      + 'base juste de proportions, à reprendre au crayon pour ce que le trois '
+      + 'quarts révélerait. Le curseur Profil dit sa largeur au quart de tour.'),
   )
 
   apply()

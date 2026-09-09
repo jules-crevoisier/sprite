@@ -179,19 +179,6 @@ export interface Angles {
 
 export const SANS_ROTATION: Angles = { lacet: 0, tangage: 0, roulis: 0 }
 
-/** Matrice 3x3 d'une rotation lacet puis tangage puis roulis. */
-function matrice(a: Angles): number[] {
-  const cy = Math.cos(a.lacet), sy = Math.sin(a.lacet)
-  const cp = Math.cos(a.tangage), sp = Math.sin(a.tangage)
-  const cr = Math.cos(a.roulis), sr = Math.sin(a.roulis)
-  // R = Rz(roulis) * Rx(tangage) * Ry(lacet)
-  return [
-    cr * cy + sr * sp * sy, -sr * cp, cr * sy - sr * sp * cy,
-    sr * cy - cr * sp * sy, cr * cp, sr * sy + cr * sp * cy,
-    -cp * sy, -sp, cp * cy,
-  ]
-}
-
 export interface OptionsRotation {
   /** Centre de rotation en x ; par defaut le centre de la boite englobante. */
   cx?: number
@@ -202,23 +189,74 @@ export interface OptionsRotation {
    * tampon de profondeur.
    */
   sortieZ?: Float32Array
+  /**
+   * Largeur du profil, en fraction de la largeur de face. Par defaut, elle
+   * est deduite du relief : un personnage epais a un profil large.
+   */
+  profil?: number
 }
 
 /**
- * Tourne un dessin autour des trois axes en se servant de son relief.
+ * Tourne un dessin de face vers un profil, sans jamais montrer son dos.
  *
- * Chaque pixel opaque devient un point (x, y, z) tourne puis reprojete a
- * plat, le plus proche de l'oeil gagnant. Deux precautions font toute la
- * difference entre une image trouee et une image propre :
+ * ## Pourquoi la version d'avant etait mauvaise
  *
- * 1. Chaque point est pose comme une tuile de la taille de l'etirement local
- *    et non comme un pixel isole. A 60 degres de lacet, la largeur se
- *    contracte : plusieurs sources tombent au meme endroit et la projection
- *    naive laisse des colonnes vides une ligne sur deux. La tuile les couvre.
- * 2. Ce qui resterait vide est bouche par la couleur du voisin le plus proche
- *    de l'oeil, et seulement si le trou est entoure — un creux du dessin
- *    d'origine ne se remplit pas.
+ * Elle traitait le dessin comme la tranche du milieu d'un volume plein et
+ * faisait tourner ce volume. C'est juste en geometrie et faux en dessin : les
+ * deux faces du volume portent la MEME image, celle de face. Passe quarante-
+ * cinq degres, la face arriere gagne le tampon de profondeur sur une partie de
+ * l'image, et le personnage se dedouble — deux demi-silhouettes accolees, avec
+ * une couture au milieu. A quatre-vingt-dix degres, la projection ecrase les
+ * colonnes les unes sur les autres et il ne reste qu'une trainee.
+ *
+ * Les mesures d'alors ne voyaient rien : la masse, les trous, les couleurs
+ * etrangeres et la symetrie restaient irreprochables pendant que l'image
+ * devenait illisible. Ce qui manquait, c'est une mesure de LISIBILITE : la
+ * couleur dominante de chaque ligne. Sur le personnage de demonstration, elle
+ * tombait a 70% des lignes justes a trente degres, 49% a quarante-cinq, 32% a
+ * quatre-vingt-dix. Autrement dit : les deux tiers des lignes ne montraient
+ * plus la bonne couleur.
+ *
+ * ## Ce qu'on fait a la place
+ *
+ * Un dessin de face ne contient pas son profil. Aucune geometrie ne l'en fera
+ * sortir — la seule chose honnete est de le COMPRIMER en gardant son dessin,
+ * et de laisser le relief decaler les colonnes pour donner le galbe. C'est le
+ * principe du demi-tour d'animation : le personnage reste dessine de face,
+ * s'amincit, et ses volumes glissent lateralement.
+ *
+ * Trois regles :
+ *
+ * 1. La compression horizontale ne descend jamais a zero. Elle va de 1 (de
+ *    face) a `profil` (de profil), ou `profil` vaut l'epaisseur du personnage
+ *    rapportee a sa largeur — deduite du relief, donc le curseur « Relief »
+ *    epaissit aussi le profil. Sans ce plancher, toutes les colonnes tombent
+ *    au meme endroit et l'image se reduit a un trait.
+ * 2. Seule la surface avant est peinte, jamais la coque arriere. Chaque pixel
+ *    du dessin apparait une fois et une seule : plus de dedoublement.
+ * 3. Au-dela du quart de tour, on montre le dessin retourne. Ce n'est pas le
+ *    dos — le dos n'existe pas — c'est le meilleur substitut, et l'interface
+ *    le dit.
+ *
+ * La profondeur, elle, reste la vraie : c'est elle qui decide qui masque qui
+ * quand un volume passe devant un autre.
  */
+/**
+ * Largeur du profil d'un dessin, en fraction de sa largeur de face.
+ *
+ * C'est l'epaisseur du personnage rapportee a sa largeur : un relief plat
+ * donne une silhouette de papier, un relief genereux un personnage rond. Le
+ * plancher evite le trait — un dessin ne doit jamais se reduire a une ligne,
+ * meme vu exactement de profil.
+ */
+export function profilDe(src: Bitmap, champ: ChampProfondeur, vertical = false): number {
+  const boite = src.trimBounds()
+  let epaisseur = 0
+  for (let i = 0; i < champ.length; i++) if (champ[i] > epaisseur) epaisseur = champ[i]
+  const cote = Math.max(1, vertical ? boite.h : boite.w)
+  return Math.max(0.25, Math.min(0.85, epaisseur / cote))
+}
+
 export function tourner(
   src: Bitmap,
   z: ChampProfondeur,
@@ -226,58 +264,199 @@ export function tourner(
   opts: OptionsRotation = {},
 ): Bitmap {
   const { width: w, height: h } = src
-  const out = new Bitmap(w, h)
-  const m = matrice(angles)
 
   const boite = src.trimBounds()
-  const cx = opts.cx ?? (boite.w > 0 ? boite.x + boite.w / 2 : w / 2)
-  const cy = opts.cy ?? (boite.h > 0 ? boite.y + boite.h / 2 : h / 2)
+  // Centre en indices de pixels, et non en coordonnees continues : une boite
+  // qui va de la colonne 2 a la colonne 29 a pour milieu l'indice 15,5 et non
+  // 16. Le demi-pixel d'ecart rendait le quart de tour a droite different de
+  // celui a gauche — six pour cent d'ecart sur un disque pourtant parfaitement
+  // symetrique.
+  const cx = opts.cx ?? (boite.w > 0 ? boite.x + (boite.w - 1) / 2 : (w - 1) / 2)
+  const cy = opts.cy ?? (boite.h > 0 ? boite.y + (boite.h - 1) / 2 : (h - 1) / 2)
 
-  // Tampon de profondeur : -Infinity = rien de pose. On garde le plus proche
-  // de l'oeil, donc le z le plus grand.
+  // Au-dela d'un quart de tour, on retourne le dessin plutot que d'inventer
+  // un dos. L'angle repasse alors dans le premier quadrant : un personnage vu
+  // a cent-vingt degres est son miroir vu a soixante.
+  let lacet = normaliser(angles.lacet)
+  let tangage = normaliser(angles.tangage)
+  const miroirH = Math.abs(lacet) > Math.PI / 2
+  const miroirV = Math.abs(tangage) > Math.PI / 2
+  if (miroirH) lacet = Math.sign(lacet) * (Math.PI - Math.abs(lacet))
+  if (miroirV) tangage = Math.sign(tangage) * (Math.PI - Math.abs(tangage))
+
+  const source = miroirH || miroirV ? retourner(src, miroirH, miroirV, cx, cy) : src
+  const champ = miroirH || miroirV ? retournerChamp(z, w, h, miroirH, miroirV, cx, cy) : z
+
+  const profilX = opts.profil ?? profilDe(src, champ)
+  const profilY = opts.profil ?? profilDe(src, champ, true)
+
+  const cosL = Math.cos(lacet), sinL = Math.sin(lacet)
+  const cosT = Math.cos(tangage), sinT = Math.sin(tangage)
+  const compX = profilX + (1 - profilX) * Math.abs(cosL)
+  const compY = profilY + (1 - profilY) * Math.abs(cosT)
+
+  const out = new Bitmap(w, h)
   const zbuf = opts.sortieZ ?? new Float32Array(w * h)
   zbuf.fill(-Infinity)
 
-  // Un pixel pose reste un pixel : pas de tuile d'elargissement.
-  //
-  // Une premiere version dimensionnait chaque tache selon l'etirement local,
-  // pour combler les vides d'une projection clairsemee. Avec un volume plein
-  // ces vides n'existent pas — deux tranches voisines ne s'ecartent jamais de
-  // plus d'un pixel, puisqu'elles sont distantes d'un pixel en profondeur et
-  // qu'aucune rotation n'agrandit. La tuile ne bouchait donc plus rien, et
-  // elle mentait : a un degre de lacet, `ceil(1 / cos(1deg))` vaut 2 quand il
-  // vaut 1 a zero degre. Chaque pixel doublait de largeur d'un coup, et la
-  // masse sautait de 39 pixels entre 0 et 1 degre — un a-coup visible en
-  // pleine animation, juste au passage de face.
+  // Position a l'ecran d'un point du relief, et sa profondeur reelle.
+  const projX = (x: number, d: number): number => (x - cx) * compX + d * sinL + cx
+  const projY = (y: number, d: number): number => (y - cy) * compY - d * sinT + cy
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x
-      const couleur = src.u32[i]
+      const couleur = source.u32[i]
       if (getA(couleur) === 0) continue
-      const px = x - cx, py = y - cy
-      // La colonne de matiere sous ce pixel, tranche par tranche. Un pas
-      // d'un pixel suffit : plus fin ne change rien apres arrondi, plus
-      // large laisse passer le fond entre deux tranches.
-      const demi = z[i]
-      const tranches = Math.max(1, Math.ceil(demi * 2) + 1)
-      for (let t = 0; t < tranches; t++) {
-        const pz = tranches === 1 ? 0 : -demi + (t * (demi * 2)) / (tranches - 1)
-        const rx = m[0] * px + m[1] * py + m[2] * pz
-        const ry = m[3] * px + m[4] * py + m[5] * pz
-        const rz = m[6] * px + m[7] * py + m[8] * pz
+      const d = champ[i]
 
-        const tx = Math.round(rx + cx), ty = Math.round(ry + cy)
-        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue
-        const j = ty * w + tx
-        if (rz <= zbuf[j]) continue
-        zbuf[j] = rz
-        out.u32[j] = couleur
+      // Chaque pixel couvre l'intervalle qui va du milieu de son voisin de
+      // gauche au milieu de son voisin de droite. Sans cet etalement, une
+      // compression de moitie laisserait une colonne sur deux vide et un
+      // relief pentu ouvrirait des fentes la ou la surface bascule.
+      //
+      // Les bornes sont prises a mi-chemin, et non sur le voisin lui-meme :
+      // un intervalle [x, x+1[ appartient au pixel de gauche, ce qui decale
+      // tout d'une colonne quand la projection descend au lieu de monter. Le
+      // banc l'avait vu — quarante pour cent d'ecart entre un quart de tour a
+      // droite et le meme a gauche, sur une lame pourtant symetrique.
+      const dGauche = x > 0 ? champ[i - 1] : d
+      const dDroite = x + 1 < w ? champ[i + 1] : d
+      const dHaut = y > 0 ? champ[i - w] : d
+      const dBas = y + 1 < h ? champ[i + w] : d
+      const x0 = projX(x - 0.5, (d + dGauche) / 2)
+      const x1 = projX(x + 0.5, (d + dDroite) / 2)
+      const y0 = projY(y - 0.5, (d + dHaut) / 2)
+      const y1 = projY(y + 0.5, (d + dBas) / 2)
+
+      const [xa, xb] = couverture(x0, x1)
+      const [ya, yb] = couverture(y0, y1)
+
+      // La profondeur est celle du vrai point tourne : elle seule dit
+      // correctement qui passe devant qui.
+      const zApres = (d * cosL - (x - cx) * sinL) * cosT + (y - cy) * sinT
+
+      for (let ty = ya; ty <= yb; ty++) {
+        if (ty < 0 || ty >= h) continue
+        for (let tx = xa; tx <= xb; tx++) {
+          if (tx < 0 || tx >= w) continue
+          const j = ty * w + tx
+          if (zApres <= zbuf[j]) continue
+          zbuf[j] = zApres
+          out.u32[j] = couleur
+        }
       }
     }
   }
 
+  if (angles.roulis) return rouler(out, angles.roulis, cx, cy, zbuf)
   boucherLesTrous(out, zbuf)
+  return out
+}
+
+/**
+ * Colonnes (ou lignes) couvertes par un intervalle continu.
+ *
+ * Un pixel d'indice t est couvert si son centre tombe dans [min, max[. La
+ * regle doit etre exactement symetrique : sinon le quart de tour a droite et
+ * celui a gauche different d'une colonne, et le banc mesure jusqu'a quarante
+ * pour cent d'ecart sur une forme pourtant symetrique. `Math.round` ne
+ * convient pas — il arrondit toujours les demis vers le haut, ce qui n'a pas
+ * de miroir. Deux `ceil` en ont un.
+ *
+ * Quand l'intervalle est plus etroit qu'un pixel et ne contient aucun centre,
+ * on prend le pixel le plus proche de son milieu : le dessin reste dense, et
+ * ce sont les collisions, arbitrees par la profondeur, qui decident du
+ * resultat.
+ */
+function couverture(a: number, b: number): [number, number] {
+  const min = Math.min(a, b), max = Math.max(a, b)
+  const debut = Math.ceil(min)
+  const fin = Math.ceil(max) - 1
+  if (fin >= debut) return [debut, fin]
+  const seul = arrondiPair((min + max) / 2)
+  return [seul, seul]
+}
+
+/**
+ * Arrondi au plus proche, les demis vers le pair.
+ *
+ * C'est le seul arrondi qui commute avec le miroir : `f(n - u) = n - f(u)`
+ * pour tout entier n. Avec l'arrondi ordinaire, un centre a 15,5 suffit a
+ * decaler d'un pixel toute une moitie de l'image.
+ */
+function arrondiPair(v: number): number {
+  const bas = Math.floor(v)
+  const reste = v - bas
+  if (reste > 0.5) return bas + 1
+  if (reste < 0.5) return bas
+  return bas % 2 === 0 ? bas : bas + 1
+}
+
+/** Ramene un angle dans ]-pi, pi]. */
+function normaliser(a: number): number {
+  let r = a % (Math.PI * 2)
+  if (r > Math.PI) r -= Math.PI * 2
+  if (r <= -Math.PI) r += Math.PI * 2
+  return r
+}
+
+/** Miroir d'un dessin autour de son propre centre. */
+function retourner(src: Bitmap, h: boolean, v: boolean, cx: number, cy: number): Bitmap {
+  const out = new Bitmap(src.width, src.height)
+  for (let y = 0; y < src.height; y++) {
+    for (let x = 0; x < src.width; x++) {
+      const sx = h ? Math.round(2 * cx - x) : x
+      const sy = v ? Math.round(2 * cy - y) : y
+      if (sx < 0 || sy < 0 || sx >= src.width || sy >= src.height) continue
+      out.u32[y * src.width + x] = src.u32[sy * src.width + sx]
+    }
+  }
+  return out
+}
+
+function retournerChamp(
+  z: ChampProfondeur, w: number, hh: number, h: boolean, v: boolean, cx: number, cy: number,
+): ChampProfondeur {
+  const out = new Float32Array(w * hh)
+  for (let y = 0; y < hh; y++) {
+    for (let x = 0; x < w; x++) {
+      const sx = h ? Math.round(2 * cx - x) : x
+      const sy = v ? Math.round(2 * cy - y) : y
+      if (sx < 0 || sy < 0 || sx >= w || sy >= hh) continue
+      out[y * w + x] = z[sy * w + sx]
+    }
+  }
+  return out
+}
+
+/**
+ * Roulis : une vraie rotation dans le plan du dessin, faite a l'envers.
+ *
+ * On parcourt les pixels d'arrivee et on va chercher d'ou ils viennent, ce qui
+ * ne laisse aucun trou — contrairement au parcours direct, qui en laisse des
+ * qu'un pixel s'etale sur plus d'un pixel.
+ */
+function rouler(
+  src: Bitmap, angle: number, cx: number, cy: number, zbuf: Float32Array,
+): Bitmap {
+  const { width: w, height: h } = src
+  const out = new Bitmap(w, h)
+  const co = Math.cos(-angle), si = Math.sin(-angle)
+  const zOut = new Float32Array(w * h).fill(-Infinity)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = x - cx, dy = y - cy
+      const sx = Math.round(dx * co - dy * si + cx)
+      const sy = Math.round(dx * si + dy * co + cy)
+      if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue
+      const j = sy * w + sx
+      if (getA(src.u32[j]) === 0) continue
+      out.u32[y * w + x] = src.u32[j]
+      zOut[y * w + x] = zbuf[j]
+    }
+  }
+  boucherLesTrous(out, zOut)
   return out
 }
 

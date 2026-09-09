@@ -2688,8 +2688,8 @@ if (await boutonPoser.count()) await boutonPoser.click()
 await sleep(600)
 const apresRotation = await page.evaluate(() => window.pixelforge.ed.frameCount)
 
-check('la rotation 3D s\'ouvre avec ses cinq réglages',
-  dialogueRotation.titre === 'Tourner en 3D' && dialogueRotation.curseurs === 5,
+check('la rotation 3D s\'ouvre avec ses six réglages',
+  dialogueRotation.titre === 'Tourner en 3D' && dialogueRotation.curseurs === 6,
   `${dialogueRotation.titre} / ${dialogueRotation.curseurs} curseurs`)
 check('tourner change le dessin sans le vider',
   tourne > 0 && tourne !== avantRotation.pixels,
