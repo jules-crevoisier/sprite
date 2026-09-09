@@ -7,3 +7,7 @@ video/
 
 # Worktrees des agents : jamais dans le depot
 .claude/worktrees/
+
+# Scripts jetables : les agents en ecrivent pour mesurer une chose une fois,
+# et le depot n'a pas a les garder.
+scripts/*-tmp.mjs
