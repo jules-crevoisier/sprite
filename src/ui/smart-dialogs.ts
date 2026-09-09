@@ -725,9 +725,14 @@ export function comblerDialog(ed: Editor): void {
 
   const source = cel.bitmap.clone()
   const zone = ed.selection.active ? ed.selection : null
-  const opts = { largeurMax: 2, respecterSelection: !!zone, protegerLesCreux: !zone }
+  // Protection des creux decochee par defaut : sans squelette, aucun morceau
+  // ne se distingue d'un autre, donc la protection reviendrait a ne rien
+  // combler du tout et le dialogue s'ouvrirait sur « aucune fente trouvee ».
+  // L'apercu et le compte sont la pour juger avant de valider.
+  const opts = { largeurMax: 2, respecterSelection: !!zone, protegerLesCreux: false }
   const apercu = zoomablePreview({ hauteur: 200 })
   const info = el('p', { class: 'form-note' })
+  const conseil = el('p', { class: 'form-note' })
 
   const apply = (): void => {
     ed.resetStroke()
@@ -754,6 +759,18 @@ export function comblerDialog(ed: Editor): void {
       : 'Aucune fente trouvée à cette largeur.'
         + (bilan.epargnes ? ` ${bilan.epargnes} creux protégé(s).` : '')
     info.style.color = bilan.combles ? 'var(--text-faint)' : 'var(--warn, #e0a33e)'
+
+    // La consigne dit ce qui se passe VRAIMENT avec les reglages en cours :
+    // une phrase figee finirait par decrire un autre comportement que celui
+    // qu'on a sous les yeux.
+    conseil.textContent = opts.protegerLesCreux
+      ? 'Seuls les vides bordés par deux zones distinctes sont refermés — '
+        + 'les creux d\'un dessin d\'un seul tenant sont laissés tels quels.'
+      : opts.respecterSelection && zone
+        ? 'La réparation s\'arrête au bord de la sélection : c\'est le moyen le '
+          + 'plus sûr de ne refermer que la déchirure.'
+        : `Tout vide encadré d'au plus ${opts.largeurMax} px est refermé, y compris `
+          + 'un creux voulu. Faites une sélection, ou cochez ci-dessus, pour en protéger un.'
   }
 
   const body = el('div', null,
@@ -776,12 +793,7 @@ export function comblerDialog(ed: Editor): void {
       ] : []),
     ),
     info,
-    zone ? el('p', { class: 'form-note' },
-      'La sélection est le moyen le plus sûr : elle dit à l\'algorithme où se '
-      + 'trouve la déchirure, ce qu\'aucune analyse de la forme ne peut deviner.')
-      : el('p', { class: 'form-note' },
-        'Sans sélection, seuls les vides bordés par deux zones distinctes sont '
-        + 'refermés. Sélectionnez la déchirure pour réparer un creux volontaire.'),
+    conseil,
   )
 
   apply()
