@@ -48,24 +48,25 @@ export function bitmapDe(d: Dessin): Bitmap {
 /* ------------------------------------------------------------------ */
 
 /**
- * Palette du heros, revue sur constat du critique.
+ * Palette du heros, revue sur deux tours de critique.
  *
- * Quatre defauts nommes, quatre corrections :
+ * Tour 1 : `m` etait declare et employe zero fois ; `y` achetait deux pixels
+ * pour seize unites d'ecart avec le contour ; le pantalon etait a luminance 57
+ * quand le sol du donjon est a 59 — le personnage etait peint couleur du decor
+ * et son quart inferieur s'y dissolvait ; la chemise n'avait pas de cote a
+ * l'ombre, `T` etait pose des DEUX cotes du torse.
  *
- * - `m` etait declare et employe zero fois, et la rampe avait un trou de
- *   cinquante-trois unites de luminance entre la chemise claire et la peau.
- *   Le meme `m`, rechauffe, bouche le trou en servant d'ombre de peau : une
- *   entree morte devient le volume du visage, a cout nul ;
- * - `y` achetait deux pixels — les yeux — pour seize unites d'ecart avec le
- *   contour. Personne ne distingue ces deux noirs a l'echelle trois : les
- *   yeux sont passes en `o` et la case est rendue ;
- * - le pantalon etait a #2f3a52, luminance 57. Le sol du donjon est a #3a3a4e,
- *   luminance 59. Le personnage etait peint couleur du decor, et son quart
- *   inferieur s'y dissolvait. Remonte a 82 ;
- * - la chemise n'avait ni ombre ni cote sombre : `T` etait pose des DEUX cotes
- *   du torse, c'est-a-dire une lumiere venue de partout, donc de nulle part.
- *   `u` donne le cote a l'ombre, et la lumiere vient desormais du haut-gauche
- *   partout — cheveux, visage, chemise, jambes.
+ * Tour 2 : la ceinture (#7a4a22) et les cheveux (#8a4b2a) etaient a vingt-cinq
+ * unites de distance mais a six de luminance — le meme brun a l'ecran, et une
+ * case payee pour rien. La ceinture est franchement assombrie. Et les jambes
+ * n'avaient que deux tons quand le torse en avait trois : `q` leur donne leur
+ * cote a l'ombre.
+ *
+ * Rectification d'un chiffre annonce a tort au tour 1 : `m` ne bouche pas le
+ * trou de la rampe, il le deplace — 137 puis 150 puis 194, l'ecart de
+ * quarante-quatre entre l'ombre de peau et la peau reste le plus grand de la
+ * rampe. C'est un choix defendable, une peau n'a que deux tons ici, mais ce
+ * n'est pas ce qui avait ete dit.
  */
 const PAL_HEROS: Palette = {
   o: '#1a1420',
@@ -76,28 +77,47 @@ const PAL_HEROS: Palette = {
   t: '#3f6fb5',
   T: '#5a90dd',
   u: '#2c4f85',
-  b: '#7a4a22',
+  b: '#5a3418',
   p: '#46536f',
   P: '#5e6d8c',
+  q: '#3c4763',
   B: '#3a2b22',
 }
 
 /**
- * Le heros, redessine apres critique.
+ * Le heros, apres deux tours de critique.
  *
- * Deux defauts de silhouette avaient ete mesures :
+ * ## Ce que le tour 2 a repris au tour 1
  *
- * - les bras etaient soudes au torse, sans un pixel de contour entre les deux.
- *   Comprimees a soixante pour cent — ce que fait la generation des huit
- *   directions — les trois lignes du torse devenaient pleines sur toute la
- *   largeur : la silhouette lisait comme une cloche. Et les bras s'arretaient
- *   trois lignes plus haut que le torse, ce qui en faisait des epaulettes.
- *   Chaque bras est maintenant separe par un trait et descend jusqu'a la main ;
- * - un unique pixel, la joue droite de la ligne des yeux, depassait d'une
- *   colonne et imposait a lui seul la largeur treize.
+ * La separation des bras avait ete faite en contour — opaque. Dans une
+ * silhouette, une couleur opaque ne separe rien : le torse restait un bloc
+ * plein, exactement comme avant. Pire, l'ecart entre les jambes avait ete
+ * bouche au passage : le seul evenement de silhouette que le sprite possedait
+ * avait disparu. Il est rouvert, et sur deux pixels, parce qu'un vide d'un
+ * seul ne survit pas a la compression a soixante pour cent que fait la
+ * generation des huit directions.
  *
- * Les jambes gagnent une ligne : quatre lignes de pantalon au lieu de deux,
- * sans quoi un cycle de marche n'a aucune amplitude.
+ * La tete etait decentree d'une colonne : onze de large sur un corps de douze,
+ * centre a 8,0 quand tout le reste est a 7,5. Le miroir de `vues.ts` se fait
+ * autour d'un axe fixe, donc entre la vue de gauche et celle de droite la tete
+ * sautait d'un pixel sur un corps immobile. Elle fait maintenant dix de large,
+ * centree comme le corps — et les epaules depassent de deux pixels au lieu
+ * d'un, ce qui est le minimum pour qu'on lise des epaules.
+ *
+ * Les cheveux etaient eclaires a l'envers : la calotte entierement sombre
+ * au-dessus d'une bande claire, et aucune information gauche-droite alors que
+ * le visage juste dessous est franchement eclaire de gauche.
+ *
+ * ## Ce qui a ete refuse, et pourquoi
+ *
+ * Detacher les bras du torse par du vide. Il y faut deux pixels de part et
+ * d'autre — un seul est ravale par la compression — donc trois colonnes de
+ * bras, deux de vide, six de torse, deux de vide, trois de bras : seize de
+ * large au lieu de douze. C'est un tiers de largeur en plus sur un sprite de
+ * douze pixels, a une taille ou aucune reference ne detache les bras : ils s'y
+ * lisent par la couleur, pas par la silhouette. Les huit directions calculees
+ * passent le controle qualite a sept sur huit, la huitieme etant le profil et
+ * son defaut de trait deja nomme.
  */
 export const HEROS: Dessin = {
   largeur: 20,
@@ -105,26 +125,26 @@ export const HEROS: Dessin = {
   palette: PAL_HEROS,
   lignes: [
     '.....oooooo.....',
-    '....ohhhhhhho...',
-    '...ohHHHHHHHho..',
-    '...ohssssssmho..',
-    '...ohsosssomho..',
-    '...ohssssssmho..',
+    '....oHHHhhho....',
+    '...ohHHHhhhho...',
+    '...ohsssssmho...',
+    '...ohsossomho...',
+    '...ohsssssmho...',
     '....osssssmo....',
     '.....oooooo.....',
-    '..ooTTTTTTttoo..',
+    '..ooTTTTttuuoo..',
     '..oToTttttuouo..',
     '..oToTttttuouo..',
     '..oToTttttuouo..',
     '..osobbbbbbomo..',
     '..osotttttuomo..',
-    '....otttttuo....',
-    '....oPpppppo....',
-    '....oPpooppo....',
-    '....oPpooppo....',
-    '....oPpooppo....',
-    '....oBBooBBo....',
-    '....oooooooo....',
+    '...ootttttuoo...',
+    '....oPpppqqo....',
+    '....oPp..qqo....',
+    '....oPp..qqo....',
+    '....oPp..qqo....',
+    '....oBB..BBo....',
+    '....ooo..ooo....',
   ],
 }
 

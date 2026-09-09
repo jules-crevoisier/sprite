@@ -2,6 +2,7 @@ import { Bitmap } from '../core/bitmap'
 import { getA } from '../core/color'
 import {
   boucherLesPoches, compression, couverture, deplacementRelief, profilDe,
+  reposerLeContour,
   INFLUENCE_RELIEF, type Angles, type ChampProfondeur,
 } from './depth'
 
@@ -385,6 +386,12 @@ export function rendreScene(
   }
 
   boucherLesPoches(image, profondeur, 4, proprietaire)
+  // La coquille de contour se deduit de la silhouette, elle ne se transporte
+  // pas : on la repose, mais seulement la ou l'image a ete inventee. Quand un
+  // dessin colle a la camera (ecart nul), il doit sortir exactement tel qu'il
+  // a ete dessine — y compris ses bords non cernes, qui sont alors un choix
+  // de l'auteur et pas un degat de la rotation.
+  if (ecartMax > 1e-6) reposerLeContour(image)
   return { image, profondeur, proprietaire, ecartMax }
 }
 

@@ -691,3 +691,134 @@ export function trousInterieurs(img: Bitmap): number {
   }
   return trous
 }
+
+/**
+ * Repose le trait de contour apres une rotation.
+ *
+ * Un contour de pixel art n'est pas une texture : c'est une coquille d'un
+ * pixel d'epaisseur qui epouse la silhouette. La rotation, elle, ne sait que
+ * reechantillonner de la texture — elle transporte donc le trait comme une
+ * couleur parmi d'autres, et la compression le repousse vers l'interieur en
+ * laissant de la couleur de remplissage au bord. Mesure sur le heros du jeu :
+ * de face le trait tient 81% du bord, aux diagonales il tombe a 68%, sous la
+ * barre des 70% du verificateur.
+ *
+ * Comme la coquille se deduit de la silhouette, on la redessine apres coup au
+ * lieu d'esperer qu'elle survive au reechantillonnage. Rien de la forme ne
+ * bouge : aucun pixel ne change d'opacite, seule leur couleur est reprise.
+ *
+ * Rend le nombre de pixels reposes.
+ */
+export function reposerLeContour(img: Bitmap): number {
+  const w = img.width, h = img.height
+  const opaque = (x: number, y: number): boolean =>
+    x >= 0 && y >= 0 && x < w && y < h && getA(img.u32[y * w + x]) !== 0
+
+  const bord: number[] = []
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!opaque(x, y)) continue
+      if (opaque(x - 1, y) && opaque(x + 1, y) && opaque(x, y - 1) && opaque(x, y + 1)) continue
+      bord.push(y * w + x)
+    }
+  }
+  if (bord.length < 20) return 0
+
+  // La couleur de trait, definie comme le verificateur la definit : celle qui
+  // tient le plus de bord. Les deux doivent lire le meme dessin de la meme
+  // facon, sinon on repeindrait pour une regle et contre l'autre.
+  const compte = new Map<number, number>()
+  for (const i of bord) compte.set(img.u32[i], (compte.get(img.u32[i]) ?? 0) + 1)
+  let trait = 0, mieux = 0
+  for (const [c, n] of compte) if (n > mieux) { mieux = n; trait = c }
+  // Sans convention de trait dans le dessin — une tuile de sol n'en a pas —
+  // il n'y a pas de coquille a reposer, et lui en inventer une serait pire
+  // que le defaut qu'on corrige. Tenir la majorite du bord ne suffit pas a le
+  // prouver : sur une tuile de gazon a deux verts, le vert dominant en tient
+  // les deux tiers sans etre un trait pour autant. Ce qui distingue une
+  // coquille, c'est qu'elle VIT sur le bord — un trait n'a presque rien a
+  // l'interieur, un aplat de fond a l'inverse presque tout.
+  if (mieux < bord.length * 0.4) return 0
+  let totalTrait = 0
+  for (let i = 0; i < img.u32.length; i++) if (img.u32[i] === trait) totalTrait++
+  if (mieux < totalTrait * 0.5) return 0
+
+  const estBord = new Uint8Array(w * h)
+  for (const i of bord) estBord[i] = 1
+
+  const ORTHO: readonly (readonly [number, number])[] =
+    [[-1, 0], [1, 0], [0, -1], [0, 1]]
+
+  // Compte les voisins de meme couleur que `i`, en tenant `saufA` pour deja
+  // repeint en trait. Sert a savoir si reposer la coquille isolerait le pixel
+  // qu'elle borde.
+  const voisinsDeMemeCouleur = (i: number, saufA: number): number => {
+    const c = img.u32[i]
+    const x = i % w, y = (i / w) | 0
+    let n = 0
+    for (const [dx, dy] of ORTHO) {
+      const xx = x + dx, yy = y + dy
+      if (!opaque(xx, yy)) continue
+      const j = yy * w + xx
+      if (j !== saufA && img.u32[j] === c) n++
+    }
+    return n
+  }
+
+  // Une forme de un ou deux pixels d'epaisseur — un doigt, une meche, une lame
+  // vue par la tranche — ne se cerne pas : la repeindre n'en laisserait qu'une
+  // trace noire, ce qui coute plus que le bord non cerne qu'on repare.
+  //
+  // L'epaisseur se mesure aux deux traversees pleines qui passent par le
+  // pixel. Le critere d'avant, « avoir un voisin qui ne soit pas du bord »,
+  // declarait epais le doigt de deux pixels des lors qu'il tenait a un corps
+  // epais, et le banc l'a pris en flagrant delit.
+  const traversee = (x: number, y: number, dx: number, dy: number): number => {
+    let n = 1
+    for (let k = 1; opaque(x + dx * k, y + dy * k); k++) n++
+    for (let k = 1; opaque(x - dx * k, y - dy * k); k++) n++
+    return n
+  }
+  const estEpais = (i: number): boolean => {
+    const x = i % w, y = (i / w) | 0
+    return Math.min(traversee(x, y, 1, 0), traversee(x, y, 0, 1)) > 2
+  }
+
+  let poses = 0
+  for (const i of bord) {
+    if (img.u32[i] === trait) continue
+    const x = i % w, y = (i / w) | 0
+    if (!estEpais(i)) continue
+
+    // Et cerner les deux flancs d'une forme de trois pixels d'epaisseur y
+    // laisse un pixel seul de sa couleur. Le banc comptait sept mouchetures
+    // de plus qu'a la source ; on renonce donc au morceau de coquille qui
+    // isolerait celui qu'il borde, quitte a laisser ce bord-la non cerne.
+    let isolerait = false
+    for (const [dx, dy] of ORTHO) {
+      const xx = x + dx, yy = y + dy
+      if (!opaque(xx, yy)) continue
+      const j = yy * w + xx
+      if (img.u32[j] === trait) continue
+      if (voisinsDeMemeCouleur(j, i) === 0) { isolerait = true; break }
+    }
+    if (isolerait) continue
+
+    // On prolonge une coquille, on ne seme pas des points : un pixel de trait
+    // pose tout seul serait lui-meme une moucheture. Il doit donc toucher le
+    // trait deja en place — ou un autre morceau de bord a reposer, sans quoi
+    // un cote entierement depouille ne pourrait jamais commencer.
+    let touche = false
+    for (const [dx, dy] of ORTHO) {
+      const xx = x + dx, yy = y + dy
+      if (!opaque(xx, yy)) continue
+      const j = yy * w + xx
+      if (img.u32[j] === trait || (estBord[j] && estEpais(j))) { touche = true; break }
+    }
+    if (!touche) continue
+
+    img.u32[i] = trait
+    poses++
+  }
+  return poses
+}

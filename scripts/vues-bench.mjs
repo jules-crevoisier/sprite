@@ -307,6 +307,91 @@ const m = await page.evaluate(async () => {
     return { dir: NOMS_DIR[i], constats: verifierQualite(image).constats.map((x) => x.id) }
   })
 
+  /* --- La pose de coquille : ce qu'elle repare, ce qu'elle refuse --- */
+  //
+  // Une regle qui ne sait pas se taire abime plus qu'elle ne repare. Les trois
+  // cas ci-dessous sont ceux ou reposer le trait serait une faute.
+  const { reposerLeContour } = await import('/src/smart/depth.ts')
+  const NOIR = 0xff201510, CHAIR = 0xff8fc0e0, VIDE = 0
+  const depuis = (lignes, cle) => {
+    const b = new Bitmap(lignes[0].length, lignes.length)
+    for (let y = 0; y < lignes.length; y++) {
+      for (let x = 0; x < lignes[y].length; x++) b.u32[y * b.width + x] = cle[lignes[y][x]]
+    }
+    return b
+  }
+  const cleContour = { '.': VIDE, o: NOIR, c: CHAIR }
+  const bordNu = (b) => {
+    const plein = (x, y) => x >= 0 && y >= 0 && x < b.width && y < b.height
+      && (b.u32[y * b.width + x] >>> 24) !== 0
+    let nu = 0
+    for (let y = 0; y < b.height; y++) {
+      for (let x = 0; x < b.width; x++) {
+        if (!plein(x, y)) continue
+        if (plein(x - 1, y) && plein(x + 1, y) && plein(x, y - 1) && plein(x, y + 1)) continue
+        if (b.u32[y * b.width + x] !== NOIR) nu++
+      }
+    }
+    return nu
+  }
+  const contour = []
+
+  // 1. Un bloc cerne dont la rotation a depouille tout le flanc droit : c'est
+  //    exactement le degat a reparer.
+  const troue = depuis([
+    '..oooooo..',
+    '.occccccc.',
+    '.occccccc.',
+    '.occccccc.',
+    '.occccccc.',
+    '.occccccc.',
+    '..oooooo..',
+  ], cleContour)
+  const nuAvant = bordNu(troue)
+  const posesTroue = reposerLeContour(troue)
+  contour.push({
+    nom: 'un flanc depouille est recerne',
+    ok: nuAvant >= 5 && bordNu(troue) === 0,
+    detail: `${nuAvant} pixel(s) de bord nu, ${posesTroue} pose(s), ${bordNu(troue)} restant(s)`,
+  })
+
+  // 2. Un doigt de deux pixels d'epaisseur : le cerner ne laisserait que du
+  //    noir. On prefere un bord nu a un membre efface.
+  const doigt = depuis([
+    '..oooooo..',
+    '.occcccco.',
+    '.occcccco.',
+    '.occcccco.',
+    '..oooooo..',
+    '...cc.....',
+    '...cc.....',
+    '...oo.....',
+  ], cleContour)
+  const avantDoigt = [...doigt.u32]
+  reposerLeContour(doigt)
+  let doigtIntact = true
+  for (let y = 5; y <= 6; y++) {
+    for (const x of [3, 4]) if (doigt.u32[y * doigt.width + x] !== CHAIR) doigtIntact = false
+  }
+  contour.push({
+    nom: 'un membre de deux pixels n\'est pas repeint',
+    ok: doigtIntact,
+    detail: doigtIntact ? 'les quatre pixels du doigt sont intacts'
+      : `${avantDoigt.filter((c, i) => c !== doigt.u32[i]).length} pixel(s) changes`,
+  })
+
+  // 3. Une tuile de sol n'a pas de convention de trait : lui en inventer une
+  //    la cernerait de sa propre couleur la plus sombre.
+  const sol = new Bitmap(10, 10)
+  for (let i = 0; i < sol.u32.length; i++) sol.u32[i] = i % 3 ? 0xff4a7a3a : 0xff3a6a2a
+  const solAvant = [...sol.u32]
+  const posesSol = reposerLeContour(sol)
+  contour.push({
+    nom: 'une tuile sans trait est laissee telle quelle',
+    ok: posesSol === 0 && solAvant.every((c, i) => c === sol.u32[i]),
+    detail: `${posesSol} pose(s)`,
+  })
+
   /* --- Diagnostic : trois pieges d'un fichier pris sur le web --- */
   const agrandir = (b, k) => {
     const o = new (b.constructor)(b.width * k, b.height * k)
@@ -615,7 +700,7 @@ const m = await page.evaluate(async () => {
       ? Math.hypot(brasApres.x - attendu.x, brasApres.y - attendu.y) : null,
     osUtilises: morceaux.filter((x) => x.os !== null).length,
     posesDistinctes: new Set(sigPose).size,
-    videsPose, deriveX, deriveY, pireMasse, dos, diagnostic, qualiteDirections,
+    videsPose, deriveX, deriveY, pireMasse, dos, diagnostic, qualiteDirections, contour,
     minPose: Math.min(...massesPose), maxPose: Math.max(...massesPose),
   }
 })
@@ -649,8 +734,14 @@ check('aucune couleur etrangere', m.etrangeres === 0, `${m.etrangeres} direction
 // La masse d'un personnage repeint en noir par son propre trait de contour
 // ne bouge pas d'un pixel. Le taux de trait, lui, s'effondre : c'est la
 // mesure qui dit si la silhouette se lit encore.
+// Ce controle a longtemps porte la mention « defaut connu ». Le contour etait
+// transporte comme une texture : il tenait jusqu'a 40 degres, puis la
+// compression le repoussait a l'interieur — 67% du taux de face au profil.
+// Depuis que la coquille est reposee apres le rendu (`reposerLeContour`), elle
+// tient a TOUTES les directions du tour, sans coup au passage : les pixels
+// isoles restent a 14 au pire, comme avant.
 check('le contour tient sur le domaine annonce',
-  m.domaineHonnete >= 20,   // DEFAUT CONNU : vaut 0 aujourd'hui, voir scene.ts
+  m.domaineHonnete === 180,
   `le trait tient jusqu'a ${m.domaineHonnete}deg `
   + `(${m.trait.filter((x) => x.deg <= 90).map((x) => `${x.deg}:${x.t.toFixed(2)}`).join(' ')})`)
 
@@ -787,16 +878,18 @@ for (const d of m.qualiteDirections) {
   void d
 }
 const sales = m.qualiteDirections.filter((d) => d.constats.length)
+// On tolerait ici une direction fautive, et c'etait le profil : vu par la
+// tranche, le contour dessine se retrouvait a l'interieur. La coquille etant
+// desormais reposee, les huit passent — et le banc l'exige, sinon la
+// tolerance couvrirait la prochaine regression au lieu de la montrer.
 check('les directions calculees passent le controle qualite',
-  sales.length <= 1,
+  sales.length === 0,
   sales.length
     ? sales.map((d) => `${d.dir} : ${d.constats.join(',')}`).join(' | ')
     : `${m.qualiteDirections.length} directions propres`)
-// Le profil est le seul a lacher, et c'est le defaut de trait deja nomme :
-// vu par la tranche, le contour dessine se retrouve a l'interieur.
-check('celle qui lache est bien le profil',
-  !sales.length || sales.every((d) => d.dir === 'E' || d.dir === 'O'),
-  sales.map((d) => d.dir).join(',') || 'aucune')
+
+/* --- Ce que la pose de coquille doit refuser de faire --- */
+for (const c of m.contour) check(`contour repose : ${c.nom}`, c.ok, c.detail)
 
 /* --- Le diagnostic : ce qui, dans un dessin, empeche la rotation --- */
 console.log('')

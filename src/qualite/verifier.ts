@@ -160,12 +160,24 @@ export function verifier(bm: Bitmap, opts: OptionsVerif = {}): Rapport {
   }
 
   /* --- 1. Couleurs en double : deux teintes qu'on ne distingue pas --- */
+  //
+  // Deux tests, parce qu'un seul laissait passer le cas le plus courant. La
+  // distance brute attrape les quasi-jumelles ; elle a laisse filer la
+  // ceinture (#7a4a22) et les cheveux (#8a4b2a) du heros, distantes de
+  // vingt-cinq — au-dessus du seuil — mais separees de six unites de
+  // luminance seulement. A l'ecran c'etait le meme brun, et une case de
+  // palette payee pour rien. Une paire proche en luminance ET pas franchement
+  // eloignee en teinte se lit comme une seule couleur.
   const doublons: string[] = []
   for (let i = 0; i < couleurs.length; i++) {
     for (let j = i + 1; j < couleurs.length; j++) {
       const d = distance(couleurs[i], couleurs[j])
-      if (d > 12) continue
-      doublons.push(`${toHex(couleurs[i])} et ${toHex(couleurs[j])} (écart ${d})`)
+      const dl = Math.abs(luminance(couleurs[i]) - luminance(couleurs[j]))
+      const jumelles = d <= 12
+      const memeValeur = dl < 10 && d < 40
+      if (!jumelles && !memeValeur) continue
+      doublons.push(`${toHex(couleurs[i])} et ${toHex(couleurs[j])} `
+        + `(écart ${d}, luminance ${dl.toFixed(0)})`)
     }
   }
   mesures.doublons = doublons.length
