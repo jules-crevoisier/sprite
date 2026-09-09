@@ -1,5 +1,6 @@
 import type { App } from './app'
 import * as ops from '../core/operations'
+import { normaliserTouches } from './shortcuts'
 import * as dlg from './dialogs'
 import { variantsDialog, detailDialog, shadeDialog, rampDialog, rotationDialog } from './smart-dialogs'
 import { exportFramePng, exportFramesZip, exportGif } from '../export'
@@ -674,7 +675,7 @@ function shortcutGroups(commands: Command[]): { title: string; items: [string, s
   for (const c of commands) {
     if (!c.keys) continue
     const arr = groups.get(c.group) ?? []
-    arr.push([c.label, c.keys])
+    arr.push([c.label, normaliserTouches(c.keys)])
     groups.set(c.group, arr)
   }
   const out = [...groups.entries()].map(([title, items]) => ({ title, items }))
@@ -682,10 +683,10 @@ function shortcutGroups(commands: Command[]): { title: string; items: [string, s
     title: 'Outils',
     items: [
       ['Crayon', 'B'], ['Gomme', 'E'], ['Pot de peinture', 'G'], ['Pipette', 'I'],
-      ['Ligne', 'L'], ['Rectangle', 'U'], ['Ellipse', 'Shift+U'], ['Contour', 'Q'],
-      ['Courbe', 'Shift+C'], ['Degrade', 'R'], ['Ombrage', 'D'], ['Flou', 'Y'],
-      ['Aerographe', 'A'], ['Sélection rect.', 'M'], ['Sélection ellipse', 'Shift+M'],
-      ['Lasso', 'Shift+L'], ['Baguette magique', 'W'], ['Déplacer', 'V'],
+      ['Ligne', 'L'], ['Rectangle', 'U'], ['Ellipse', 'Maj+U'], ['Contour', 'Q'],
+      ['Courbe', 'Maj+C'], ['Dégradé', 'R'], ['Ombrage', 'D'], ['Flou', 'Y'],
+      ['Aerographe', 'A'], ['Sélection rect.', 'M'], ['Sélection ellipse', 'Maj+M'],
+      ['Lasso', 'Maj+L'], ['Baguette magique', 'W'], ['Déplacer', 'V'],
       ['Main', 'H'], ['Loupe', 'Z'],
     ],
   })

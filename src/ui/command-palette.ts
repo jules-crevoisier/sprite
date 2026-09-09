@@ -61,7 +61,7 @@ export function openCommandPalette(commands: Command[]): void {
         disabled: !enabled,
         onclick: () => { handle.close(); void c.run() },
       },
-        el('span', { style: { width: '18px', display: 'grid', placeItems: 'center' }, html: c.icon ? icon(c.icon, 15) : '' }),
+        el('span', { style: { width: '18px', display: 'grid', placeItems: 'center' }, html: c.icon ? icon(c.icon, 16) : '' }),
         el('span', { class: 'label' }, c.label),
         el('span', { class: 'group' }, c.group),
       )

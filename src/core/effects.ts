@@ -36,7 +36,7 @@ export interface LayerEffect {
   enabled: boolean
   /** Couleur principale. Pour le biseau : la lumiere. Pour le degrade : le depart. */
   color: RGBA
-  /** Couleur secondaire. Biseau : l'ombre. Degrade : l'arrivee. */
+  /** Couleur secondaire. Biseau : l'ombre. Dégradé : l'arrivee. */
   color2: RGBA
   /** 0..1 */
   opacity: number
@@ -86,7 +86,7 @@ const BLANC = rgba(255, 250, 235, 255)
 export const EFFECT_KINDS: EffectKindInfo[] = [
   {
     id: 'ombre-portee',
-    label: 'Ombre portee',
+    label: 'Ombre portée',
     hint: 'Une copie sombre de la silhouette, decalee derrière le dessin',
     fields: ['color', 'opacity', 'angle', 'distance', 'spread', 'size', 'falloff', 'steps', 'blend'],
     defaults: { color: NOIR, opacity: 0.55, angle: 315, distance: 2, spread: 0, size: 1, falloff: 'tramage' },
@@ -138,7 +138,7 @@ export const EFFECT_KINDS: EffectKindInfo[] = [
   },
   {
     id: 'degrade',
-    label: 'Degrade',
+    label: 'Dégradé',
     hint: 'Passe d\'une couleur a l\'autre sur la hauteur du dessin',
     fields: ['color', 'color2', 'opacity', 'angle', 'falloff', 'steps'],
     defaults: {

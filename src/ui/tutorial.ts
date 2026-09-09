@@ -156,8 +156,8 @@ export class Tutorial {
       const dirty = this.app.ed.history.canUndo
       if (dirty && !(await confirmDialog(
         lesson.title,
-        'Cette leçon charge un document de demonstration et remplace le travail en cours. Continuer ?',
-        'Charger la demo',
+        'Cette leçon charge un document de démonstration et remplace le travail en cours. Continuer ?',
+        'Charger la démo',
       ))) return
       lesson.setup()
     }
@@ -355,7 +355,7 @@ export class Tutorial {
         el('strong', null, lesson.title),
         el('span', { class: 'spacer' }),
         el('span', { class: 'tutor-count' }, `${this.index + 1}/${lesson.steps.length}`),
-        el('button', { class: 'btn ghost sm icon-only', title: 'Quitter', html: icon('close', 13), onclick: () => this.stop() }),
+        el('button', { class: 'btn ghost sm icon-only', title: 'Quitter', html: icon('close', 14), onclick: () => this.stop() }),
       ),
       jauge,
       // La consigne sort de la bouche de la mascotte, elle n'est pas
@@ -477,7 +477,7 @@ export class Tutorial {
           el('b', { style: { display: 'block', fontSize: '13px' } }, lesson.title),
           el('span', { class: 'form-note' }, lesson.hint)),
         done.has(lesson.id)
-          ? el('span', { html: icon('check', 15), style: { color: 'var(--ok)', display: 'flex' } })
+          ? el('span', { html: icon('check', 16), style: { color: 'var(--ok)', display: 'flex' } })
           : el('span', { class: 'form-note' }, `${lesson.steps.length} étapes`),
       ))
     }
@@ -495,7 +495,7 @@ export class Tutorial {
                   ? 'Vous les avez toutes faites.'
                   : `${done.size} leçon${done.size > 1 ? 's' : ''} sur ${lessons.length}.`),
             el('p', { class: 'form-note', style: { margin: '0' } },
-              'Chaque leçon se deroule dans l\'éditeur, sur un document de demonstration. ',
+              'Chaque leçon se deroule dans l\'éditeur, sur un document de démonstration. ',
               'Faites le geste vous-même, ou laissez la leçon le faire pour voir le résultat.'),
           ),
         ),

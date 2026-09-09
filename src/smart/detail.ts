@@ -27,7 +27,7 @@ export const DETAIL_MODES: { id: DetailMode; label: string; hint: string }[] = [
   { id: 'clusters', label: 'Touffes', hint: 'Petits amas, herbe et feuillage' },
   { id: 'edge-shade', label: 'Ombre des bords', hint: 'Assombrit le contour intérieur' },
   { id: 'top-light', label: 'Lumière du haut', hint: 'Eclaircit les faces tournees vers le haut' },
-  { id: 'volume', label: 'Volume', hint: 'Degrade trame du haut vers le bas' },
+  { id: 'volume', label: 'Volume', hint: 'Dégradé trame du haut vers le bas' },
 ]
 
 /** Enchainements prets a l'emploi, pour les matieres courantes. */

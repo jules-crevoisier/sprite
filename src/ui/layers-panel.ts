@@ -157,15 +157,16 @@ export class LayersPanel {
 
     const titre = el('div', { class: 'fx-head' },
       el('span', { class: 'fx-title' }, 'Effets'),
-      iconButton(icon('plus', 13), 'Ajouter un effet', (e) => this.menuAjout(e), {
+      iconButton(icon('plus', 14), 'Ajouter un effet', (e) => this.menuAjout(e), {
         className: 'ghost sm icon-only',
       }),
     )
     hote.appendChild(titre)
 
     if (!layer.effects.length) {
-      hote.appendChild(el('p', { class: 'fx-vide' },
-        'Ombre portee, contour, biseau, teinte… reglables en direct, sans toucher aux pixels.'))
+      // Un panneau de travail n'est pas un encart publicitaire : ce qu'un
+      // effet sait faire se decouvre en l'ajoutant, pas en le lisant.
+      hote.appendChild(el('p', { class: 'fx-vide' }, 'Aucun effet sur ce calque.'))
       return
     }
 
@@ -265,7 +266,7 @@ export class LayersPanel {
       segmented<Falloff>([
         { value: 'net', label: 'Net', title: 'Une seule couleur, bord franc' },
         { value: 'paliers', label: 'Paliers', title: 'Quelques niveaux d\'opacité' },
-        { value: 'tramage', label: 'Trame', title: 'Motif régulier : le degrade sans nouvelles couleurs' },
+        { value: 'tramage', label: 'Trame', title: 'Motif régulier : le dégradé sans nouvelles couleurs' },
       ], fx.falloff, (v) => ed.run('Bord de l\'effet', () => { fx.falloff = v }))))
     if (champs.has('steps') && fx.falloff === 'paliers') corps.appendChild(rangee('Paliers',
       slider(1, 6, fx.steps, 1, (v) => { fx.steps = v; vivant() }, undefined,
@@ -273,7 +274,7 @@ export class LayersPanel {
     if (champs.has('steps') && fx.kind === 'degrade' && fx.falloff !== 'paliers') {
       corps.appendChild(rangee('Tons',
         slider(2, 8, fx.steps, 1, (v) => { fx.steps = v; vivant() }, undefined,
-          () => fige('Tons du degrade'))))
+          () => fige('Tons du dégradé'))))
     }
     if (champs.has('blend')) corps.appendChild(rangee('Fusion',
       select(BLEND_MODES.map((m) => ({ value: m.id, label: m.label, group: m.group })), fx.blend,

@@ -102,7 +102,7 @@ export class RigPanel {
       this.body.appendChild(el('p', { class: 'form-note', style: { marginTop: '6px' } },
         `« ${racine.name} » est la racine : les os decales en dessous en dependent et `,
         'le suivent. Bouger la racine emmene tout le corps, bouger un bras ne bouge que lui. ',
-        'Selectionnez un os pour changer son rattachement.'))
+        'Sélectionnez un os pour changer son rattachement.'))
     }
 
     // --- liaison, un calque a la fois ---
@@ -193,7 +193,7 @@ export class RigPanel {
       },
         el('span', { html: icon('film', 12), style: { color: 'var(--accent)', display: 'flex', flex: 'none' } }),
         el('span', { class: 'lname' }, clip.label),
-        el('span', { style: { fontSize: '10.5px', color: 'var(--text-faint)', flex: 'none' } },
+        el('span', { style: { fontSize: '10px', color: 'var(--text-faint)', flex: 'none' } },
           `${clip.frames}f`),
       ))
     }
@@ -499,7 +499,7 @@ export class RigPanel {
           refreshPose(this.ed)
         }, { min: -64, max: 64, width: '46px' })),
       el('label', {
-        title: 'Souplesse : au-dessus de zero, l\'os traine derrière le corps, '
+        title: 'Souplesse : au-dessus de zéro, l\'os traine derrière le corps, '
           + 'dépasse a l\'arret puis se stabilise. Pour une cape, une queue, une meche.',
       }, 'souple', numberInput(Math.round(bone.softness * 100), (v) => {
         this.ed.run('Souplesse d\'un os', () => { bone.softness = Math.max(0, Math.min(100, v)) / 100 })
@@ -587,7 +587,7 @@ export class RigPanel {
         }),
         el('span', { class: 'lname' }, layer.name),
         el('span', {
-          style: { fontSize: '10.5px', color: 'var(--text-faint)', flex: 'none' },
+          style: { fontSize: '10px', color: 'var(--text-faint)', flex: 'none' },
         }, lie ? 'relie' : vide ? 'vide' : 'libre'),
       ))
     }

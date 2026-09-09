@@ -188,13 +188,13 @@ export function variantsDialog(ed: Editor): void {
     wide: true,
     body,
     actions: [
-      { label: 'Fermer' },
+      { label: 'Annuler' },
       {
         label: 'Appliquer',
         primary: true,
         onClick: () => {
           const picked = variants.filter((_, i) => chosen.has(i))
-          if (!picked.length) { showToast('Selectionnez au moins une variante', 'error'); return false }
+          if (!picked.length) { showToast('Sélectionnez au moins une variante', 'error'); return false }
           applyVariants(ed, picked, target)
           return true
         },
@@ -382,7 +382,7 @@ export function detailDialog(ed: Editor): void {
         },
       },
       {
-        label: 'Appliquer et fermer',
+        label: 'Appliquer',
         primary: true,
         onClick: () => { ed.commitStroke() },
       },
@@ -468,7 +468,7 @@ export function shadeDialog(ed: Editor): void {
     el('label', null, 'Force'),
     slider(0, 1, options.strength, 0.05, (v) => { options.strength = v; apply() },
       (v) => `${Math.round(v * 100)}%`),
-    el('label', null, 'Portee'),
+    el('label', null, 'Portée'),
     slider(1, 8, options.radius, 1, (v) => { options.radius = v; apply() }, (v) => `${v} px`),
     el('label', null, 'Contre-jour'),
     checkbox('Liseré clair sur le bord opposé', options.rimLight, (v) => {
@@ -506,7 +506,7 @@ export function shadeDialog(ed: Editor): void {
           return false
         },
       },
-      { label: 'Fermer', onClick: () => { ed.cancelStroke(); return true } },
+      { label: 'Annuler', onClick: () => { ed.cancelStroke(); return true } },
       { label: 'Appliquer', primary: true, onClick: () => { ed.commitStroke(); return true } },
     ],
     onClose: () => { ed.cancelStroke() },
@@ -566,9 +566,9 @@ export function rampDialog(ed: Editor): void {
       ),
     ),
     actions: [
-      { label: 'Fermer', onClick: () => true },
+      { label: 'Annuler', onClick: () => true },
       {
-        label: 'Ajouter a la palette',
+        label: 'Ajouter à la palette',
         primary: true,
         onClick: () => {
           ed.run('Rampe de couleurs', () => {

@@ -1,3 +1,4 @@
+import { normaliserTouches } from './shortcuts'
 import type { Editor } from '../core/editor'
 import { toolsForMode } from '../tools'
 import { el, clear } from './dom'
@@ -13,7 +14,7 @@ export function renderToolbar(container: HTMLElement, ed: Editor, onSelect: (id:
     const active = ed.settings.tool === tool.id
     const btn = el('button', {
       class: `tool ${active ? 'active' : ''}`,
-      title: `${tool.name}  (${tool.shortcut})${tool.hint ? `\n${tool.hint}` : ''}`,
+      title: `${tool.name}  (${normaliserTouches(tool.shortcut)})${tool.hint ? `\n${tool.hint}` : ''}`,
       'aria-label': tool.name,
       'aria-pressed': String(active),
       onclick: () => onSelect(tool.id),

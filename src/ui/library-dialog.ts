@@ -171,7 +171,7 @@ export function bibliothequeDialog(app: App): void {
           return false
         },
       },
-      { label: 'Fermer', primary: true },
+      { label: 'Fermer' },
     ],
   })
 

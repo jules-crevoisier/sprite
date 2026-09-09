@@ -126,11 +126,11 @@ export function renderTopbar(container: HTMLElement, app: App): void {
 
   container.appendChild(el('div', { class: 'topbar-spacer' }))
 
-  // Porte de sortie d'une demonstration. Elle n'apparait que le temps de la
+  // Porte de sortie d'une démonstration. Elle n'apparait que le temps de la
   // visite, et repose le document qu'on avait avant d'y entrer.
   if (app.demoOuverte) {
     const retour = el('button', { class: 'demo-retour', title: 'Revenir a votre document' },
-      el('span', { html: icon('prev', 13) }),
+      el('span', { html: icon('prev', 14) }),
       el('span', null, `Quitter ${app.demoOuverte}`),
     )
     retour.addEventListener('click', () => app.quitterDemo())

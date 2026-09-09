@@ -360,7 +360,7 @@ export const rigBoneTool: Tool = {
   shortcut: 'K',
   icon: ICONS.bone,
   group: 'rig',
-  hint: 'Glisser pour poser un os. Répartir du bout d\'un os l\'enchaine. Alt : déplacer une extremite.',
+  hint: 'Glisser pour poser un os. Répartir du bout d\'un os l\'enchaine. Alt : déplacer une extrémité.',
   options: [],
   cursor: 'crosshair',
 

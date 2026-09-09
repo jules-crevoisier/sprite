@@ -248,7 +248,7 @@ export function outlineDialog(ed: Editor): void {
     el('label', null, 'Épaisseur'), slider(1, 8, thickness, 1, (v) => { thickness = v }, (v) => `${v} px`),
     el('label', null, 'Couleur'), checkbox('Utiliser la couleur secondaire', useSecondary, (v) => { useSecondary = v }),
     el('label', null, 'Angles'), checkbox('Inclure les diagonales', diagonal, (v) => { diagonal = v }),
-    el('label', null, 'Portee'), select([
+    el('label', null, 'Portée'), select([
       { value: 'cel', label: 'Case active' },
       { value: 'layer', label: 'Calque entier' },
       { value: 'frame', label: 'Frame entière' },
@@ -540,7 +540,7 @@ export function shortcutsDialog(groups: { title: string; items: [string, string]
     const list = el('div', { style: { display: 'grid', gridTemplateColumns: '1fr auto', gap: '5px 16px' } })
     for (const [label, keys] of group.items) {
       list.append(
-        el('span', { style: { color: 'var(--text-dim)', fontSize: '12.5px' } }, label),
+        el('span', { style: { color: 'var(--text-dim)', fontSize: '12px' } }, label),
         el('span', { class: 'keys', style: { justifySelf: 'end' } }, keys),
       )
     }
@@ -666,7 +666,7 @@ export function slicesDialog(ed: Editor): void {
     body.replaceChildren()
     if (!ed.sprite.slices.length) {
       body.appendChild(videAvecPixl('Aucune zone', 'repos',
-        'Selectionnez une region puis « Nouvelle zone depuis la sélection » '
+        'Sélectionnez une region puis « Nouvelle zone depuis la sélection » '
         + 'pour définir un pivot ou une découpe 9-slice.'))
       return
     }

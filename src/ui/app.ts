@@ -463,7 +463,7 @@ export class App {
         ),
       ),
       el('div', { class: 'form-section' }, 'Pense pour le game dev'),
-      el('ul', { style: { margin: '0', paddingLeft: '18px', color: 'var(--text-dim)', lineHeight: '1.8', fontSize: '12.5px' } },
+      el('ul', { style: { margin: '0', paddingLeft: '18px', color: 'var(--text-dim)', lineHeight: '1.8', fontSize: '12px' } },
         el('li', null, 'Tags d\'animation exportes en clips Unity et en SpriteFrames Godot.'),
         el('li', null, 'Planches avec extrusion, marge et contrainte puissance de deux.'),
         el('li', null, 'JSON au format Aseprite, lu par Phaser, PixiJS, LibGDX, Defold.'),

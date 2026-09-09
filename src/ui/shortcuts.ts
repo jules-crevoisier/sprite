@@ -163,6 +163,22 @@ export function installShortcuts(host: ShortcutHost, commands: () => Command[]):
 }
 
 /** Libelle lisible d'un raccourci, pour les menus. */
+/**
+ * Ecrit une combinaison de touches comme l'interface la nomme.
+ *
+ * Les valeurs de `keys` et de `shortcut` servent aussi a reconnaitre la
+ * frappe : on ne les traduit donc pas a la source, on les traduit a
+ * l'affichage. Sans cela, la meme commande s'ecrivait « Ctrl+Maj+E » dans le
+ * menu Fichier et « Ctrl+Shift+E » dans la fenetre des raccourcis, deux
+ * lignes plus bas.
+ */
+export function normaliserTouches(combinaison: string): string {
+  return combinaison
+    .split('+')
+    .map((t) => (t.toLowerCase() === 'shift' ? 'Maj' : t))
+    .join('+')
+}
+
 export function keyLabel(commandId: string): string | undefined {
   const entry = Object.entries(BINDINGS).find(([, id]) => id === commandId)
   if (!entry) return undefined

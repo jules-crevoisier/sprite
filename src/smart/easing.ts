@@ -45,7 +45,7 @@ export const EASINGS: Easing[] = [
   {
     id: 'ease-in',
     label: 'Depart doux',
-    hint: 'Démarré lentement et accelere : une masse qui se met en marche',
+    hint: 'Démarré lentement et accéléré : une masse qui se met en marche',
     fn: (t) => t * t,
   },
   {

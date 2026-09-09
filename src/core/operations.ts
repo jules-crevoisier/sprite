@@ -337,7 +337,7 @@ export function propagateCel(ed: Editor): void {
   if (!source) { ed.toast('Case vide', 'error'); return }
   const layer = ed.layer
   const targets = [...ed.frameSelection].filter((f) => f !== ed.activeFrame)
-  if (!targets.length) { ed.toast('Selectionnez plusieurs frames dans la timeline', 'error'); return }
+  if (!targets.length) { ed.toast('Sélectionnez plusieurs frames dans la timeline', 'error'); return }
   ed.run('Propager la case', () => {
     for (const f of targets) {
       layer.cels[f] = { bitmap: source.bitmap.clone(), opacity: source.opacity }

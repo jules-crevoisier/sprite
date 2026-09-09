@@ -99,6 +99,17 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
     etat = { enGeste: false, rafraichir: null, rebatir: refresh }
     etats.set(container, etat)
     const e = etat
+    // La molette d'une souris ordinaire n'a qu'un axe : sans ce report, les
+    // reglages pousses hors de la barre — la symetrie et le mode tuile, sur
+    // une fenetre de 1280 — n'etaient atteignables qu'en passant par le menu
+    // Vue, ce que personne ne devine.
+    container.addEventListener('wheel', (ev) => {
+      if (container.scrollWidth <= container.clientWidth + 1) return
+      if (Math.abs(ev.deltaY) <= Math.abs(ev.deltaX)) return
+      ev.preventDefault()
+      container.scrollLeft += ev.deltaY
+    }, { passive: false })
+
     container.addEventListener('pointerdown', (ev) => {
       const cible = ev.target as Element | null
       e.enGeste = !!cible?.closest?.('input[type=range]')
@@ -126,7 +137,7 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
     for (const n of nodes) if (n) container.appendChild(n)
   }
 
-  add(el('div', { class: 'opt' }, el('strong', { style: { color: 'var(--text)', fontSize: '12.5px' } }, tool.name)))
+  add(el('div', { class: 'opt' }, el('strong', { style: { color: 'var(--text)', fontSize: '12px' } }, tool.name)))
   add(el('div', { class: 'opt-sep' }))
 
   const opts = new Set(tool.options)
@@ -231,13 +242,13 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
 
   if (opts.has('gradientDither')) {
     add(el('div', { class: 'opt' },
-      checkbox('Tramage du degrade', s.gradientDither, (v) => ed.updateSettings({ gradientDither: v })),
+      checkbox('Tramage du dégradé', s.gradientDither, (v) => ed.updateSettings({ gradientDither: v })),
     ))
   }
 
   if (opts.has('tolerance')) {
     add(el('div', { class: 'opt' },
-      el('label', null, 'Tolerance'),
+      el('label', null, 'Tolérance'),
       slider(0, 255, s.tolerance, 1, (v) => ed.updateSettings({ tolerance: v })),
     ))
   }

@@ -2889,6 +2889,8 @@ const SANS_ACCENT = [
   'Elevation', 'Lumiere', 'Edition', 'Detail', 'Icone', 'Entree', 'Interieur',
   'Repetition', 'Numero', 'Systeme', 'Parametre', 'Symetrie', 'Isometrique',
   'Modele', 'Element', 'Premiere', 'Derniere', 'Lecon', 'Apres', 'Carree',
+  'Portee', 'Degrade', 'Diametre', 'Extremite', 'Tolerance', 'Hierarchie',
+  'Frequence', 'Demonstration', 'Zero', 'Moitie', 'Preenregistre',
 ]
 const fautes = await page.evaluate(async (mots) => {
   const vus = new Set()

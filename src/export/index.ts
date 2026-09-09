@@ -156,7 +156,7 @@ const GODOT_README = (base: string, resPath: string) => `Import dans Godot 4
 1. Copiez ${base}.png et ${base}_frames.très dans votre projet.
    Le .très pointe vers ${resPath} : adaptez le chemin si vous rangez la
    texture ailleurs (ouvrez le .très dans un éditeur de texte).
-2. Selectionnez la texture dans le FileSystem, onglet Import, mettez
+2. Sélectionnez la texture dans le FileSystem, onglet Import, mettez
    Filter sur Nearest puis Reimport. C'est indispensable pour du pixel art.
 3. Ajoutez un AnimatedSprite2D et assignez ${base}_frames.très a sa
    propriété Sprite Frames. Chaque tag d'animation devient une animation.

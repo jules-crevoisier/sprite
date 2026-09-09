@@ -377,14 +377,40 @@ export class Viewport {
     ctx.restore()
   }
 
+  /**
+   * Grille d'un pixel, plus une ligne renforcee tous les huit.
+   *
+   * Elle etait tracee en blanc a dix pour cent : invisible sur un aplat
+   * clair, c'est-a-dire precisement la ou l'on compte les pixels. Le mode
+   * `difference` la rend lisible sur n'importe quel fond — clair ou sombre —
+   * sans jamais teinter le dessin, puisqu'il inverse au lieu de recouvrir.
+   *
+   * La ligne des huit sert a compter : au-dela de quelques pixels, l'oeil ne
+   * denombre plus une grille reguliere, il a besoin de reperes.
+   */
   private drawPixelGrid(ctx: CanvasRenderingContext2D): void {
     const s = this.ed.sprite
+    const trait = 1 / this.ed.view.zoom
     ctx.save()
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)'
-    ctx.lineWidth = 1 / this.ed.view.zoom
+    ctx.globalCompositeOperation = 'difference'
+    ctx.lineWidth = trait
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)'
     ctx.beginPath()
-    for (let x = 1; x < s.width; x++) { ctx.moveTo(x, 0); ctx.lineTo(x, s.height) }
-    for (let y = 1; y < s.height; y++) { ctx.moveTo(0, y); ctx.lineTo(s.width, y) }
+    for (let x = 1; x < s.width; x++) {
+      if (x % 8 === 0) continue
+      ctx.moveTo(x, 0); ctx.lineTo(x, s.height)
+    }
+    for (let y = 1; y < s.height; y++) {
+      if (y % 8 === 0) continue
+      ctx.moveTo(0, y); ctx.lineTo(s.width, y)
+    }
+    ctx.stroke()
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.34)'
+    ctx.beginPath()
+    for (let x = 8; x < s.width; x += 8) { ctx.moveTo(x, 0); ctx.lineTo(x, s.height) }
+    for (let y = 8; y < s.height; y += 8) { ctx.moveTo(0, y); ctx.lineTo(s.width, y) }
     ctx.stroke()
     ctx.restore()
   }

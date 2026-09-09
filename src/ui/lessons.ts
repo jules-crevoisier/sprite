@@ -200,12 +200,12 @@ export function buildLessons(app: App): Lesson[] {
           done: () => ed.mode === 'rig',
         },
         {
-          text: 'L\'interface a change : la barre d\'outils propose Créer des os, Poser et Pondérer, et le panneau de droite montre la hierarchie. Partez d\'un modèle « Humanoide de face ».',
+          text: 'L\'interface a change : la barre d\'outils propose Créer des os, Poser et Pondérer, et le panneau de droite montre la hiérarchie. Partez d\'un modèle « Humanoide de face ».',
           target: q('[data-panel="rig"]'),
           done: () => ed.sprite.rig.bones.length > 0,
         },
         {
-          text: 'Les os apparaissent sur le dessin. Avec l\'outil Créer des os, glissez une extremite en maintenant Alt pour l\'ajuster, ou repartez du bout d\'un os pour en enchainer un nouveau.',
+          text: 'Les os apparaissent sur le dessin. Avec l\'outil Créer des os, glissez une extrémité en maintenant Alt pour l\'ajuster, ou repartez du bout d\'un os pour en enchainer un nouveau.',
           target: q('.toolbar'),
           enter: () => app.setTool('rig-bone'),
         },
@@ -376,7 +376,7 @@ export function buildLessons(app: App): Lesson[] {
           done: () => (ed.layer.effects.find((f) => f.kind === 'contour')?.size ?? 1) !== epaisseur,
         },
         {
-          text: 'Ajoutez maintenant une « Ombre portee ». L\'angle dit d\'ou vient la lumière, '
+          text: 'Ajoutez maintenant une « Ombre portée ». L\'angle dit d\'ou vient la lumière, '
             + 'la distance de combien de pixels l\'ombre s\'écarté.',
           target: q('.fx-head'),
           done: () => ed.layer.effects.some((f) => f.kind === 'ombre-portee'),

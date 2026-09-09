@@ -92,6 +92,7 @@ export class TimelinePanel {
       e.preventDefault()
       s.scrollLeft += e.deltaY
     }, { passive: false })
+    this.scroll.addEventListener('scroll', () => this.syncToolbar(), { passive: true })
 
     editor.events.on('doc', () => this.render())
     editor.events.on('cursor', () => { this.renderSelectionOnly(); this.suivreImageActive() })
@@ -135,7 +136,14 @@ export class TimelinePanel {
     if (!this.container) return
     const tags = this.grid.querySelector<HTMLElement>('.tl-tags')
     const bandes = tags ? tags.getBoundingClientRect().height : 20
-    const needed = 5 + 36 + 26 + Math.max(20, bandes) + this.ed.sprite.layers.length * 30 + 14
+    // Les 12 derniers pixels sont la place de l'ascenseur horizontal. Sans
+    // eux, la timeline se dimensionnait exactement sur son contenu, la barre
+    // n'avait nulle part ou s'afficher, et il ne restait que la molette —
+    // astucieux mais indecouvrable — pour atteindre les images au-dela de la
+    // vingt-cinquieme.
+    const ASCENSEUR = 12
+    const needed = 5 + 36 + 26 + Math.max(20, bandes)
+      + this.ed.sprite.layers.length * 30 + 14 + ASCENSEUR
     const height = this.manualHeight ?? Math.min(window.innerHeight * 0.45, needed)
     this.container.style.height = `${Math.round(height)}px`
   }
@@ -192,13 +200,13 @@ export class TimelinePanel {
     const ed = this.ed
     const t = this.toolbar
 
-    const play = iconButton(icon('play', 15), 'Lecture (Entrée)', () => this.playback.toggle(),
+    const play = iconButton(icon('play', 16), 'Lecture (Entrée)', () => this.playback.toggle(),
       { className: 'sm icon-only' })
-    const tagOnly = iconButton(icon('loop', 15), 'Limiter la lecture au tag courant', () => {
+    const tagOnly = iconButton(icon('loop', 16), 'Limiter la lecture au tag courant', () => {
       ed.playTagOnly = !ed.playTagOnly
       this.syncToolbar()
     }, { className: 'sm icon-only ghost' })
-    const onion = iconButton(icon('onion', 15), 'Pelure d\'oignon', () => {
+    const onion = iconButton(icon('onion', 16), 'Pelure d\'oignon', () => {
       ed.onion.enabled = !ed.onion.enabled
       ed.events.emit('settings', undefined)
       this.syncToolbar()
@@ -228,14 +236,14 @@ export class TimelinePanel {
     const total = el('span')
 
     t.append(
-      iconButton(icon('prev', 15), 'Frame précédente (,)', () => ed.setActiveFrame(ed.activeFrame - 1), { className: 'ghost sm icon-only' }),
+      iconButton(icon('prev', 16), 'Frame précédente (,)', () => ed.setActiveFrame(ed.activeFrame - 1), { className: 'ghost sm icon-only' }),
       play,
-      iconButton(icon('next', 15), 'Frame suivante (.)', () => ed.setActiveFrame(ed.activeFrame + 1), { className: 'ghost sm icon-only' }),
+      iconButton(icon('next', 16), 'Frame suivante (.)', () => ed.setActiveFrame(ed.activeFrame + 1), { className: 'ghost sm icon-only' }),
       tagOnly,
       el('div', { class: 'opt-sep' }),
-      iconButton(icon('plus', 15), 'Nouvelle frame — reprend le dessin actuel (Alt+N)', () => this.addFrame(), { className: 'ghost sm icon-only' }),
-      iconButton(icon('frame-empty', 15), 'Nouvelle frame vide (Alt+Maj+N)', () => this.addEmptyFrame(), { className: 'ghost sm icon-only' }),
-      iconButton(icon('trash', 15), 'Supprimer la frame', () => this.deleteFrame(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('plus', 16), 'Nouvelle frame — reprend le dessin actuel (Alt+N)', () => this.addFrame(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('frame-empty', 16), 'Nouvelle frame vide (Alt+Maj+N)', () => this.addEmptyFrame(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('trash', 16), 'Supprimer la frame', () => this.deleteFrame(), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
       el('div', { class: 'tl-fps' }, el('span', null, 'Durée'), duration, el('span', null, 'ms'), fps, toutes),
       el('div', { class: 'opt-sep' }),
@@ -244,13 +252,13 @@ export class TimelinePanel {
       onion,
       iconButton(icon('settings', 14), 'Réglages de la pelure d\'oignon', (e) => this.onionMenu(e), { className: 'ghost sm icon-only' }),
       el('div', { class: 'opt-sep' }),
-      iconButton(icon('tag', 15), 'Nouveau tag d\'animation sur la sélection', () => this.createTag(), { className: 'ghost sm', label: 'Tag' }),
+      iconButton(icon('tag', 16), 'Nouveau tag d\'animation sur la sélection', () => this.createTag(), { className: 'ghost sm', label: 'Tag' }),
       el('div', { class: 'opt-sep' }),
       // La pile de calques se pilote depuis la timeline, sans aller-retour
       // avec le panneau de droite : c'est la que se lit une composition.
-      iconButton(icon('layers', 15), 'Nouveau calque', () => this.ajouterCalque(), { className: 'ghost sm icon-only' }),
-      iconButton(icon('duplicate', 15), 'Dupliquer le calque', () => this.dupliquerCalque(), { className: 'ghost sm icon-only' }),
-      iconButton(icon('trash', 15), 'Supprimer le calque', () => this.supprimerCalque(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('layers', 16), 'Nouveau calque', () => this.ajouterCalque(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('duplicate', 16), 'Dupliquer le calque', () => this.dupliquerCalque(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('trash', 16), 'Supprimer le calque', () => this.supprimerCalque(), { className: 'ghost sm icon-only' }),
       el('div', { class: 'spacer' }),
       el('div', { class: 'tl-fps' }, total),
     )
@@ -284,8 +292,17 @@ export class TimelinePanel {
     // On ne bouscule pas un champ en cours de saisie.
     if (document.activeElement !== bar.duration) bar.duration.value = String(duration)
     bar.fps.textContent = `≈ ${Math.round(1000 / Math.max(1, duration))} fps`
+    // La plage visible, quand tout ne tient pas. Un ascenseur suffirait, mais
+    // le systeme le dessine parfois en surimpression, sans occuper de place :
+    // on ne peut donc pas compter dessus pour dire qu'il reste des images a
+    // droite. Ce compte, lui, se voit toujours.
+    const premiere = Math.floor(this.scroll.scrollLeft / COL_W) + 1
+    const tenant = Math.max(1, Math.floor((this.scroll.clientWidth - NAME_W) / COL_W))
+    const derniere = Math.min(ed.frameCount, premiere + tenant - 1)
+    const plage = derniere - premiere + 1 < ed.frameCount ? `${premiere}–${derniere} sur ` : ''
     bar.total.textContent =
-      `${ed.frameCount} frame${ed.frameCount > 1 ? 's' : ''} · ${(ed.sprite.totalDuration() / 1000).toFixed(2)}s`
+      `${plage}${ed.frameCount} frame${ed.frameCount > 1 ? 's' : ''}`
+      + ` · ${(ed.sprite.totalDuration() / 1000).toFixed(2)}s`
     if (bar.courbe.value !== ed.easing) bar.courbe.value = ed.easing
     bar.trace.innerHTML = easingSvg(ed.easing)
     bar.trace.title = EASINGS.find((e) => e.id === ed.easing)?.hint ?? ''

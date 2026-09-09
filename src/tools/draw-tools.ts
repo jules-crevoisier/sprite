@@ -290,13 +290,13 @@ export const shadingTool: Tool = {
 
 export const gradientTool: Tool = {
   id: 'gradient',
-  name: 'Degrade',
+  name: 'Dégradé',
   shortcut: 'R',
   icon: ICONS.gradient,
   group: 'draw',
-  hint: 'Glisser pour définir l\'axe. Maj : degrade radial.',
+  hint: 'Glisser pour définir l\'axe. Maj : dégradé radial.',
   options: ['gradientDither', 'opacity', 'paintMode'],
-  down(ed, _p) { ed.beginStroke('Degrade') },
+  down(ed, _p) { ed.beginStroke('Dégradé') },
   move(ed, p) {
     if (!ed.strokeBefore) return
     ed.resetStroke()

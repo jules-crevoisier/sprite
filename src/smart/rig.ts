@@ -84,7 +84,7 @@ export interface Bone {
   /** Ordre de dessin : un os de valeur superieure passe devant. */
   z: number
   /**
-   * Portee de l'os, en pixels : la moitie de l'epaisseur de la partie qu'il
+   * Portee de l'os, en pixels : la moitié de l'epaisseur de la partie qu'il
    * commande. La liaison compare des distances rapportees a cette portee,
    * faute de quoi un os de bras, mince mais proche, rafle le cote d'une tete
    * pourtant commandee par un os central plus eloigne.
@@ -225,7 +225,7 @@ export function createBone(
     depth: 0,
     x, y, ex, ey,
     z: rig.bones.length,
-    // A defaut d'indication, une portee proportionnee a la longueur de l'os.
+    // A defaut d'indication, une portée proportionnee a la longueur de l'os.
     radius: Math.max(2, Math.hypot(ex - x, ey - y) * 0.35),
     softness: 0,
     angle: 0, tx: 0, ty: 0, scale: 1,
