@@ -17,6 +17,7 @@ export class History {
   private listeners = new Set<() => void>()
   /** Incremente a chaque mutation : sert de cle de cache pour le rendu. */
   version = 0
+  private pushCount = 0
 
   constructor(limit = 200) { this.limit = limit }
 
@@ -31,9 +32,21 @@ export class History {
   get undoLabel(): string | null { return this.canUndo ? this.entries[this.index].label : null }
   get redoLabel(): string | null { return this.canRedo ? this.entries[this.index + 1].label : null }
   get depth(): number { return this.entries.length }
+  /**
+   * Position du curseur dans la pile.
+   *
+   * `depth` compte les commandes stockees : une annulation ne la fait pas
+   * baisser, elle ne fait que reculer le curseur. Qui voulait detecter une
+   * annulation en surveillant `depth` attendait un evenement qui n'arrive
+   * jamais — c'est exactement ce qui figeait l'etape Ctrl+Z du tutoriel.
+   */
+  get position(): number { return this.index }
+  /** Nombre total de commandes empilees depuis le debut, jamais decremente. */
+  get pushes(): number { return this.pushCount }
 
   /** Enregistre une commande deja appliquee. */
   push(cmd: Command): void {
+    this.pushCount++
     this.entries.splice(this.index + 1)
     this.entries.push(cmd)
     if (this.entries.length > this.limit) this.entries.shift()

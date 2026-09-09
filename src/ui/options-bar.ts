@@ -64,6 +64,12 @@ function strokePreview(ed: Editor): { node: HTMLElement; redraw: () => void } {
  * le curseur que la souris tient : le navigateur perd sa prise et la valeur
  * s'arrete au premier cran. On note donc qu'un geste est en cours, et on se
  * contente alors de rafraichir ce qui depend de la valeur.
+ *
+ * Le garde ne vaut QUE pour les curseurs. Arme sur n'importe quel appui, il
+ * reconstruisait la barre au relachement — donc avant que le navigateur
+ * n'emette le `click`, qu'il n'emet pas sur un noeud detache. Tous les
+ * boutons de la barre etaient morts, forme du pinceau comprise ; seuls les
+ * curseurs, qui repondent a `input`, continuaient de marcher.
  */
 interface EtatBarre {
   enGeste: boolean
@@ -93,7 +99,10 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
     etat = { enGeste: false, rafraichir: null, rebatir: refresh }
     etats.set(container, etat)
     const e = etat
-    container.addEventListener('pointerdown', () => { e.enGeste = true })
+    container.addEventListener('pointerdown', (ev) => {
+      const cible = ev.target as Element | null
+      e.enGeste = !!cible?.closest?.('input[type=range]')
+    })
     // Le relachement peut tomber hors de la barre : on ecoute la fenetre.
     const fin = () => {
       if (!e.enGeste) return

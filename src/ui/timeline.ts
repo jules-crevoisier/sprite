@@ -59,6 +59,12 @@ export class TimelinePanel {
   private container: HTMLElement | null = null
   /** Hauteur fixee a la souris ; null = ajustement automatique. */
   private manualHeight: number | null = null
+  /**
+   * Image en cours de deplacement, ou null. La grille etant refaite a chaque
+   * pas du glisser, la marque visuelle ne peut pas vivre sur le noeud tire :
+   * elle est reposee par le rendu.
+   */
+  private imageTiree: number | null = null
 
   constructor(editor: Editor, playback: Playback, container: HTMLElement) {
     this.ed = editor
@@ -72,8 +78,21 @@ export class TimelinePanel {
     container.append(this.makeResizer(), this.toolbar, this.scroll)
     this.root = container
 
+    // La molette verticale defile horizontalement quand il n'y a rien a
+    // faire defiler en hauteur : c'est le sens utile ici, une souris ordinaire
+    // n'a pas de second axe et les images partent vers la droite.
+    this.scroll.addEventListener('wheel', (e) => {
+      const s = this.scroll
+      const versLeBas = Math.abs(e.deltaY) > Math.abs(e.deltaX)
+      const peutDescendre = s.scrollHeight > s.clientHeight + 1
+      if (!versLeBas || (peutDescendre && !e.shiftKey)) return
+      if (s.scrollWidth <= s.clientWidth + 1) return
+      e.preventDefault()
+      s.scrollLeft += e.deltaY
+    }, { passive: false })
+
     editor.events.on('doc', () => this.render())
-    editor.events.on('cursor', () => this.renderSelectionOnly())
+    editor.events.on('cursor', () => { this.renderSelectionOnly(); this.suivreImageActive() })
     editor.events.on('reload', () => this.render())
     editor.events.on('playback', () => this.renderToolbar())
     this.render()
@@ -117,6 +136,29 @@ export class TimelinePanel {
     const needed = 5 + 36 + 26 + Math.max(20, bandes) + this.ed.sprite.layers.length * 30 + 14
     const height = this.manualHeight ?? Math.min(window.innerHeight * 0.45, needed)
     this.container.style.height = `${Math.round(height)}px`
+  }
+
+  /**
+   * Ramene l'image courante dans la fenetre de defilement.
+   *
+   * Pendant la lecture d'un cycle place au-dela du bord droit, la timeline
+   * restait sur les premieres colonnes : on voyait le sprite bouger sans
+   * jamais voir l'image lue.
+   */
+  private suivreImageActive(): void {
+    const col = this.grid.querySelector<HTMLElement>(
+      `.tl-head-cell[data-frame="${this.ed.activeFrame}"]`,
+    )
+    if (!col) return
+    const gauche = col.offsetLeft
+    const droite = gauche + col.offsetWidth
+    const vue = this.scroll.scrollLeft
+    // La colonne des noms est collee a gauche : elle masque ce qui passe
+    // dessous, il faut donc s'arreter avant elle et pas au bord de la vue.
+    const debut = vue + NAME_W
+    const fin = vue + this.scroll.clientWidth
+    if (gauche < debut) this.scroll.scrollLeft = gauche - NAME_W
+    else if (droite > fin) this.scroll.scrollLeft = droite - this.scroll.clientWidth
   }
 
   /** Mise a jour legere quand seule la position du curseur change. */
@@ -362,6 +404,74 @@ export class TimelinePanel {
     ])
   }
 
+  /**
+   * Reordonne les images en tirant leur numero.
+   *
+   * On ne bouge rien tant que le curseur n'a pas franchi une demi-colonne :
+   * un simple clic doit rester un clic. Le trait d'insertion montre ou
+   * l'image tombera, et tout le geste ne laisse qu'une entree d'historique,
+   * meme s'il traverse dix colonnes.
+   */
+  private rendreImageDeplacable(cell: HTMLElement, index: number): void {
+    const ed = this.ed
+    cell.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return
+      if (ed.sprite.frameCount < 2) return
+      const depart = e.clientX
+      let source = index
+      let bouge = false
+      const trait = el('div', { class: 'tl-insert', hidden: true })
+      this.scroll.appendChild(trait)
+
+      /** Colonne devant laquelle l'image se posera, 0..frameCount. */
+      const creneau = (x: number): number => {
+        const r = this.scroll.getBoundingClientRect()
+        const dans = x - r.left + this.scroll.scrollLeft - NAME_W
+        return Math.max(0, Math.min(ed.sprite.frameCount, Math.round(dans / COL_W)))
+      }
+
+      const move = (ev: PointerEvent) => {
+        if (!bouge) {
+          if (Math.abs(ev.clientX - depart) < COL_W / 2) return
+          bouge = true
+          this.imageTiree = source
+        }
+        const cible = creneau(ev.clientX)
+        trait.hidden = false
+        trait.style.left = `${NAME_W + cible * COL_W}px`
+        // Deplacement en direct : on voit le dessin passer d'une colonne a
+        // l'autre au lieu de decouvrir le resultat au relachement.
+        const to = cible > source ? cible - 1 : cible
+        if (to === source) return
+        ed.sprite.moveFrame(source, to)
+        source = to
+        this.imageTiree = to
+        ed.activeFrame = to
+        ed.events.emit('doc', undefined)
+      }
+
+      const up = () => {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+        window.removeEventListener('pointercancel', up)
+        trait.remove()
+        this.imageTiree = null
+        if (!bouge || source === index) { this.renderGrid(); return }
+        const de = index, vers = source
+        ed.pushCommand({
+          label: 'Deplacer une image',
+          undo: () => { ed.sprite.moveFrame(vers, de); ed.setActiveFrame(de) },
+          redo: () => { ed.sprite.moveFrame(de, vers); ed.setActiveFrame(vers) },
+        })
+        ed.setActiveFrame(vers)
+      }
+
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', up)
+      window.addEventListener('pointercancel', up)
+    })
+  }
+
   /* ---------------------------------------------------------------- */
   /* Grille                                                            */
   /* ---------------------------------------------------------------- */
@@ -382,6 +492,8 @@ export class TimelinePanel {
         oncontextmenu: (e: MouseEvent) => { e.preventDefault(); ed.setActiveFrame(f); this.frameMenu(e) },
       }, String(f + 1))
       cell.dataset.frame = String(f)
+      if (this.imageTiree === f) cell.classList.add('dragging')
+      this.rendreImageDeplacable(cell, f)
       this.grid.appendChild(cell)
     }
 
@@ -427,10 +539,31 @@ export class TimelinePanel {
     for (let li = ed.sprite.layers.length - 1; li >= 0; li--) {
       const layer = ed.sprite.layers[li]
       const nameCell = el('div', {
-        class: `tl-cell tl-layer-cell ${li === ed.activeLayer ? 'active' : ''}`,
+        class: `tl-cell tl-layer-cell ${li === ed.activeLayer ? 'active' : ''}`
+          + `${layer.visible ? '' : ' hidden-layer'}`,
         onclick: () => ed.setActiveLayer(li),
       },
-        el('span', { html: icon(layer.visible ? 'eye' : 'eye-off', 12), style: { color: 'var(--text-faint)', display: 'flex' } }),
+        // L'oeil etait un simple dessin : on cliquait dessus et il ne se
+        // passait rien d'autre que la selection de la ligne. Il masque
+        // desormais vraiment, comme celui du panneau Calques.
+        el('button', {
+          class: `tl-mini ${layer.visible ? 'on' : ''}`,
+          title: layer.visible ? 'Masquer le calque' : 'Afficher le calque',
+          html: icon(layer.visible ? 'eye' : 'eye-off', 12),
+          onclick: (e: MouseEvent) => {
+            e.stopPropagation()
+            ed.run(layer.visible ? 'Masquer le calque' : 'Afficher le calque', () => { layer.visible = !layer.visible })
+          },
+        }),
+        el('button', {
+          class: `tl-mini ${layer.locked ? 'on' : ''}`,
+          title: layer.locked ? 'Deverrouiller le calque' : 'Verrouiller le calque',
+          html: icon(layer.locked ? 'lock' : 'unlock', 12),
+          onclick: (e: MouseEvent) => {
+            e.stopPropagation()
+            ed.run(layer.locked ? 'Deverrouiller' : 'Verrouiller', () => { layer.locked = !layer.locked })
+          },
+        }),
         el('span', { class: 'lname' }, layer.name),
       )
       nameCell.dataset.layerRow = String(li)

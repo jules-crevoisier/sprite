@@ -1723,12 +1723,13 @@ const curseurTaille = '#optionsbar input[data-test="taille"]'
 
 // Un reglage change pendant un geste ne doit pas reconstruire la barre :
 // le curseur tenu par la souris serait detruit et le glisser s'arreterait
-// au premier cran.
+// au premier cran. L'appui part du curseur lui-meme, comme dans la vraie
+// vie : c'est lui, et lui seul, que le garde protege — arme sur toute la
+// barre, il tuait le clic de tous les boutons voisins.
 const survie = await page.evaluate((sel) => {
-  const barre = document.getElementById('optionsbar')
   const avant = document.querySelector(sel)
   avant.dataset.marque = 'oui'
-  barre.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  avant.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
   window.pixelforge.ed.updateSettings({ brushSize: 12 })
   const pendant = document.querySelector(sel)?.dataset.marque === 'oui'
   window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))
@@ -2797,6 +2798,191 @@ const cyclesNommables = await page.evaluate(async () => {
 })
 check('chaque cycle est joignable par son identifiant', cyclesNommables.length === 0,
   cyclesNommables.join(', ') || 'les six repondent')
+
+/* ------------------------------------------------------------------ */
+/* Commandes qui repondent au clic, et reperes d'historique honnetes    */
+/* ------------------------------------------------------------------ */
+
+// La barre d'options se reconstruit a chaque reglage. Armee sur n'importe
+// quel appui, cette reconstruction partait au `pointerup` — donc avant que le
+// navigateur n'emette le `click`, qu'il n'emet pas sur un noeud detache :
+// tous ses boutons etaient morts sans qu'aucune erreur ne le signale.
+await page.evaluate(() => { window.pixelforge.setTool('pencil') })
+await sleep(250)
+const formeAvant = await page.evaluate(() => window.pixelforge.ed.settings.brushShape)
+const boutonForme = page.locator('#optionsbar .seg button[title="Carree"]')
+if (await boutonForme.count()) await boutonForme.first().click()
+await sleep(250)
+const formeApres = await page.evaluate(() => window.pixelforge.ed.settings.brushShape)
+check('un bouton de la barre d\'options repond au clic',
+  formeAvant !== formeApres && formeApres === 'square', `${formeAvant} -> ${formeApres}`)
+
+// Le curseur de taille, lui, doit continuer de suivre la souris pendant tout
+// le glisser : c'est ce que le garde protege, et il ne doit pas disparaitre
+// en meme temps que le defaut ci-dessus.
+const glisse = await page.evaluate(async () => {
+  const input = document.querySelector('#optionsbar input[type=range]')
+  if (!input) return null
+  const avant = window.pixelforge.ed.settings.brushSize
+  input.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
+  input.value = String(Math.min(Number(input.max), avant + 3))
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  const pendant = document.contains(input)
+  window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }))
+  return { avant, apres: window.pixelforge.ed.settings.brushSize, pendant }
+})
+check('le curseur de taille survit a son propre glisser',
+  !!glisse && glisse.pendant && glisse.apres > glisse.avant,
+  glisse ? `${glisse.avant} -> ${glisse.apres}, garde ${glisse.pendant}` : 'pas de curseur')
+
+// `depth` compte les commandes stockees : une annulation ne la fait pas
+// baisser. Le tutoriel surveillait cette valeur pour valider son etape
+// Ctrl+Z et attendait donc un evenement qui n'arrive jamais.
+const reperes = await page.evaluate(() => {
+  const h = window.pixelforge.ed.history
+  const avant = { depth: h.depth, position: h.position, pushes: h.pushes }
+  h.push({ label: 'test', undo: () => {}, redo: () => {} })
+  const pousse = { depth: h.depth, position: h.position, pushes: h.pushes }
+  h.undo()
+  const annule = { depth: h.depth, position: h.position, pushes: h.pushes }
+  h.redo()
+  return { avant, pousse, annule }
+})
+check('l\'annulation fait bouger une valeur observable',
+  reperes.annule.position < reperes.pousse.position &&
+  reperes.annule.depth === reperes.pousse.depth &&
+  reperes.annule.pushes === reperes.pousse.pushes,
+  `position ${reperes.pousse.position} -> ${reperes.annule.position}, depth inchange`)
+
+// Aucune etape ne doit surveiller `depth` pour detecter une annulation, ni
+// comparer a une valeur figee ce qui devrait l'etre a l'etat d'avant.
+const source = await (await fetch(`${URL}src/ui/lessons.ts`)).text()
+check('aucune lecon ne guette une annulation sur la taille de la pile',
+  !/history\.depth\s*<[^=]/.test(source),
+  (source.match(/.*history\.depth\s*<[^=].*/) ?? ['aucune'])[0].trim())
+
+/* ------------------------------------------------------------------ */
+/* Le tutoriel : des etapes qui demandent vraiment quelque chose        */
+/* ------------------------------------------------------------------ */
+
+// Une etape dont la condition est deja vraie a l'entree defile toute seule :
+// on lit une consigne, elle disparait, on n'a rien fait. Trois l'etaient.
+const etapesSansGeste = await page.evaluate(() => {
+  const app = window.pixelforge
+  const fautifs = []
+  for (const lecon of app.lessons()) {
+    try { lecon.setup?.() } catch { /* la lecon suivante compte quand meme */ }
+    for (const [i, etape] of lecon.steps.entries()) {
+      if (!etape.done) continue
+      try {
+        etape.enter?.()
+        if (etape.done()) fautifs.push(`${lecon.id}#${i + 1}`)
+        // Puis on fait le geste a sa place quand l'etape sait le faire : sans
+        // cela, l'etape suivante serait jugee dans un etat que la lecon reelle
+        // ne connait jamais.
+        etape.auto?.()
+      } catch (e) { fautifs.push(`${lecon.id}#${i + 1} (${e.message})`) }
+    }
+  }
+  return fautifs
+})
+check('aucune etape de tutoriel ne se valide sans rien faire',
+  etapesSansGeste.length === 0, etapesSansGeste.join(', ') || 'toutes attendent un geste')
+
+// Une consigne qui dit « dessinez » doit eclairer la toile. Celle des bases
+// designait la barre d'outils : on cherchait ou dessiner sur la palette.
+const ciblesDeDessin = await page.evaluate(() => {
+  const app = window.pixelforge
+  const mauvais = []
+  for (const lecon of app.lessons()) {
+    for (const [i, etape] of lecon.steps.entries()) {
+      if (!/dessinez (sur|un trait)/i.test(etape.text)) continue
+      const cible = etape.target?.()
+      if (cible && !cible.closest('#canvas, .canvas-area')) {
+        mauvais.push(`${lecon.id}#${i + 1} -> ${cible.className || cible.id}`)
+      }
+    }
+  }
+  return mauvais
+})
+check('une etape « dessinez » eclaire la toile et pas autre chose',
+  ciblesDeDessin.length === 0, ciblesDeDessin.join(', ') || 'toutes visent la toile')
+
+/* ------------------------------------------------------------------ */
+/* Le panneau d'animation                                              */
+/* ------------------------------------------------------------------ */
+
+await page.evaluate(async () => {
+  const m = await import('/src/ui/mascot-clips.ts')
+  window.pixelforge.workspace.setTimelineVisible(true)
+  window.pixelforge.ed.loadSprite(m.spritePixl())
+})
+await sleep(600)
+
+// `min-width: auto` laissait la timeline prendre la largeur de son contenu :
+// a 46 images elle mesurait 2172px dans une fenetre de 1440 et poussait la
+// mise en page au lieu de defiler. Rien ne debordait a l'ecran, mais les
+// dernieres images etaient hors d'atteinte.
+const debord = await page.evaluate(() => {
+  const s = document.querySelector('.tl-scroll')
+  return {
+    vue: s.clientWidth, contenu: s.scrollWidth,
+    fenetre: window.innerWidth, images: window.pixelforge.ed.sprite.frameCount,
+  }
+})
+check('la timeline defile au lieu de deborder',
+  debord.vue <= debord.fenetre && debord.contenu > debord.vue,
+  `${debord.images} images : ${debord.contenu}px de contenu dans ${debord.vue}px de vue`)
+
+// La molette d'une souris ordinaire n'a qu'un axe : sans ce report, les
+// images situees a droite restaient inaccessibles au clavier pres.
+const moletteTimeline = await page.evaluate(() => {
+  const s = document.querySelector('.tl-scroll')
+  s.scrollLeft = 0
+  s.dispatchEvent(new WheelEvent('wheel', { deltaY: 240, bubbles: true, cancelable: true }))
+  return s.scrollLeft
+})
+check('la molette fait defiler la timeline en largeur', moletteTimeline > 0, `scrollLeft ${moletteTimeline}`)
+
+// L'oeil de la ligne de calque n'etait qu'un dessin : on cliquait dessus et
+// il ne se passait rien d'autre que la selection de la ligne.
+const oeil = await page.evaluate(() => {
+  const btn = document.querySelector('.tl-layer-cell .tl-mini')
+  if (!btn) return null
+  const avant = window.pixelforge.ed.sprite.layers.map((l) => l.visible)
+  btn.click()
+  return { avant, apres: window.pixelforge.ed.sprite.layers.map((l) => l.visible) }
+})
+check('l\'oeil de la timeline masque vraiment le calque',
+  !!oeil && String(oeil.avant) !== String(oeil.apres),
+  oeil ? `${oeil.avant} -> ${oeil.apres}` : 'pas de bouton')
+
+// Reordonner les images par glisser-deposer, et pouvoir revenir en arriere.
+const reordre = await page.evaluate(() => {
+  const ed = window.pixelforge.ed
+  // Les cases n'ont pas d'identifiant : on signe leur contenu, seule chose
+  // qui distingue vraiment une image d'une autre.
+  const noms = () => ed.sprite.layers[0].cels.map((c) => {
+    if (!c) return '-'
+    let h = 0
+    for (let i = 0; i < c.bitmap.u32.length; i++) h = (h * 31 + c.bitmap.u32[i]) | 0
+    return h
+  }).join(',')
+  const avant = noms()
+  ed.sprite.moveFrame(0, 3)
+  const apres = noms()
+  ed.sprite.moveFrame(3, 0)
+  return { avant, apres, retour: noms() }
+})
+check('deplacer une image la remet ailleurs sans en perdre',
+  reordre.avant !== reordre.apres && reordre.avant === reordre.retour,
+  `${reordre.avant.split(',').length} cases conservees`)
+
+const tireur = await page.evaluate(() => {
+  const cell = document.querySelector('.tl-head-cell[data-frame="2"]')
+  return !!cell && getComputedStyle(cell).cursor === 'grab'
+})
+check('les numeros d\'image s\'annoncent comme deplacables', tireur)
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
