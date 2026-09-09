@@ -75,10 +75,7 @@ button { cursor: pointer; }
 
 .app {
   display: grid;
-  /* haut, options, onglets, toile, timeline, etat. La bande d'onglets est en
-     `auto` : elle occupe sa hauteur quand elle existe, et rien du tout quand
-     un seul document est ouvert. */
-  grid-template-rows: var(--h-top) var(--h-options) auto 1fr auto var(--h-status);
+  grid-template-rows: var(--h-top) var(--h-options) 1fr auto var(--h-status);
   height: 100vh;
   height: 100dvh;
 }
@@ -129,6 +126,12 @@ button { cursor: pointer; }
 .canvas-area {
   /* Prend toute la largeur laissee par les docks. */
   flex: 1 1 0;
+  /* Colonne : la bande d'onglets en haut, la toile sous elle. Les onglets
+     appartiennent a la TOILE, pas a l'application — ils ne doivent pas
+     repousser la colonne d'outils ni les panneaux, qui gardent leur pleine
+     hauteur comme dans Aseprite ou Photoshop. */
+  display: flex;
+  flex-direction: column;
   position: relative;
   background:
     radial-gradient(circle at 50% 40%, #1a1f2b 0%, #0d0f14 78%);
@@ -136,7 +139,7 @@ button { cursor: pointer; }
   min-width: 0;
 }
 
-.canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+.canvas { flex: 1 1 0; min-height: 0; width: 100%; touch-action: none; display: block; }
 
 .canvas-hud {
   position: absolute;
@@ -1697,9 +1700,10 @@ canvas.pixl {
  * garder un liseré qui ne dit rien.
  */
 .doctabs {
+  flex: none;
   display: flex; align-items: stretch; gap: 2px;
-  padding: 0 8px; background: var(--bg-1);
-  border-bottom: 1px solid var(--border);
+  padding: 0 6px; background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
   overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
 }
 .doctabs.vide { display: none; }
