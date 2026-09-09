@@ -462,8 +462,8 @@ const ATTAQUE: Reglage[] = [
   { corps: [2, -2], corpsArt: 'etire', tete: [0, 1], gauche: [1, -3], droite: [1, -3], queue: 'basse' },
   { corps: [1, -2], gauche: [0, -3], droite: [2, -3], queue: 'basmilieu' },
   { corps: [1, 0], gauche: [0, -2], droite: [1, -2], queue: 'milieu' },
-  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
-  { corps: [-1, 1], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'basse' },
+  { corps: [-1, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [0, -1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]

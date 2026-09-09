@@ -64,6 +64,15 @@ export interface Arme {
    */
   montee: [[number, number], [number, number], [number, number]]
   /**
+   * Ou tombe l'arme a l'impact, et ou elle traine a la retombee.
+   *
+   * Propre a l'arme comme les paliers d'armement : un offset unique
+   * arretait la masse du marteau un pixel au-dessus du sol et la gemme du
+   * baton deux, alors que c'est justement leur point de chute qui donne le
+   * poids.
+   */
+  frappe: [[number, number], [number, number]]
+  /**
    * Le dessin de l'impact : l'arme abattue en diagonale, tranchant vers le
    * bas et vers l'exterieur.
    *
@@ -134,15 +143,20 @@ const MARTEAU = [
 /**
  * Baton. La gemme est le seul point clair du dessin : c'est elle qu'on
  * suit du regard, donc c'est sa trajectoire qui doit etre la plus ample.
+ *
+ * Le manche est epais sur quatre rangees et la diagonale abattue va deux
+ * rangees plus loin que celle des deux autres armes : a dix-huit pixels,
+ * l'image d'impact du baton ne debordait pas d'une colonne de plus que son
+ * image portee. En aplat, le coup n'existait pas.
  */
 const BATON = [
   '..d..',
   '.dfd.',
   '..d..',
-  '..c..',
-  '..c..',
-  '..c..',
-  '..c..',
+  '..cc.',
+  '..cc.',
+  '..cc.',
+  '..cc.',
   '..c..',
   '..c..',
   '..cPP',
@@ -182,7 +196,7 @@ const MARTEAU_IMPACT = [
   '.ooooo.....',
 ]
 
-/** Le baton abattu : la gemme finit sa course en bas. Dix-huit pixels. */
+/** Le baton abattu : la gemme finit sa course au sol. Vingt-deux pixels. */
 const BATON_IMPACT = [
   '........C..',
   '........cPP',
@@ -190,19 +204,22 @@ const BATON_IMPACT = [
   '.......cc..',
   '......cc...',
   '.....cc....',
-  '.....d.....',
-  '....dfd....',
-  '.....d.....',
+  '....cc.....',
+  '...cc......',
+  '...d.......',
+  '..dfd......',
+  '...d.......',
 ]
 
 export const ARMES: Arme[] = [
   ({
     id: 'epee',
     nom: 'Epee',
-    pitch: 'La plus longue des trois : elle donne la direction du coup une image avant le corps.',
+    pitch: 'Celle qui deborde le plus au moment du coup : sept colonnes hors du corps, contre six et trois.',
     art: EPEE,
     prise: [3, 9],
     montee: [[0, -4], [0, -8], [0, -9]],
+    frappe: [[3, -2], [3, -2]],
     impact: EPEE_IMPACT,
     priseImpact: [8, 1],
   }),
@@ -213,6 +230,7 @@ export const ARMES: Arme[] = [
     art: MARTEAU,
     prise: [2, 12],
     montee: [[0, -3], [0, -5], [0, -6]],
+    frappe: [[3, -1], [3, -1]],
     impact: MARTEAU_IMPACT,
     priseImpact: [8, 1],
   }),
@@ -223,6 +241,7 @@ export const ARMES: Arme[] = [
     art: BATON,
     prise: [2, 9],
     montee: [[0, -4], [0, -8], [0, -9]],
+    frappe: [[3, -2], [3, -2]],
     impact: BATON_IMPACT,
     priseImpact: [8, 1],
   }),
@@ -268,8 +287,15 @@ export const POSITIONS_ARME = {
   rebond: [0, -1],
 } as const
 
-/** Les positions qui utilisent le dessin d'impact. */
-const IMPACTS = new Set<string>(['impact'])
+/**
+ * Les positions qui utilisent le dessin d'impact.
+ *
+ * La retombee en fait partie : la lame reste au sol une image de plus, et
+ * c'est le rebond qui la redresse. Avec le dessin porte des la retombee,
+ * la pointe remontait de quinze rangees en quatre-vingts millisecondes,
+ * une image apres avoir touche le sol.
+ */
+const IMPACTS = new Set<string>(['impact', 'retombee'])
 
 /**
  * Les positions ou l'arme passerait DEVANT le personnage. Aucune.
@@ -307,11 +333,16 @@ export function mainDansLaToile(p: Pose): [number, number] {
 
 /** Les paliers d'armement, dans l'ordre. */
 const PALIERS: PositionArme[] = ['armement1', 'armement2', 'armement3']
+/** Les deux images ou l'arme est au sol, dans l'ordre. */
+const CHUTES: PositionArme[] = ['impact', 'retombee']
 
-/** Le decalage d'une position, en tenant compte des paliers propres a l'arme. */
+/** Le decalage d'une position, en tenant compte des offsets propres a l'arme. */
 export function decalageDeLArme(arme: Arme, position: PositionArme): readonly [number, number] {
   const palier = PALIERS.indexOf(position)
-  return palier >= 0 ? arme.montee[palier] : POSITIONS_ARME[position]
+  if (palier >= 0) return arme.montee[palier]
+  const chute = CHUTES.indexOf(position)
+  if (chute >= 0) return arme.frappe[chute]
+  return POSITIONS_ARME[position]
 }
 
 /** Le dessin et sa prise pour une position donnee. */
