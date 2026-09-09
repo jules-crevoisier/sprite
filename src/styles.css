@@ -473,6 +473,23 @@ input[type="range"]::-moz-range-thumb {
 .panel.grow { flex: 1 0 auto; }
 /* Un panneau extensible ne doit pas manger tout le dock a lui seul. */
 .dock .panel.grow > .panel-body { max-height: 36vh; }
+/* Sauf si on lui a donne une hauteur a la main : elle commande. */
+.dock .panel.hauteur-reglee > .panel-body { max-height: none; }
+/*
+   Poignee de hauteur, au bas de chaque panneau. Discrete au repos — une barre
+   visible en permanence a chaque panneau ferait une colonne rayee — et
+   franche des qu'on l'approche.
+*/
+.panel-grip {
+  flex: none; height: 6px; cursor: ns-resize; position: relative; touch-action: none;
+}
+.panel-grip::after {
+  content: ''; position: absolute; left: 50%; top: 2px;
+  transform: translateX(-50%); width: 30px; height: 2px;
+  border-radius: 2px; background: transparent; transition: background .12s;
+}
+.panel-grip:hover::after, .panel-grip.active::after { background: var(--accent); }
+
 .layer-foot { flex: none; padding: 6px 10px 9px; border-top: 1px solid var(--line-soft); }
 
 .panel-head {

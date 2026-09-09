@@ -3063,6 +3063,60 @@ for (const d of damier) {
     d.hors ? 'hors cadre' : `${d.bords} bord(s), ${d.decale} decale(s)`)
 }
 
+// La hauteur d'un panneau se regle a la souris. Sans cela, la colonne de
+// droite imposait ses proportions : le selecteur de couleur restait petit et
+// la palette laissait la moitie du dock vide.
+const poignee = page.locator('.dock-right .panel[data-panel="layers"] .panel-grip')
+const avantHauteur = await page.evaluate(() =>
+  document.querySelector('.panel[data-panel="layers"]').getBoundingClientRect().height)
+const cadrePoignee = await poignee.boundingBox()
+check('chaque panneau porte une poignee de hauteur', !!cadrePoignee)
+if (cadrePoignee) {
+  await page.mouse.move(cadrePoignee.x + cadrePoignee.width / 2, cadrePoignee.y + 2)
+  await page.mouse.down()
+  await page.mouse.move(cadrePoignee.x + cadrePoignee.width / 2, cadrePoignee.y + 92, { steps: 6 })
+  await page.mouse.up()
+  await sleep(250)
+}
+const apresHauteur = await page.evaluate(() =>
+  document.querySelector('.panel[data-panel="layers"]').getBoundingClientRect().height)
+check('tirer la poignee agrandit le panneau', apresHauteur > avantHauteur + 40,
+  `${Math.round(avantHauteur)} -> ${Math.round(apresHauteur)} px`)
+// Et le reglage se retient : sinon il serait perdu au prochain lancement.
+const retenue = await page.evaluate(() => {
+  const brut = JSON.parse(localStorage.getItem('pixelforge.layout.v3.draw') ?? '{}')
+  return brut.heights?.layers ?? null
+})
+check('la hauteur reglee est retenue', retenue !== null && Math.abs(retenue - apresHauteur) < 3,
+  `${retenue} en memoire pour ${Math.round(apresHauteur)} a l'ecran`)
+
+// Une disposition composee peut etre nommee, rangee, puis rappelee.
+const dispo = await page.evaluate(async () => {
+  const ws = window.pixelforge.workspace
+  ws.enregistrerDisposition('Banc')
+  const listee = ws.dispositions().some((d) => d.nom === 'Banc')
+  // On defait tout : panneaux masques, colonne retrecie, hauteurs perdues.
+  ws.applyPreset('minimal')
+  const apresCasse = document.querySelectorAll('.dock .panel').length
+  ws.appliquerDisposition('Banc')
+  const apresRappel = document.querySelectorAll('.dock .panel').length
+  const hauteurRappelee = document.querySelector('.panel[data-panel="layers"]')
+    ?.getBoundingClientRect().height ?? 0
+  ws.supprimerDisposition('Banc')
+  const partie = ws.dispositions().some((d) => d.nom === 'Banc')
+  return { listee, apresCasse, apresRappel, hauteurRappelee, partie }
+})
+check('une disposition s\'enregistre sous un nom', dispo.listee)
+check('une disposition rappelee remet les panneaux',
+  dispo.apresRappel > dispo.apresCasse,
+  `${dispo.apresCasse} panneau(x) apres Minimal, ${dispo.apresRappel} apres rappel`)
+check('une disposition rappelee remet les hauteurs',
+  Math.abs(dispo.hauteurRappelee - apresHauteur) < 3,
+  `${Math.round(dispo.hauteurRappelee)} px`)
+check('une disposition se supprime', !dispo.partie)
+await page.evaluate(() => window.pixelforge.workspace.reset())
+await sleep(250)
+
 // Aucune barre ne coupe ses boutons, meme sur une fenetre etroite. A 900
 // pixels de large, la barre du haut debordait de 95 pixels et le bouton
 // Exporter etait tranche en deux ; la barre de la timeline perdait ses six
