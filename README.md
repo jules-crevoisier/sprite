@@ -351,17 +351,27 @@ prime sur celui du site.
 
 C'est le cas normal : les visiteurs ne doivent voir qu'un bouton **Se
 connecter à Google**, jamais un formulaire d'identifiant. Il suffit que
-l'identifiant soit posé une fois, à la construction.
+l'identifiant soit posé une fois, à la construction — le dialogue
+d'identifiant devient alors une porte de service que plus rien n'ouvre tout
+seul.
 
-`.github/workflows/deploy.yml` publie le site sur GitHub Pages et injecte
-l'identifiant depuis le secret `GOOGLE_CLIENT_ID` du dépôt
-(*Settings → Secrets and variables → Actions*). Le dialogue d'identifiant
-devient alors une porte de service : plus rien ne l'ouvre tout seul.
+Sur Dokploy, c'est une variable d'environnement à déclarer dans l'onglet
+**Environment** de l'application : `docker-compose.yml` la passe en
+`build-arg` au `Dockerfile`, qui la donne à Vite au moment du build.
 
-Deux réglages, dans la console Google Cloud, décident qui peut se connecter :
+```
+VITE_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+```
 
-- **Origines JavaScript autorisées** : l'URL exacte de la page publiée,
-  `https://<compte>.github.io` — sans elle, Google refuse la connexion.
+Attention : c'est une variable **de construction**, pas d'exécution. La
+changer demande de reconstruire l'image, pas seulement de redémarrer le
+conteneur.
+
+Deux réglages, dans la console Google Cloud, décident ensuite qui peut se
+connecter :
+
+- **Origines JavaScript autorisées** : l'URL exacte du site publié, votre
+  domaine Dokploy — sans elle, Google refuse la connexion.
 - **Écran de consentement OAuth → Publier l'application**. Tant qu'il reste
   *En test*, seuls les comptes ajoutés en utilisateurs de test peuvent se
   connecter. `drive.file` est un droit *non sensible* : publier ne demande
