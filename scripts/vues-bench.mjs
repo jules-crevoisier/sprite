@@ -165,7 +165,106 @@ const m = await page.evaluate(async () => {
       s.rendreScene([troisVues], { azimut: az, elevation: 0, zoom: 1 }, opts).ecartMax)
   }
 
-  /* --- 6. Une planche de huit directions --- */
+  /* --- 6. Le pont avec le squelette --- */
+  const rs = await import('/src/smart/rig-scene.ts')
+  const rig = await import('/src/smart/rig.ts')
+  const { demoCharacter } = await import('/src/ui/demo-content.ts')
+  const { RIG_TEMPLATES, applyTemplate } = await import('/src/smart/rig-presets.ts')
+
+  const perso = demoCharacter()
+  const dessinPerso = perso.layers[0].cels[0].bitmap
+  applyTemplate(perso.rig, RIG_TEMPLATES[0], dessinPerso,
+    { width: perso.width, height: perso.height })
+  const partie = rig.autoBind(perso.rig, perso.layers[0].id, dessinPerso)
+  perso.rig.parts = [partie]
+
+  const morceaux = rs.piecesDuRig(perso.rig, partie)
+  const bilan = rs.bilanDecoupage(partie, morceaux)
+  const piecesRepos = morceaux.map((x) => x.piece)
+
+  // Un sujet ou des pixels restent volontairement libres : sans lui, la
+  // regle « rien ne se perd » ne prouve rien, puisque la liaison ordinaire
+  // attribue tout. Une portee courte laisse les extremites sans os.
+  const court = rig.autoBind(perso.rig, perso.layers[0].id, dessinPerso, 3)
+  const morceauxCourt = rs.piecesDuRig(perso.rig, court)
+  const bilanCourt = rs.bilanDecoupage(court, morceauxCourt)
+  let libres = 0
+  for (let i = 0; i < court.weights.length; i++) {
+    if (court.weights[i] === 255 && (dessinPerso.u32[i] >>> 24) !== 0) libres++
+  }
+
+  // Au repos et de face, la scene doit rendre le dessin d'origine.
+  const reposRendu = s.rendreScene(piecesRepos, s.CAMERA_FACE, {
+    largeur: perso.width, hauteur: perso.height, centre: { x: 0, y: 0 },
+  })
+  const dessin = dessinPerso
+  let reposIdentique = true
+  for (let i = 0; i < dessin.u32.length; i++) {
+    if (dessin.u32[i] !== reposRendu.image.u32[i]) { reposIdentique = false; break }
+  }
+
+  // Une pose : on leve un bras, puis on regarde sous huit directions.
+  const bras = perso.rig.bones.find((b) => b.role === 'armL') ?? perso.rig.bones[1]
+  const iBras = perso.rig.bones.indexOf(bras)
+  const cadre = { largeur: perso.width, hauteur: perso.height, centre: { x: 0, y: 0 } }
+  /** Centre du morceau d'un os, rendu seul et de face. */
+  const centreDuMorceau = (liste) => {
+    const seul = liste.find((x) => x.os === iBras)
+    if (!seul) return null
+    const b = s.rendreScene([seul.piece], s.CAMERA_FACE, cadre).image.trimBounds()
+    return b.w ? { x: b.x + b.w / 2, y: b.y + b.h / 2, w: b.w, h: b.h } : null
+  }
+  const brasAvant = centreDuMorceau(morceaux)
+  const ANGLE = -0.9
+  // Ou le centre du bras DOIT atterrir : le point d'avant, tourne de l'angle
+  // pose, autour de l'attache de l'os. C'est de la geometrie, pas une
+  // opinion — et une rotation autour du mauvais axe n'y tombe pas.
+  const attendu = brasAvant ? {
+    x: bras.x + (brasAvant.x - bras.x) * Math.cos(ANGLE) - (brasAvant.y - bras.y) * Math.sin(ANGLE),
+    y: bras.y + (brasAvant.x - bras.x) * Math.sin(ANGLE) + (brasAvant.y - bras.y) * Math.cos(ANGLE),
+  } : null
+  bras.angle = ANGLE
+  const morceauxPose = rs.piecesDuRig(perso.rig, partie)
+  const brasApres = centreDuMorceau(morceauxPose)
+  const piecesPose = morceauxPose.map((x) => x.piece)
+  const posee = s.rendreScene(piecesPose, s.CAMERA_FACE, {
+    largeur: perso.width, hauteur: perso.height, centre: { x: 0, y: 0 },
+  })
+  let bougePose = 0
+  for (let i = 0; i < dessin.u32.length; i++) {
+    if (dessin.u32[i] !== posee.image.u32[i]) bougePose++
+  }
+
+  // La profondeur d'un os est ce qui fait passer un bras DEVANT le torse.
+  // A quatre-vingt-dix degres d'azimut, la profondeur devient l'abscisse a
+  // l'ecran : un os pose a +6 doit se retrouver six pixels plus loin qu'un
+  // os laisse dans le plan. Si le pont ignore `bone.depth`, les deux se
+  // superposent et les membres traversent le corps au quart de tour.
+  const profil = { azimut: Math.PI / 2, elevation: 0, zoom: 1 }
+  const centreProfil = () => {
+    const seul = rs.piecesDuRig(perso.rig, partie).find((x) => x.os === iBras)
+    if (!seul) return null
+    const b = s.rendreScene([seul.piece], profil, cadre).image.trimBounds()
+    return b.w ? b.x + b.w / 2 : null
+  }
+  const profondeurAvant = bras.depth
+  bras.depth = 0
+  const xSansProfondeur = centreProfil()
+  bras.depth = 6
+  const xAvecProfondeur = centreProfil()
+  bras.depth = profondeurAvant
+
+  const dirsPose = s.planchesDeDirections(piecesPose, 8, s.ELEVATION_ISO_2_1, {
+    largeur: perso.width * 2, hauteur: perso.height * 2,
+  })
+  const sigPose = dirsPose.map((p) => {
+    let h = 0
+    for (let i = 0; i < p.rendu.image.u32.length; i++) h = (h * 31 + p.rendu.image.u32[i]) | 0
+    return h
+  })
+  const massesPose = dirsPose.map((p) => s.masse(p.rendu.image))
+
+  /* --- 7. Une planche de huit directions --- */
   const planche = s.planchesDeDirections([seule], 8, s.ELEVATION_ISO_2_1, opts)
   const signatures = planche.map((p) => {
     let h = 0
@@ -185,6 +284,15 @@ const m = await page.evaluate(async () => {
     ecartQuatre: (ecartQuatre * 180) / Math.PI,
     directions: planche.length, distinctes,
     noms: planche.map((p) => p.nom).join(','),
+    bilan, reposIdentique, bougePose,
+    bilanCourt, libres,
+    brasAvant, brasApres, attendu,
+    xSansProfondeur, xAvecProfondeur,
+    ecartPose: brasApres && attendu
+      ? Math.hypot(brasApres.x - attendu.x, brasApres.y - attendu.y) : null,
+    osUtilises: morceaux.filter((x) => x.os !== null).length,
+    posesDistinctes: new Set(sigPose).size,
+    minPose: Math.min(...massesPose), maxPose: Math.max(...massesPose),
   }
 })
 
@@ -232,6 +340,45 @@ check('une planche de huit directions sort huit images distinctes',
   m.directions === 8 && m.distinctes === 8, `${m.distinctes}/8 distinctes`)
 check('les directions portent les noms qu\'un moteur attend',
   m.noms === 'S,SE,E,NE,N,NO,O,SO', m.noms)
+
+/* --- le pont avec le squelette --- */
+
+// Un pixel attribue a aucun os disparaitrait du rendu ; un pixel compte deux
+// fois clignoterait selon l'ordre du tampon. Les deux se voient a peine sur
+// une image fixe et sautent aux yeux en mouvement.
+check('le decoupage par os ne perd ni ne duplique aucun pixel',
+  m.bilan.morceaux === m.bilan.origine && m.bilan.doublons === 0,
+  `${m.bilan.origine} pixels -> ${m.bilan.morceaux}, ${m.bilan.doublons} doublon(s), `
+  + `${m.osUtilises} os porteurs`)
+check('les pixels qu\'aucun os ne porte sont gardes',
+  m.libres > 0 && m.bilanCourt.morceaux === m.bilanCourt.origine && m.bilanCourt.doublons === 0,
+  `${m.libres} pixel(s) libre(s), ${m.bilanCourt.morceaux}/${m.bilanCourt.origine} gardes`)
+check('la pose de repos rendue de face redonne le dessin', m.reposIdentique)
+
+// La regle qui distingue une pose juste d'une pose seulement differente : le
+// bras doit atterrir la ou la geometrie le dit, pas ailleurs. Une rotation
+// autour du mauvais axe deplace autant de pixels et passerait tous les
+// comptages ; ici elle rate la cible de plusieurs pixels.
+check('le bras pose atterrit ou la geometrie le dit',
+  m.ecartPose !== null && m.ecartPose <= 1.5,
+  m.attendu && m.brasApres
+    ? `attendu (${m.attendu.x.toFixed(1)}, ${m.attendu.y.toFixed(1)}), `
+      + `obtenu (${m.brasApres.x.toFixed(1)}, ${m.brasApres.y.toFixed(1)}) — `
+      + `${m.ecartPose.toFixed(2)} px d'ecart`
+    : 'morceau introuvable')
+check('la profondeur d\'un os le place vraiment devant le corps',
+  m.xSansProfondeur !== null && m.xAvecProfondeur !== null
+  && Math.abs(m.xAvecProfondeur - m.xSansProfondeur - 6) <= 1,
+  m.xSansProfondeur !== null
+    ? `x ${m.xSansProfondeur} sans profondeur, ${m.xAvecProfondeur} a +6`
+    : 'morceau introuvable')
+check('poser un os change vraiment le rendu', m.bougePose > 20,
+  `${m.bougePose} pixels differents`)
+check('une pose se rend sous huit directions distinctes',
+  m.posesDistinctes === 8, `${m.posesDistinctes}/8`)
+check('aucune direction d\'une pose ne se vide',
+  m.minPose > 0 && m.minPose >= m.maxPose * 0.55,
+  `de ${m.minPose} a ${m.maxPose} pixels`)
 
 check('aucune erreur JavaScript', erreurs.length === 0, erreurs.join(' | '))
 
