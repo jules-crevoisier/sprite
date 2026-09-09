@@ -38,7 +38,12 @@ jobs:
           # Vide tant que le secret n'existe pas : l'application se construit
           # et fonctionne, seul Google Drive reste a configurer par visiteur.
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      # `enablement` demande a l'action d'activer Pages elle-meme si le depot
+      # ne l'a pas encore. Sans cette ligne, la premiere execution echoue sur
+      # « Get Pages site failed » : le workflow existe, le site non.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
