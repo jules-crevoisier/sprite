@@ -171,7 +171,7 @@ export const ARMES: Arme[] = [
     nom: 'Marteau',
     pitch: 'La masse est au bout du bras de levier : le meme deplacement se lit plus lourd.',
     art: MARTEAU,
-    prise: [2, 10],
+    prise: [2, 12],
   }),
   armer({
     id: 'baton',
@@ -202,18 +202,24 @@ export const POSITIONS_ARME = {
   // tressautait dessous. C'est l'objet qui doit trainer le plus qui ne
   // bougeait pas du tout.
   retardHaut: [0, 2],
-  haute: [2, -6],
+  haute: [0, -4],
   // Le contre-mouvement : l'arme descend avant de monter. L'accroupissement
   // seul ne la deplacait pas d'un pixel, parce que le corps descendait de
   // trois et que `levee` remontait de trois — les deux s'annulaient
   // exactement, et la preparation ne se voyait pas.
-  contre: [-1, 2],
+  contre: [0, 2],
   // L'amorti : l'arme continue vers le bas apres l'impact.
   retombee: [0, 3],
   // La seule position qui change de dessin : l'arme abattue, tranchant ou
   // masse vers l'exterieur. Verticale, la lame pointait vers le ciel
   // pendant tout le coup — ca ne se lit pas comme un coup porte.
-  abattue: [6, 4],
+  //
+  // Les deux offsets sont le resultat d'un balayage complet, pas d'un
+  // reglage a l'oeil : ce sont les seuls, sur les trois armes et les cinq
+  // images concernees, qui gardent l'arme accrochee au personnage, dans le
+  // cadre, et qui maximisent ce qu'elle ajoute a la silhouette. Une arme
+  // brandie qui n'ajoute rien a la silhouette n'existe pas en aplat.
+  abattue: [8, 4],
   rebond: [0, -1],
 } as const
 
@@ -221,16 +227,17 @@ export const POSITIONS_ARME = {
 const ABATTUES = new Set<string>(['abattue'])
 
 /**
- * Les positions ou l'arme passe DEVANT le personnage.
+ * Les positions ou l'arme passerait DEVANT le personnage. Aucune.
  *
- * La regle generale est l'inverse : devant, une lame couperait le visage.
- * Mais au-dessus des epaules elle ne peut rien couper, et derriere elle
- * n'a qu'une colonne de couloir visible a droite d'une tete large de
- * quatorze pixels — mesure : dix-huit pixels visibles a l'aplomb, sept a
- * un pixel de decalage, quatre a deux, un a trois. Aucun arc n'est
- * possible dans un couloir d'une colonne.
+ * L'idee etait de gagner de la lisibilite au-dessus des epaules, la ou une
+ * lame ne peut rien couper. Elle achetait la couleur et perdait la
+ * silhouette : l'arme brandie n'ajoutait plus que quatre a cinq pixels au
+ * contour du personnage, et effacait une dizaine de pixels de son trait
+ * noir. En aplat, le personnage n'etait plus arme au moment meme ou il
+ * frappe. Sortir l'arme du corps regle les deux d'un coup ; passer devant
+ * ne reglait que le second.
  */
-const DEVANT = new Set<string>(['haute'])
+const DEVANT = new Set<string>([])
 
 export type PositionArme = keyof typeof POSITIONS_ARME
 
@@ -250,7 +257,7 @@ export function masseDArme(art: string[]): number {
  * flanc, ce qui laisse la lame degagee de la tete.
  */
 export function mainDansLaToile(p: Pose): [number, number] {
-  return [p.corps[0] - 2, p.corps[1] + 3]
+  return [p.corps[0] - 3, p.corps[1] + 3]
 }
 
 /** Le dessin et sa prise pour une position donnee. */
@@ -351,7 +358,7 @@ export interface ClipArme {
  */
 const COUP: PositionArme[] = [
   'contre', 'haute', 'haute', 'haute', 'portee',
-  'abattue', 'abattue', 'retombee', 'rebond', 'portee',
+  'abattue', 'retombee', 'rebond', 'portee',
 ]
 
 /**

@@ -1896,8 +1896,14 @@ const mascotte = await page.evaluate(async () => {
     for (let i = 0; i < queues.length; i++) {
       const suivant = (i + 1) % queues.length
       if (!clip.loop && suivant === 0) continue
+      // Seuil relatif : passer de huit a douze pixels, c'est perdre un
+      // tiers de la queue, et une borne absolue de quatre le laissait
+      // passer. Plus un plancher : sous douze pixels visibles, la queue ne
+      // se lit plus comme une queue.
       const d = Math.abs(queues[suivant] - queues[i])
-      if (d > 4) bilan.queuesInegales.push(`${clip.id} ${i + 1}->${suivant + 1} (${d} px)`)
+      const seuil = Math.max(3, 0.25 * Math.min(queues[i], queues[suivant]))
+      if (d > seuil) bilan.queuesInegales.push(`${clip.id} ${i + 1}->${suivant + 1} (${d} px)`)
+      if (queues[i] < 12) bilan.queuesInegales.push(`${clip.id}#${i + 1} (${queues[i]} px seulement)`)
     }
 
     // Une patte peut perdre les deux tiers de sa longueur sans jamais
@@ -2070,16 +2076,17 @@ const armee = await page.evaluate(async () => {
         // cotes, une arme pourrait un jour coller la colonne zero alors que
         // le personnage ne le peut pas.
         if (y0 <= 0 || x0 <= 0 || x1 >= TAILLE - 1) bilan.horsCadre.push(`${clip.id}#${i + 1} (${x0},${y0},${x1})`)
-        // Si le corps la recouvre entierement, l'arme a disparu sans que
-        // rien ne le signale. La mesure ne peut pas etre une soustraction
-        // « image armee moins image nue » : des que l'arme passe devant,
-        // elle remplace des pixels au lieu d'en ajouter, et la
-        // soustraction compte zero la ou l'arme se voit le mieux.
-        const seule = armeSeule(clip.images[i].pose, arme, clip.images[i].position)
-        let visibles = 0
-        for (let k = 0; k < seule.u32.length; k++) if (seule.u32[k] >>> 24) visibles++
-        if (visibles < 6) bilan.armeInvisible.push(`${clip.id}#${i + 1} (${visibles} px)`)
-        bilan.visibleMin = Math.min(bilan.visibleMin, visibles)
+        // Ce qui compte n'est pas le nombre de pixels d'arme peints, c'est
+        // ce que l'arme AJOUTE a la silhouette du personnage. Une arme
+        // brandie qui laisse le contour inchange n'existe pas en aplat, et
+        // le compte de pixels peints, lui, l'annonce fierement visible.
+        const nu = imageDePose(clip.images[i].pose)
+        let ajoutes = 0
+        for (let k = 0; k < bm.u32.length; k++) {
+          if ((bm.u32[k] >>> 24) && !(nu.u32[k] >>> 24)) ajoutes++
+        }
+        if (ajoutes < 8) bilan.armeInvisible.push(`${clip.id}#${i + 1} (${ajoutes} px)`)
+        bilan.visibleMin = Math.min(bilan.visibleMin, ajoutes)
       })
       for (let a = 0; a < bmps.length; a++) for (let b = a + 1; b < bmps.length; b++) {
         let d = 0
@@ -2103,8 +2110,8 @@ check('aucune image armee n\'en repete une autre', armee.jumelles.length === 0,
 check('l\'arme garde sa masse', armee.massesArmes.every((m) => m > 0) && armee.armesInegales.length === 0,
   armee.armesInegales.join(', ')
     || `${armee.massesArmes.join(' / ')} px, ${armee.positions} positions, dessin abattu compris`)
-check('l\'arme ne disparait jamais sous le personnage', armee.armeInvisible.length === 0,
-  armee.armeInvisible.join(', ') || `${armee.visibleMin} px visibles au minimum`)
+check('l\'arme change toujours la silhouette', armee.armeInvisible.length === 0,
+  armee.armeInvisible.join(', ') || `${armee.visibleMin} px ajoutes au contour au minimum`)
 
 /* --- Pixl dans l'application --- */
 // Une mascotte peut disparaitre d'un coin sans que rien ne casse : plus

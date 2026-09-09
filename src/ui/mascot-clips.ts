@@ -281,7 +281,10 @@ function pose(r: Reglage = {}): Pose {
     corpsArt,
     patteG: [PATTE_GX + gx, SOL + gy],
     patteD: [PATTE_DX + ddx, SOL + ddy],
-    queue: [nomQueue, bordDroit(bx, r.corpsArt) - 2, by + ANCRE_QUEUE_Y],
+    // L'ancre colle au bord du torse et ne rentre plus de deux colonnes
+    // dedans : la queue y perdait jusqu'a un tiers de sa surface visible
+    // selon la variante de corps, deux fois par tour de marche.
+    queue: [nomQueue, bordDroit(bx, r.corpsArt), by + ANCRE_QUEUE_Y],
   }
   sortie.corps = [cx, cy]
   return sortie
@@ -314,7 +317,7 @@ const REPOS: Reglage[] = [
   { corps: [0, 0], tete: [0, 0], queue: 'milieu' },
   { corps: [0, 1], tete: [-1, 0], queue: 'milieu' },
   { corps: [0, 1], tete: [-1, 1], queue: 'basmilieu' },
-  { corps: [0, 1], tete: [0, 1], queue: 'basse' },
+  { corps: [0, 2], tete: [0, 1], queue: 'basse' },
   { corps: [0, 1], tete: [1, 1], queue: 'basmilieu' },
   { corps: [0, 0], tete: [1, 1], queue: 'basmilieu' },
   { corps: [0, 0], teteArt: 'clin', tete: [0, 0], queue: 'milieu' },
@@ -339,11 +342,11 @@ const REPOS: Reglage[] = [
 const MARCHE: Reglage[] = [
   { corps: [-1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [-1, 1], gauche: [0, 0], droite: [0, -1], queue: 'haute' },
-  { corps: [0, -1], tete: [-1, 0], gauche: [0, 0], droite: [1, -4], queue: 'basse' },
+  { corps: [0, -1], tete: [-1, 1], gauche: [0, 0], droite: [1, -4], queue: 'basse' },
   { corps: [0, 0], gauche: [0, 0], droite: [1, -2], queue: 'basmilieu' },
   { corps: [1, 0], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [1, 1], gauche: [0, -1], droite: [0, 0], queue: 'haute' },
-  { corps: [0, -1], tete: [1, 0], gauche: [-1, -4], droite: [0, 0], queue: 'basse' },
+  { corps: [0, -1], tete: [1, 1], gauche: [-1, -4], droite: [0, 0], queue: 'basse' },
   { corps: [0, 0], gauche: [-1, -2], droite: [0, 0], queue: 'basmilieu' },
 ]
 
@@ -366,10 +369,10 @@ const MARCHE: Reglage[] = [
  */
 const COURSE: Reglage[] = [
   { corps: [-1, 0], corpsArt: 'ecrase', gauche: [0, 0], droite: [0, -3], queue: 'haute' },
-  { corps: [-1, -2], tete: [0, 1], gauche: [-2, -4], droite: [0, -3], queue: 'basmilieu' },
+  { corps: [-1, -2], tete: [0, 1], gauche: [-1, -4], droite: [0, -3], queue: 'basmilieu' },
   { corps: [0, -3], tete: [0, 1], gauche: [0, -6], droite: [0, -3], queue: 'basse' },
   { corps: [1, 0], corpsArt: 'ecrase', gauche: [0, -3], droite: [0, 0], queue: 'haute' },
-  { corps: [1, -2], tete: [0, 1], gauche: [0, -3], droite: [2, -4], queue: 'basmilieu' },
+  { corps: [1, -2], tete: [0, 1], gauche: [0, -3], droite: [1, -4], queue: 'basmilieu' },
   { corps: [0, -3], tete: [0, 1], gauche: [0, -3], droite: [0, -6], queue: 'basse' },
 ]
 
@@ -398,8 +401,8 @@ const SAUT: Reglage[] = [
   { corps: [0, 1], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'haute' },
   { corps: [0, -1], corpsArt: 'etire', tete: [0, 1], queue: 'basse' },
   { corps: [0, -2], corpsArt: 'etire', tete: [0, 1], gauche: [0, -3], droite: [0, -3], queue: 'basse' },
-  { corps: [0, -3], corpsArt: 'etire', tete: [0, 0], gauche: [0, -6], droite: [0, -6], queue: 'basmilieu' },
-  { corps: [0, -2], corpsArt: 'etire', tete: [1, 0], gauche: [0, -3], droite: [0, -3], queue: 'milieu' },
+  { corps: [1, -3], corpsArt: 'etire', tete: [0, 0], gauche: [1, -6], droite: [1, -6], queue: 'basmilieu' },
+  { corps: [1, -2], corpsArt: 'etire', tete: [1, 0], gauche: [1, -3], droite: [1, -3], queue: 'milieu' },
   { corps: [0, 0], corpsArt: 'etire', gauche: [0, 0], droite: [0, 0], queue: 'haute' },
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
   { corps: [0, -1], tete: [0, 0], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
@@ -446,13 +449,12 @@ const SAUT: Reglage[] = [
  */
 const ATTAQUE: Reglage[] = [
   { corps: [1, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', queue: 'milieu' },
-  { corps: [1, 1], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
-  { corps: [2, -3], corpsArt: 'etire', tete: [0, 1], gauche: [1, -3], droite: [1, -3], queue: 'basse' },
+  { corps: [1, 0], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
+  { corps: [2, -2], corpsArt: 'etire', tete: [0, 1], gauche: [1, -3], droite: [1, -3], queue: 'basse' },
   { corps: [1, -1], gauche: [0, -3], droite: [2, -3], queue: 'basmilieu' },
   { corps: [1, 1], gauche: [0, -2], droite: [1, -2], queue: 'milieu' },
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', tete: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
-  { corps: [-1, 2], corpsArt: 'ecrase', teteArt: 'ecrasee', gauche: [0, 0], droite: [0, 0], queue: 'basse' },
-  { corps: [0, 1], gauche: [0, 0], droite: [0, 0], queue: 'fouet' },
+  { corps: [-1, 1], gauche: [0, 0], droite: [0, 0], queue: 'basmilieu' },
   { corps: [0, -1], gauche: [0, 0], droite: [0, 0], queue: 'milieu' },
   { corps: [0, 0], queue: 'milieu' },
 ]
@@ -467,17 +469,27 @@ const ATTAQUE: Reglage[] = [
  * Le coup arrache le personnage du sol pendant une image. C'est ce qui
  * remplace le patinage : deux semelles plaquees au sol pendant que le corps
  * recule de trois pixels, ca ne s'appelle pas encaisser, ca s'appelle
- * glisser. Le recul se fait donc en deux temps, les pieds en l'air : les
- * centres de torse font 9, 8, 7, 9, 12, 10. La version precedente
- * annoncait deux temps et n'en faisait qu'un — le corps etait a la meme
- * colonne sur les images deux et trois.
+ * glisser. Le recul se fait donc en deux temps, les pieds en l'air.
+ *
+ * Les centres REELLEMENT dessines font 15,5 · 13,5 · 12,5 · 14,5 · 17,5 ·
+ * 15,5 : le recul decelere vers son extreme. Lire `corps[0]` a la place
+ * ment ici plus qu'ailleurs, parce que la deuxieme image est ecrasee —
+ * quatorze colonnes — et la troisieme normale : le reglage dit moins un la
+ * ou le dessin recule de deux.
+ *
+ * Le retour, lui, accelere, et c'est structurel : la quatrieme image est
+ * verrouillee a cette colonne par le pied qui porte. Avancer le torse
+ * d'une colonne de plus obligerait soit a faire riper cette semelle, soit
+ * a sortir l'autre patte du torse — et il n'existe aucune position de
+ * patte gauche qui garde a la fois l'ecart de deux colonnes et le pied
+ * dans le corps.
  *
  * Le depassement du retour vaut deux pixels, les deux tiers du recul. A un
  * seul pixel il se perdait dans le bruit du reste du dessin.
  */
 const DEGATS: Reglage[] = [
   { corps: [0, 2], corpsArt: 'ecrase', teteArt: 'ecraseeClin', queue: 'milieu' },
-  { corps: [-1, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', tete: [-1, 0], gauche: [-1, -2], droite: [-1, -2], queue: 'haute' },
+  { corps: [-2, 1], corpsArt: 'ecrase', teteArt: 'ecraseeClin', tete: [-1, 0], gauche: [-1, -2], droite: [-1, -2], queue: 'haute' },
   { corps: [-3, 2], teteArt: 'clin', tete: [-1, 0], gauche: [-2, 0], droite: [-2, 0], queue: 'fouet' },
   { corps: [-1, 1], teteArt: 'clin', tete: [-1, 1], gauche: [-2, -2], droite: [-2, 0], queue: 'basse' },
   { corps: [2, 1], teteArt: 'miclos', tete: [-2, 0], gauche: [1, -2], droite: [1, -2], queue: 'basmilieu' },
