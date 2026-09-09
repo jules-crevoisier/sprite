@@ -3289,6 +3289,70 @@ for (const [nom, mesures] of [['1440', barresLarge], ['900', barresEtroite]]) {
     || `${mesures.length} barres mesurees`)
 }
 
+/* --- La grille d'ecran : un pixel du sprite, un nombre entier de pixels --- */
+//
+// C'est le controle qu'un editeur de pixel art doit passer avant tous les
+// autres. Le sprite se posait a une fraction de pixel pres, et le
+// reechantillonnage au plus proche voisin distribuait les colonnes de facon
+// inegale : a zoom 13, un panoramique de 0,61 pixel donnait des colonnes
+// larges de 25 ET de 26 pixels dans la meme image. `imageSmoothingEnabled =
+// false` n'y peut rien — il supprime le flou, pas l'irregularite.
+//
+// La mire est un damier d'une colonne sur deux : le pas entre deux colonnes
+// de meme couleur doit valoir exactement deux fois le zoom, partout.
+const grille = await page.evaluate(async () => {
+  const app = window.pixelforge, ed = app.ed
+  const cel = ed.peekCel()
+  ed.runPixels('mire', [cel], () => {
+    const bm = cel.bitmap
+    for (let y = 0; y < bm.height; y++) for (let x = 0; x < bm.width; x++) {
+      bm.u32[y * bm.width + x] = (x % 2) ? 0xff101010 : 0xfff0f0f0
+    }
+  })
+  ed.view.showPixelGrid = false
+  ed.view.showGrid = false
+
+  const mesures = []
+  for (const [zoom, pan] of [[7, 0.61], [13, 0.61], [8, 0.37], [16, 0.29]]) {
+    app.viewport.setZoom(zoom)
+    ed.view.panX += pan
+    ed.view.panY += pan
+    app.viewport.invalidate()
+    await new Promise((q) => requestAnimationFrame(() => requestAnimationFrame(q)))
+
+    const c = app.viewport.canvas
+    const ctx = c.getContext('2d')
+    const dpr = window.devicePixelRatio
+    const yv = Math.round((ed.view.panY + ed.sprite.height * ed.view.zoom / 2) * dpr)
+    const d = ctx.getImageData(0, yv, c.width, 1).data
+    const cle = (x) => `${d[x * 4]},${d[x * 4 + 1]},${d[x * 4 + 2]}`
+
+    const plages = []
+    let cur = cle(0), deb = 0
+    for (let x = 1; x <= c.width; x++) {
+      const k = x < c.width ? cle(x) : null
+      if (k !== cur) { plages.push({ k: cur, x: deb, n: x - deb }); cur = k; deb = x }
+    }
+    const x0 = ed.view.panX * dpr
+    const x1 = x0 + ed.sprite.width * ed.view.zoom * dpr
+    const dedans = plages.filter((p) => p.x >= x0 && p.x + p.n <= x1 && p.n > 1)
+    const parCouleur = {}
+    for (const p of dedans) (parCouleur[p.k] ??= []).push(p.x)
+    const serie = Object.values(parCouleur).sort((a, b) => b.length - a.length)[0] ?? []
+    const pas = []
+    for (let i = 1; i < serie.length; i++) pas.push(serie[i] - serie[i - 1])
+    mesures.push({ zoom, pan, dpr, n: pas.length,
+      distincts: [...new Set(pas)].sort((a, b) => a - b), attendu: zoom * dpr * 2 })
+  }
+  return mesures
+})
+
+for (const m of grille) {
+  check(`la grille d'ecran est reguliere a zoom ${m.zoom}`,
+    m.n >= 5 && m.distincts.length === 1 && m.distincts[0] === m.attendu,
+    `${m.n} pas, ${JSON.stringify(m.distincts)} (attendu ${m.attendu})`)
+}
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()

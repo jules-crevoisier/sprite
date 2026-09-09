@@ -183,7 +183,7 @@ export class Viewport {
     this.render()
   }
 
-  private resizeToDisplay(): { w: number; h: number } {
+  private resizeToDisplay(): { w: number; h: number; dpr: number } {
     const dpr = Math.min(3, window.devicePixelRatio || 1)
     const r = this.canvas.getBoundingClientRect()
     const w = Math.max(1, Math.round(r.width * dpr))
@@ -193,11 +193,11 @@ export class Viewport {
       this.canvas.height = h
     }
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    return { w: r.width, h: r.height }
+    return { w: r.width, h: r.height, dpr }
   }
 
   private render(): void {
-    const { w, h } = this.resizeToDisplay()
+    const { w, h, dpr } = this.resizeToDisplay()
     const ctx = this.ctx
     const ed = this.ed
     const s = ed.sprite
@@ -216,8 +216,21 @@ export class Viewport {
 
     const dw = s.width * v.zoom
     const dh = s.height * v.zoom
-    const ox = v.panX
-    const oy = v.panY
+    // L'origine est calee sur un pixel d'ecran entier.
+    //
+    // Sans ce calage, le sprite se pose a une fraction de pixel pres et le
+    // reechantillonnage au plus proche voisin distribue les colonnes de facon
+    // inegale : mesure a zoom 7, un deplacement de 0,61 pixel donnait des
+    // colonnes larges de six ET de sept pixels dans la meme image. Une grille
+    // qui ondule, c'est exactement ce qu'un dessinateur de pixel art voit en
+    // premier. `imageSmoothingEnabled = false` n'y change rien : il supprime
+    // le flou, pas l'irregularite.
+    //
+    // Les fonds, les grilles et la selection prennent la meme origine, donc
+    // tout reste aligne. L'ecart avec la position exacte est inferieur a un
+    // pixel d'ecran, invisible au curseur.
+    const ox = Math.round(v.panX * dpr) / dpr
+    const oy = Math.round(v.panY * dpr) / dpr
 
     ctx.imageSmoothingEnabled = false
 
@@ -251,7 +264,7 @@ export class Viewport {
     ctx.scale(v.zoom, v.zoom)
 
     if (v.showGrid) this.drawGrid(ctx)
-    if (v.showPixelGrid && v.zoom >= 8) this.drawPixelGrid(ctx)
+    if (v.showPixelGrid && v.zoom >= 8) this.drawPixelGrid(ctx, ox, oy, dpr)
     if (v.showSlices) this.drawSlices(ctx)
     if (v.showSymmetryGuides) this.drawSymmetry(ctx)
 
@@ -402,32 +415,50 @@ export class Viewport {
    * La ligne des huit sert a compter : au-dela de quelques pixels, l'oeil ne
    * denombre plus une grille reguliere, il a besoin de reperes.
    */
-  private drawPixelGrid(ctx: CanvasRenderingContext2D): void {
+  private drawPixelGrid(
+    ctx: CanvasRenderingContext2D, ox: number, oy: number, dpr: number,
+  ): void {
     const s = this.ed.sprite
-    const trait = 1 / this.ed.view.zoom
+    const z = this.ed.view.zoom
+
+    // La grille se trace en pixels d'ecran entiers, pas en coordonnees du
+    // sprite.
+    //
+    // Tracee a l'echelle du sprite, chaque ligne etait centree sur la
+    // frontiere entre deux pixels : large d'un pixel CSS, elle debordait d'une
+    // demie de chaque cote et le lisseur la rendait sur DEUX colonnes a demi
+    // intensite. Le banc mesurait des plages « 1, 6, 1 » la ou il fallait lire
+    // « 1, 7 », et les couleurs du dessin en sortaient teintees — a zoom 8, un
+    // gris 16 se lisait 33, 60 ou 70 selon la position du panoramique. Une
+    // grille qui teinte le dessin qu'elle sert a compter ne sert a rien.
+    //
+    // En remplissant exactement une colonne de pixels d'ecran, la ligne est
+    // franche et n'emprunte rien aux pixels voisins.
+    const px = (x: number): number => Math.round((ox + x * z) * dpr)
+    const py = (y: number): number => Math.round((oy + y * z) * dpr)
+    const x0 = px(0), x1 = px(s.width), y0 = py(0), y1 = py(s.height)
+
     ctx.save()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.globalCompositeOperation = 'difference'
-    ctx.lineWidth = trait
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)'
-    ctx.beginPath()
-    for (let x = 1; x < s.width; x++) {
-      if (x % 8 === 0) continue
-      ctx.moveTo(x, 0); ctx.lineTo(x, s.height)
+    // Deux passes : la trame d'un pixel, puis les reperes tous les huit. Au
+    // dela de quelques pixels l'oeil ne denombre plus une grille reguliere.
+    for (const [pas, teinte] of [[1, 0.16], [8, 0.34]] as const) {
+      ctx.fillStyle = `rgba(255,255,255,${teinte})`
+      for (let x = pas === 1 ? 1 : 8; x < s.width; x += pas) {
+        if (pas === 1 && x % 8 === 0) continue
+        ctx.fillRect(px(x), y0, 1, y1 - y0)
+      }
+      for (let y = pas === 1 ? 1 : 8; y < s.height; y += pas) {
+        if (pas === 1 && y % 8 === 0) continue
+        ctx.fillRect(x0, py(y), x1 - x0, 1)
+      }
     }
-    for (let y = 1; y < s.height; y++) {
-      if (y % 8 === 0) continue
-      ctx.moveTo(0, y); ctx.lineTo(s.width, y)
-    }
-    ctx.stroke()
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.34)'
-    ctx.beginPath()
-    for (let x = 8; x < s.width; x += 8) { ctx.moveTo(x, 0); ctx.lineTo(x, s.height) }
-    for (let y = 8; y < s.height; y += 8) { ctx.moveTo(0, y); ctx.lineTo(s.width, y) }
-    ctx.stroke()
     ctx.restore()
   }
+
 
   private drawSymmetry(ctx: CanvasRenderingContext2D): void {
     const sym = this.ed.symmetry
