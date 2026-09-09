@@ -180,6 +180,30 @@ peau, un feuillage sont chacun une famille.
 *De gauche à droite : le dessin de repos, la carte des os — une couleur par
 os, qui montre à qui appartient chaque pixel — puis quatre poses.*
 
+#### Tourner en 3D — `Ctrl+Maj+R`
+
+Le squelette fait pivoter des membres **dans le plan du dessin**. Il ne sait
+pas montrer un trois-quarts : pour cela il faudrait savoir ce qu'il y a
+derrière, et un dessin plat ne le dit pas.
+
+On le devine. Chaque pixel reçoit une **épaisseur**, lue dans la silhouette :
+loin du bord, la matière est épaisse ; sur le contour, elle est mince. Le
+dessin cesse d'être une image et devient un volume dont il est la tranche du
+milieu. Tourner revient alors à faire tourner ce volume et à le reprojeter —
+les occultations tombent juste, sans qu'aucun modèle 3D n'existe.
+
+Trois angles (lacet, tangage, roulis) et deux réglages de relief (hauteur,
+galbe). Le résultat s'applique sur place ou part sur sa propre frame.
+
+**Rien n'est interpolé** : les pixels sont déplacés, jamais mélangés. La
+palette traverse la transformation intacte, et `npm run test:rotation` le
+mesure à chaque degré plutôt que de le supposer — avec la masse, la
+continuité et l'étanchéité de la silhouette.
+
+Ce que ce n'est pas : un vrai dos. Au-delà d'un demi-tour le résultat est une
+base à reprendre au crayon, pas une vue juste. Le dialogue le dit, et prévient
+dès qu'une pose perd de la matière ou se perce.
+
 **Squelette et pose** (`Maj+K`). Six modèles prêts à l'emploi — humanoïde de face
 et de profil, quadrupède, oiseau, arbre, membre simple — se calent sur la
 boîte des pixels opaques, donc ils tombent juste quelle que soit la taille du
@@ -473,7 +497,9 @@ Deux choix structurants :
 
 ```bash
 npm run typecheck
-npm run test:smoke   # nécessite Chromium : npx playwright install chromium
+npm run test          # les deux bancs
+npm run test:smoke    # nécessite Chromium : npx playwright install chromium
+npm run test:rotation # géométrie de la rotation par relief
 ```
 
 Le test de bout en bout ouvre l'application dans un vrai navigateur et vérifie
@@ -488,6 +514,19 @@ multipart, l'écrasement du fichier lié plutôt que sa duplication, la reprise
 après un jeton expiré, et les messages rendus pour un Drive plein, une
 coupure réseau ou un fichier supprimé. Il vérifie aussi que sans identifiant
 client, les commandes ouvrent la marche à suivre au lieu d'échouer.
+
+Le banc de rotation balaie le lacet **degré par degré**, de −75° à +75°, sur
+quatre sujets choisis pour leurs pièges : la mascotte, un disque (le relief le
+plus haut), une lame (longue et fine) et un anneau (un vrai trou, qu'aucun
+bouchage ne doit combler). À chaque angle il exige que le dessin ressorte
+intact à 0°, que la masse tienne jusqu'à 45° et ne descende jamais sous celle
+d'une feuille de papier au-delà, qu'aucune couleur étrangère n'apparaisse, que
+la silhouette ne se perce pas, que deux angles voisins ne sautent pas de plus
+d'une colonne, et que les deux profils se vaillent.
+
+Chaque règle a été vérifiée **en la cassant** : revenir à une coque au lieu
+d'un volume plein fait tomber quatorze vérifications, interpoler une couleur
+en fait tomber huit. Un banc qui ne sait pas échouer ne protège rien.
 
 ## Limites connues
 

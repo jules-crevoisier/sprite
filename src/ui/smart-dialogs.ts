@@ -14,6 +14,9 @@ import {
 import {
   DEFAULT_RECIPE, DEFAULT_SHADE, antiAlias, autoShade, buildRamp,
 } from '../smart/shading'
+import {
+  champAuto, hauteurSuggeree, tourner, masse, trousInterieurs, couleursEtrangeres,
+} from '../smart/depth'
 import { el, checkbox, numberInput, select, slider } from './dom'
 import { zoomablePreview } from './preview-zoom'
 import { icon } from './icons'
@@ -576,5 +579,125 @@ export function rampDialog(ed: Editor): void {
         },
       },
     ],
+  })
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Rotation par relief                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Tourne le dessin dans les trois axes en lui pretant une epaisseur.
+ *
+ * Le squelette sait deja faire pivoter des membres dans le plan. Ce qu'il ne
+ * sait pas faire, c'est montrer un trois-quarts : pour cela il faut savoir ce
+ * qu'il y a derriere, et un dessin plat ne le dit pas. On le devine a partir
+ * de la silhouette — epais au milieu, mince au bord — et on fait tourner le
+ * volume obtenu.
+ *
+ * Ce que le resultat n'est pas : un vrai dos. Le dessin ne contient pas
+ * l'information, aucun calcul ne l'inventera. C'est une base juste en
+ * volume et en occultation, a retoucher au crayon comme n'importe quelle
+ * pose generee.
+ */
+export function rotationDialog(ed: Editor): void {
+  const cel = ed.beginStroke('Rotation 3D')
+  if (!cel) return
+
+  const source = cel.bitmap.clone()
+  const angles = { lacet: 0, tangage: 0, roulis: 0 }
+  const relief = { hauteur: hauteurSuggeree(source), galbe: 0.5 }
+  const masseSource = masse(source)
+  const trousSource = trousInterieurs(source)
+
+  const apercu = zoomablePreview({ hauteur: 220 })
+  const info = el('p', { class: 'form-note' })
+
+  const apply = () => {
+    ed.resetStroke()
+    const cible = ed.peekCel()
+    if (!cible) return
+    const champ = champAuto(source, relief)
+    const tourne = tourner(source, champ, angles)
+    cible.bitmap.copyFrom(tourne)
+    ed.events.emit('doc', undefined)
+    apercu.show(cible.bitmap)
+
+    // Les trois mesures du banc, sous les yeux : une pose qui perd de la
+    // matiere, se perce ou invente une couleur se voit ici avant d'etre
+    // posee, au lieu d'etre decouverte a la lecture de l'animation.
+    const m = masse(tourne)
+    const perte = masseSource ? Math.round((1 - m / masseSource) * 100) : 0
+    const perces = trousInterieurs(tourne) - trousSource
+    const etrangeres = couleursEtrangeres(source, tourne).length
+    const alertes: string[] = []
+    if (perte > 12) alertes.push(`${perte}% de matiere perdue`)
+    if (perces > 0) alertes.push(`${perces} trou(s) ouvert(s)`)
+    if (etrangeres > 0) alertes.push(`${etrangeres} couleur(s) etrangere(s)`)
+    info.textContent = alertes.length
+      ? `Attention : ${alertes.join(', ')}. Baissez l'angle, ou montez le relief.`
+      : `${m} pixels, palette intacte, silhouette pleine.`
+    info.style.color = alertes.length ? 'var(--warn, #e0a33e)' : 'var(--text-faint)'
+  }
+
+  const deg = (v: number) => `${Math.round((v * 180) / Math.PI)}°`
+  const QUART = Math.PI / 2
+
+  const controls = el('div', { class: 'form-grid' },
+    el('label', { title: 'Le personnage se tourne sur lui-meme' }, 'Lacet'),
+    slider(-QUART, QUART, 0, 0.02, (v) => { angles.lacet = v; apply() }, deg),
+    el('label', { title: 'Le personnage se penche en avant ou en arriere' }, 'Tangage'),
+    slider(-QUART, QUART, 0, 0.02, (v) => { angles.tangage = v; apply() }, deg),
+    el('label', { title: 'Rotation dans le plan du dessin' }, 'Roulis'),
+    slider(-Math.PI, Math.PI, 0, 0.02, (v) => { angles.roulis = v; apply() }, deg),
+    el('label', null, 'Relief'),
+    slider(0, 24, relief.hauteur, 1, (v) => { relief.hauteur = v; apply() },
+      (v) => (v === 0 ? 'plat' : `${v} px`)),
+    el('label', { title: 'Cone, dome, ou plateau a bords tombants' }, 'Galbe'),
+    slider(0.15, 1.2, relief.galbe, 0.05, (v) => { relief.galbe = v; apply() },
+      (v) => (v < 0.35 ? 'plateau' : v < 0.75 ? 'dome' : 'cone')),
+  )
+
+  const body = el('div', null,
+    el('p', { class: 'form-note', style: { margin: '0 0 8px', lineHeight: '1.6' } },
+      'Le dessin est la tranche du milieu d\'un volume : le relief dit de combien '
+      + 'la matiere deborde de chaque cote, devine a partir de la silhouette. '
+      + 'Aucune couleur n\'est melangee — les pixels sont deplaces, jamais interpoles.'),
+    apercu.node,
+    controls,
+    info,
+    el('p', { class: 'form-note' },
+      'Le dos n\'existe pas dans le dessin : au-dela d\'un demi-tour, le resultat '
+      + 'est une base a reprendre au crayon, pas une vue juste.'),
+  )
+
+  apply()
+
+  openModal({
+    title: 'Tourner en 3D',
+    icon: 'rig',
+    body,
+    actions: [
+      { label: 'Annuler', onClick: () => { ed.cancelStroke() } },
+      {
+        label: 'Poser sur une nouvelle frame',
+        onClick: () => {
+          const tourne = ed.peekCel()?.bitmap.clone()
+          ed.cancelStroke()
+          if (!tourne) return
+          const at = ed.activeFrame + 1
+          ed.run('Pose tournee', () => { ed.sprite.duplicateFrame(ed.activeFrame, at) })
+          ed.setActiveFrame(at)
+          const cible = ed.peekCel()
+          if (cible) {
+            ed.run('Pose tournee', () => { cible.bitmap.copyFrom(tourne) })
+          }
+          showToast('Pose posee sur une nouvelle frame', 'success')
+        },
+      },
+      { label: 'Appliquer', primary: true, onClick: () => { ed.commitStroke() } },
+    ],
+    onClose: () => { ed.cancelStroke() },
   })
 }

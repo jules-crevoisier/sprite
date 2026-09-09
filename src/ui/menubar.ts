@@ -39,7 +39,7 @@ const MENUS: { label: string; items: string[] }[] = [
     label: 'Assiste',
     items: [
       'rig.open', '---',
-      'sprite.ramp', 'sprite.shade', '---',
+      'sprite.ramp', 'sprite.shade', 'sprite.rotate3d', '---',
       'sprite.variants', 'sprite.detail',
     ],
   },

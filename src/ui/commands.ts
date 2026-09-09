@@ -1,7 +1,7 @@
 import type { App } from './app'
 import * as ops from '../core/operations'
 import * as dlg from './dialogs'
-import { variantsDialog, detailDialog, shadeDialog, rampDialog } from './smart-dialogs'
+import { variantsDialog, detailDialog, shadeDialog, rampDialog, rotationDialog } from './smart-dialogs'
 import { exportFramePng, exportFramesZip, exportGif } from '../export'
 import { downloadText, pickFiles, safeName } from '../export/files'
 import { serializeSprite, deserializeSprite, PROJECT_EXT, loadAutosave, autosaveDate } from '../io/project'
@@ -330,6 +330,12 @@ export function buildCommands(app: App): Command[] {
   add({
     id: 'sprite.shade', label: 'Ombrage automatique…', group: 'Assiste', keys: 'Ctrl+Maj+O', icon: 'shading',
     run: () => shadeDialog(ed),
+  })
+
+  add({
+    id: 'sprite.rotate3d', label: 'Tourner en 3D…', group: 'Assiste', keys: 'Ctrl+Maj+R', icon: 'rig',
+    hint: () => 'Trois-quarts et profils, sans redessiner',
+    run: () => rotationDialog(ed),
   })
   add({
     id: 'sprite.ramp', label: 'Rampe de couleurs…', group: 'Assiste', keys: 'Ctrl+Maj+G', icon: 'palette',

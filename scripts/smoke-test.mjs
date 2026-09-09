@@ -3047,6 +3047,56 @@ check('deplacer un calque le remet ailleurs sans en perdre',
   pileDeplacee.avant !== pileDeplacee.apres && pileDeplacee.avant === pileDeplacee.retour,
   pileDeplacee.apres)
 
+/* ------------------------------------------------------------------ */
+/* Rotation par relief                                                 */
+/* ------------------------------------------------------------------ */
+
+// Le banc dedie mesure la geometrie sur tout un balayage (npm run
+// test:rotation). Ici on verifie seulement que la commande est branchee et
+// que le resultat arrive bien dans le document.
+await page.keyboard.press('Escape')
+await sleep(300)
+await page.evaluate(async () => {
+  const m = await import('/src/ui/mascot-clips.ts')
+  window.pixelforge.ed.loadSprite(m.spritePixl())
+})
+await sleep(500)
+const avantRotation = await page.evaluate(() => ({
+  frames: window.pixelforge.ed.frameCount,
+  pixels: [...window.pixelforge.ed.peekCel().bitmap.u32].filter((c) => c >>> 24).length,
+}))
+await page.evaluate(() => window.pixelforge.runCommand('sprite.rotate3d'))
+await sleep(600)
+const dialogueRotation = await page.evaluate(() => ({
+  titre: document.querySelector('.modal-head h2')?.textContent ?? '',
+  curseurs: document.querySelectorAll('.modal input[type=range]').length,
+}))
+// Lacet a mi-course : le dessin doit changer sans se vider.
+await page.evaluate(() => {
+  const s = document.querySelector('.modal input[type=range]')
+  s.value = String(Number(s.max) * 0.5)
+  s.dispatchEvent(new Event('input', { bubbles: true }))
+})
+await sleep(400)
+const tourne = await page.evaluate(() => {
+  const b = window.pixelforge.ed.peekCel().bitmap
+  return [...b.u32].filter((c) => c >>> 24).length
+})
+const boutonPoser = page.locator('.modal button', { hasText: 'Poser sur une nouvelle frame' })
+if (await boutonPoser.count()) await boutonPoser.click()
+await sleep(600)
+const apresRotation = await page.evaluate(() => window.pixelforge.ed.frameCount)
+
+check('la rotation 3D s\'ouvre avec ses cinq reglages',
+  dialogueRotation.titre === 'Tourner en 3D' && dialogueRotation.curseurs === 5,
+  `${dialogueRotation.titre} / ${dialogueRotation.curseurs} curseurs`)
+check('tourner change le dessin sans le vider',
+  tourne > 0 && tourne !== avantRotation.pixels,
+  `${avantRotation.pixels} -> ${tourne} pixels`)
+check('la pose tournee peut partir sur sa propre frame',
+  apresRotation === avantRotation.frames + 1,
+  `${avantRotation.frames} -> ${apresRotation} frames`)
+
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 
 await browser.close()
