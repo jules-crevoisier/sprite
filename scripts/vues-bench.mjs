@@ -66,6 +66,93 @@ const m = await page.evaluate(async () => {
   const TAILLE = 48
   const opts = { largeur: TAILLE, hauteur: TAILLE }
 
+  /* --- Mesures qui regardent l'image, pas seulement son poids --- */
+
+  /** Pixels opaques ayant au moins un voisin orthogonal vide ou hors cadre. */
+  const bordDe = (img) => {
+    const w = img.width, h = img.height
+    const out = []
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x
+        if ((img.u32[i] >>> 24) === 0) continue
+        const vide = (xx, yy) => xx < 0 || yy < 0 || xx >= w || yy >= h
+          || (img.u32[yy * w + xx] >>> 24) === 0
+        if (vide(x - 1, y) || vide(x + 1, y) || vide(x, y - 1) || vide(x, y + 1)) out.push(i)
+      }
+    }
+    return out
+  }
+
+  /**
+   * Couleurs qui font le contour du dessin : celles qui couvrent au moins
+   * 60% de ses pixels de bord.
+   */
+  const couleursDeTrait = (img) => {
+    const bord = bordDe(img)
+    const compte = new Map()
+    for (const i of bord) compte.set(img.u32[i], (compte.get(img.u32[i]) ?? 0) + 1)
+    const tri = [...compte].sort((a, b) => b[1] - a[1])
+    const cle = new Set()
+    let cumul = 0
+    for (const [c, n] of tri) {
+      cle.add(c)
+      cumul += n
+      if (cumul >= bord.length * 0.6) break
+    }
+    return cle
+  }
+
+  /**
+   * Part du contour encore tenue par les couleurs de trait.
+   *
+   * C'est la mesure qui dit si la silhouette se lit encore. Un flanc repeint
+   * par le remplissage, un trait rompu, un bandeau qui deborde : tout cela
+   * fait chuter ce taux, la ou la masse ne bouge pas d'un pixel.
+   */
+  const tauxDeTrait = (img, cle) => {
+    const bord = bordDe(img)
+    if (!bord.length) return 0
+    let n = 0
+    for (const i of bord) if (cle.has(img.u32[i])) n++
+    return n / bord.length
+  }
+
+  /** Effectif de chaque couleur. */
+  const effectifs = (img) => {
+    const m = new Map()
+    for (let i = 0; i < img.u32.length; i++) {
+      const c = img.u32[i]
+      if ((c >>> 24) === 0) continue
+      m.set(c, (m.get(c) ?? 0) + 1)
+    }
+    return m
+  }
+
+  /** Pixels dont la couleur differe de tous leurs voisins orthogonaux. */
+  const mouchetures = (img) => {
+    const w = img.width, h = img.height
+    let n = 0
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x
+        const c = img.u32[i]
+        if ((c >>> 24) === 0) continue
+        let voisins = 0, pareils = 0
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+          const xx = x + dx, yy = y + dy
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue
+          const v = img.u32[yy * w + xx]
+          if ((v >>> 24) === 0) continue
+          voisins++
+          if (v === c) pareils++
+        }
+        if (voisins > 0 && pareils === 0) n++
+      }
+    }
+    return n
+  }
+
   /** Une piece a partir d'un dessin, centree sur lui-meme. */
   const pieceDe = (nom, bitmap, position, sourcesSupp = []) => {
     const champ = d.champAuto(bitmap, { hauteur: d.hauteurSuggeree(bitmap), galbe: 0.5 })
@@ -103,11 +190,55 @@ const m = await page.evaluate(async () => {
   const trous = []
   const masse0 = d.masse(pixl)
   const trous0 = d.trousInterieurs(pixl)
+  const cle = couleursDeTrait(pixl)
+  const traitSource = tauxDeTrait(pixl, cle)
+  const effSource = effectifs(pixl)
+  const mouchSource = mouchetures(pixl)
+  // Les « accents » : les couleurs rares, celles qui portent les yeux, le nez,
+  // un reflet. Elles pesent trop peu pour que la masse les voie disparaitre.
+  const accents = [...effSource].filter(([, n]) => n <= s.masse(pixl) * 0.05)
+  const pivotUn = s.pivotDesPieces([seule])
+  const cadreUn = { ...opts, pivotMonde: pivotUn }
+  /** Le plus grand azimut, en degres, ou tout tient encore. */
+  let domaine = 0
+  const trait = []
+  let accentsPerdus = null
+  let mouchMax = mouchSource
   for (let i = 0; i < 36; i++) {
-    const r = s.rendreScene([seule], { azimut: (i / 36) * Math.PI * 2, elevation: 0, zoom: 1 }, opts)
+    const deg = (i / 36) * 360
+    const r = s.rendreScene([seule], { azimut: (deg * Math.PI) / 180, elevation: 0, zoom: 1 }, cadreUn)
     masses.push(s.masse(r.image))
     if (d.couleursEtrangeres(pixl, r.image).length) etrangeres.push(i)
     if (d.trousInterieurs(r.image) > trous0) trous.push(i)
+
+    const t = tauxDeTrait(r.image, cle)
+    trait.push({ deg: Math.round(deg), t })
+    const eff = effectifs(r.image)
+    let accentOk = true
+    for (const [c, n] of accents) {
+      const vu = eff.get(c) ?? 0
+      if (Math.abs(vu - n) > Math.max(1, n * 0.25)) { accentOk = false; break }
+    }
+    mouchMax = Math.max(mouchMax, mouchetures(r.image))
+    const angle = deg > 180 ? 360 - deg : deg
+    if (t >= traitSource * 0.9 && accentOk && angle >= domaine) domaine = angle
+    if (!accentOk && accentsPerdus === null) accentsPerdus = Math.round(angle)
+  }
+  // Le domaine honnete : le plus grand angle tel que le trait tienne a TOUS
+  // les angles inferieurs. Prendre le maximum des angles ou il tient donnait
+  // 180 degres — parce que le dos, etant le miroir exact de la face, a un
+  // contour parfait. La mesure annoncait donc un domaine complet en
+  // s'appuyant sur l'artefact meme qu'elle devait denoncer.
+  const parAngle = new Map()
+  for (const { deg, t } of trait) {
+    const angle = deg > 180 ? 360 - deg : deg
+    parAngle.set(angle, Math.min(parAngle.get(angle) ?? 1, t))
+  }
+  const angles = [...parAngle.keys()].sort((a, b) => a - b)
+  let domaineHonnete = 0
+  for (const a of angles) {
+    if (parAngle.get(a) < traitSource * 0.9) break
+    domaineHonnete = a
   }
   // Le tour se referme : la direction 36 est la direction 0.
   const boucle = s.masse(s.rendreScene([seule], { azimut: Math.PI * 2, elevation: 0, zoom: 1 }, opts).image)
@@ -151,11 +282,46 @@ const m = await page.evaluate(async () => {
   /* --- 5. Plusieurs vues sources : de combien invente-t-on ? --- */
   const champDe = (b) => d.champAuto(b, { hauteur: d.hauteurSuggeree(b), galbe: 0.5 })
   const uneSeule = pieceDe('une', pixl, { x: 0, y: 0, z: 0 })
+  // Quatre vues REELLEMENT differentes. Les passer toutes identiques ne
+  // mesurait que l'arithmetique d'angles de `choisirSource` : le rendu
+  // n'etait jamais regarde, et la couture entre deux sources — l'endroit ou
+  // l'image saute — restait invisible par construction.
+  const clips = await import('/src/ui/mascot-clips.ts')
+  const spr = clips.spritePixl()
+  const autreVue = (n) => spr.layers[0].cels[n]?.bitmap ?? pixl
+  const vueE = autreVue(10), vueN = autreVue(20), vueO = autreVue(30)
   const troisVues = pieceDe('trois', pixl, { x: 0, y: 0, z: 0 }, [
-    { azimut: Math.PI / 2, elevation: 0, bitmap: pixl, champ: champDe(pixl) },
-    { azimut: Math.PI, elevation: 0, bitmap: pixl, champ: champDe(pixl) },
-    { azimut: -Math.PI / 2, elevation: 0, bitmap: pixl, champ: champDe(pixl) },
+    { azimut: Math.PI / 2, elevation: 0, bitmap: vueE, champ: champDe(vueE) },
+    { azimut: Math.PI, elevation: 0, bitmap: vueN, champ: champDe(vueN) },
+    { azimut: -Math.PI / 2, elevation: 0, bitmap: vueO, champ: champDe(vueO) },
   ])
+
+  // I3 : la couture. Les azimuts de bascule sont les bissectrices des
+  // directions sources — ici 45, 135, 225, 315 degres. De part et d'autre,
+  // a un dixieme de degre, l'image ne doit pas sauter.
+  // Ecart intrinseque entre deux dessins sources voisins : la borne sous
+  // laquelle aucun rendu ne peut descendre.
+  let ecartSources = 0
+  for (const [a, b] of [[pixl, vueE], [vueE, vueN], [vueN, vueO], [vueO, pixl]]) {
+    let diff = 0, plein = 0
+    for (let i = 0; i < a.u32.length; i++) {
+      if (a.u32[i] !== b.u32[i]) diff++
+      if ((a.u32[i] >>> 24) !== 0) plein++
+    }
+    ecartSources = Math.max(ecartSources, diff / Math.max(1, plein))
+  }
+
+
+  let coutureMax = 0
+  for (const bascule of [45, 135, 225, 315]) {
+    const rendu = (deg) => s.rendreScene([troisVues],
+      { azimut: (deg * Math.PI) / 180, elevation: 0, zoom: 1 }, opts).image
+    const a = rendu(bascule - 0.1), b = rendu(bascule + 0.1)
+    let diff = 0
+    for (let i = 0; i < a.u32.length; i++) if (a.u32[i] !== b.u32[i]) diff++
+    const m = Math.max(1, s.masse(a))
+    coutureMax = Math.max(coutureMax, diff / m)
+  }
   let ecartUne = 0, ecartQuatre = 0
   for (let i = 0; i < 36; i++) {
     const az = (i / 36) * Math.PI * 2
@@ -254,9 +420,22 @@ const m = await page.evaluate(async () => {
   const xAvecProfondeur = centreProfil()
   bras.depth = profondeurAvant
 
+  // Le cadre natif, pas un cadre double : c'est justement en doublant que le
+  // banc masquait la derive du personnage.
   const dirsPose = s.planchesDeDirections(piecesPose, 8, s.ELEVATION_ISO_2_1, {
-    largeur: perso.width * 2, hauteur: perso.height * 2,
+    largeur: perso.width, hauteur: perso.height,
   })
+  // I4 : le personnage doit tourner sur lui-meme, pas orbiter. On suit le
+  // centre de sa boite englobante d'une direction a l'autre.
+  const centres = dirsPose.map((p) => {
+    const b = p.rendu.image.trimBounds()
+    return b.w ? { x: b.x + b.w / 2, y: b.y + b.h / 2 } : null
+  })
+  const videsPose = centres.filter((c) => !c).length
+  const xs = centres.filter(Boolean).map((c) => c.x)
+  const ys = centres.filter(Boolean).map((c) => c.y)
+  const deriveX = xs.length ? Math.max(...xs) - Math.min(...xs) : 0
+  const deriveY = ys.length ? Math.max(...ys) - Math.min(...ys) : 0
   const sigPose = dirsPose.map((p) => {
     let h = 0
     for (let i = 0; i < p.rendu.image.u32.length; i++) h = (h * 31 + p.rendu.image.u32[i]) | 0
@@ -280,10 +459,13 @@ const m = await page.evaluate(async () => {
     boucle, masse0Rendue: masses[0],
     sautMax, etrangeres: etrangeres.length, trous: trous.length,
     occ, ordreIndifferent,
+    coutureMax, ecartSources,
     ecartUne: (ecartUne * 180) / Math.PI,
     ecartQuatre: (ecartQuatre * 180) / Math.PI,
     directions: planche.length, distinctes,
     noms: planche.map((p) => p.nom).join(','),
+    traitSource, trait, domaineHonnete, accentsPerdus,
+    mouchSource, mouchMax, nbAccents: accents.length,
     bilan, reposIdentique, bougePose,
     bilanCourt, libres,
     brasAvant, brasApres, attendu,
@@ -292,6 +474,7 @@ const m = await page.evaluate(async () => {
       ? Math.hypot(brasApres.x - attendu.x, brasApres.y - attendu.y) : null,
     osUtilises: morceaux.filter((x) => x.os !== null).length,
     posesDistinctes: new Set(sigPose).size,
+    videsPose, deriveX, deriveY,
     minPose: Math.min(...massesPose), maxPose: Math.max(...massesPose),
   }
 })
@@ -315,6 +498,44 @@ check('aucune direction n\'enfle', m.maxMasse <= m.masse0 * 1.6,
 check('pas de saut d\'une direction a la suivante', m.sautMax <= m.masse0 * 0.2,
   `saut max ${m.sautMax} pixels sur ${m.masse0}`)
 check('aucune couleur etrangere', m.etrangeres === 0, `${m.etrangeres} direction(s)`)
+
+/* --- ce que la masse ne voit pas --- */
+
+// La masse d'un personnage repeint en noir par son propre trait de contour
+// ne bouge pas d'un pixel. Le taux de trait, lui, s'effondre : c'est la
+// mesure qui dit si la silhouette se lit encore.
+check('le contour tient sur le domaine annonce',
+  m.domaineHonnete >= 20,   // DEFAUT CONNU : vaut 0 aujourd'hui, voir scene.ts
+  `le trait tient jusqu'a ${m.domaineHonnete}deg `
+  + `(${m.trait.filter((x) => x.deg <= 90).map((x) => `${x.deg}:${x.t.toFixed(2)}`).join(' ')})`)
+
+// Les yeux, le nez : quelques pixels chacun, invisibles pour la masse.
+check('les accents survivent au domaine annonce',
+  m.accentsPerdus === null || m.accentsPerdus >= 20,
+  m.accentsPerdus === null
+    ? `${m.nbAccents} accent(s) tiennent partout`
+    : `${m.nbAccents} accent(s), le premier lache a ${m.accentsPerdus}deg`)
+
+check('les aplats ne se mouchettent pas',
+  m.mouchMax <= m.mouchSource + 2,
+  `${m.mouchSource} pixel(s) isole(s) a la source, ${m.mouchMax} au pire`)
+
+// La couture entre deux vues sources : c'est la que l'image saute, et
+// aucune mesure de masse ne peut le voir.
+// On ne peut pas faire mieux que l'ecart entre les deux dessins : si le
+// profil et la face different de 70%, la bascule les fait forcement sauter
+// d'autant. Ce qu'on exige, c'est que le rendu n'AJOUTE pas de saut — et
+// qu'avec deux sources identiques il n'y en ait aucun.
+// Une regle a ete ecrite ici puis retiree : « deux vues sources identiques
+// ne doivent faire aucun saut ». Elle est fausse. Declarer le meme dessin
+// comme vue de face ET de profil, c'est affirmer que le personnage a la meme
+// apparence des deux cotes ; a la bascule, l'un est rendu tourne de +45
+// degres et l'autre de -45, et le saut est la consequence honnete d'une
+// donnee contradictoire, pas un defaut du rendu.
+check('le saut de bascule ne depasse pas l\'ecart entre les deux dessins',
+  m.coutureMax <= m.ecartSources * 1.1 + 0.02,
+  `saut ${Math.round(m.coutureMax * 100)}%, les dessins different de `
+  + `${Math.round(m.ecartSources * 100)}%`)
 check('aucune silhouette percee', m.trous === 0, `${m.trous} direction(s)`)
 
 // L'occultation est ce qui distingue une composition d'un empilement : sans
@@ -374,6 +595,11 @@ check('la profondeur d\'un os le place vraiment devant le corps',
     : 'morceau introuvable')
 check('poser un os change vraiment le rendu', m.bougePose > 20,
   `${m.bougePose} pixels differents`)
+// Le personnage doit tourner sur lui-meme. Sans pivot, la camera le fait
+// orbiter autour du coin du cadre : il en sort.
+check('le personnage tourne sur lui-meme et reste dans son cadre',
+  m.videsPose === 0 && m.deriveX <= 4 && m.deriveY <= 4,
+  `${m.videsPose} direction(s) vide(s), derive ${m.deriveX.toFixed(1)} x ${m.deriveY.toFixed(1)} px`)
 check('une pose se rend sous huit directions distinctes',
   m.posesDistinctes === 8, `${m.posesDistinctes}/8`)
 check('aucune direction d\'une pose ne se vide',

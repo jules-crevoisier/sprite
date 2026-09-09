@@ -337,6 +337,40 @@ export const masse = (b: Bitmap): number => {
 }
 
 /**
+ * Couleurs qui font le contour d'un dessin : celles qui couvrent au moins
+ * `part` de ses pixels de bord.
+ *
+ * En pixel art, la silhouette est presque toujours cernee d'un trait sombre.
+ * Savoir lesquelles de ses couleurs jouent ce role permet de les traiter a
+ * part au moment de tourner : voir `rendreScene`.
+ */
+export function couleursDeTrait(img: Bitmap, part = 0.6): Set<number> {
+  const { width: w, height: h } = img
+  const compte = new Map<number, number>()
+  let bord = 0
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      if (getA(img.u32[i]) === 0) continue
+      const vide = (xx: number, yy: number): boolean =>
+        xx < 0 || yy < 0 || xx >= w || yy >= h || getA(img.u32[yy * w + xx]) === 0
+      if (!(vide(x - 1, y) || vide(x + 1, y) || vide(x, y - 1) || vide(x, y + 1))) continue
+      bord++
+      compte.set(img.u32[i], (compte.get(img.u32[i]) ?? 0) + 1)
+    }
+  }
+  const cle = new Set<number>()
+  if (!bord) return cle
+  let cumul = 0
+  for (const [c, n] of [...compte].sort((a, b) => b[1] - a[1])) {
+    cle.add(c)
+    cumul += n
+    if (cumul >= bord * part) break
+  }
+  return cle
+}
+
+/**
  * Couleurs presentes dans le resultat mais absentes de la source.
  *
  * Une rotation qui melange les couleurs sort du pixel art : la palette doit

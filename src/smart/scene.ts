@@ -29,6 +29,33 @@ import type { Angles, ChampProfondeur } from './depth'
  * C'est le compromis honnete : l'artiste dessine trois vues au lieu de
  * soixante-quatre images, et la machine fabrique le reste.
  *
+ * ## Le trait de contour ne doit pas repeindre le flanc
+ *
+ * Le volume est symetrique autour du plan du dessin : le trait qui cerne la
+ * silhouette se trouve donc sur son *equateur*. Des qu'on tourne, cet
+ * equateur vient vers l'oeil, gagne le test de profondeur, et repeint tout le
+ * flanc qui se decouvre. Un personnage cerne de noir devient un croissant
+ * noir a trente degres — la masse ne bouge pas d'un pixel, et pourtant plus
+ * rien ne se lit.
+ *
+ * Deux corrections ont ete tentees et mesurees, aucune ne tient :
+ *
+ * Poser le trait en dernier, la ou rien n'a ete peint, le fait disparaitre au
+ * profit du remplissage qui s'etale : le taux de trait tombe de 0,76 a 0,53 a
+ * dix degres.
+ *
+ * Retirer le trait du volume et en retracer un autour de la silhouette
+ * obtenue donne un contour parfait — et casse l'identite a zero degre en neuf
+ * pixels. Un contour dessine a la main n'est pas la dilatation du
+ * remplissage : il fait deux pixels d'epaisseur sous les pieds, et il laisse
+ * ouvertes les encoches entre les oreilles et entre les jambes, qu'une
+ * dilatation comble.
+ *
+ * Le defaut est donc mesure et nomme, pas masque : `scripts/vues-bench.mjs`
+ * mesure la part du contour encore tenue par l'encre du dessin, et elle
+ * s'effondre des dix degres. C'est cette mesure qui dit ce que vaut le
+ * module, pas la masse.
+ *
  * ## Un seul tampon de profondeur pour toute la scene
  *
  * Les pieces ne sont pas composees l'une apres l'autre : elles sont projetees
@@ -216,6 +243,16 @@ export interface OptionsRendu {
   hauteur: number
   /** Centre de la projection a l'ecran. Par defaut, le centre de l'image. */
   centre?: { x: number; y: number }
+  /**
+   * Point du monde autour duquel la camera tourne.
+   *
+   * Sans lui, la camera pivote autour de l'origine du monde — le coin
+   * haut-gauche du dessin — et le personnage *orbite* au lieu de tourner sur
+   * lui-meme. Sur un sprite de 48 pixels, un demi-tour le deplacait de 48
+   * pixels et trois directions sur huit sortaient du cadre. Le defaut ne se
+   * voyait pas parce que le banc rendait dans un cadre double.
+   */
+  pivotMonde?: { x: number; y: number; z: number }
 }
 
 /**
@@ -238,12 +275,16 @@ export function rendreScene(
   const cam = matriceCamera(camera)
   const cx = opts.centre?.x ?? w / 2
   const cy = opts.centre?.y ?? h / 2
+  const ox = opts.pivotMonde?.x ?? 0
+  const oy = opts.pivotMonde?.y ?? 0
+  const oz = opts.pivotMonde?.z ?? 0
   let ecartMax = 0
 
   for (const piece of pieces) {
     const choix = choisirSource(piece.sources, camera.azimut, camera.elevation)
     if (!choix) continue
     ecartMax = Math.max(ecartMax, choix.ecart)
+
 
     // Le dessin choisi a ete fait depuis sa propre direction : pour l'amener
     // sous la camera, il faut defaire cette direction puis appliquer celle
@@ -275,8 +316,12 @@ export function rendreScene(
           const rz = m[6] * lx + m[7] * ly + m[8] * lz
 
           // La position de la piece est deja exprimee dans le monde : elle
-          // subit la camera, jamais la rotation propre de la piece.
-          const px3 = piece.position.x, py3 = piece.position.y, pz3 = piece.position.z
+          // subit la camera, jamais la rotation propre de la piece. Elle est
+          // rapportee au pivot avant d'etre tournee, sinon la scene entiere
+          // tourne autour du coin du cadre.
+          const px3 = piece.position.x - ox
+          const py3 = piece.position.y - oy
+          const pz3 = piece.position.z - oz
           const wx = cam[0] * px3 + cam[1] * py3 + cam[2] * pz3
           const wy = cam[3] * px3 + cam[4] * py3 + cam[5] * pz3
           const wz = cam[6] * px3 + cam[7] * py3 + cam[8] * pz3
@@ -297,6 +342,7 @@ export function rendreScene(
   boucherLesTrous(image, profondeur)
   return { image, profondeur, ecartMax }
 }
+
 
 function transposee(m: Mat3): Mat3 {
   return [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]
@@ -349,6 +395,32 @@ const NOMS_8 = ['S', 'SE', 'E', 'NE', 'N', 'NO', 'O', 'SO']
 const NOMS_4 = ['S', 'E', 'N', 'O']
 
 /**
+ * Centre du monde d'un ensemble de pieces : le milieu de ce qu'elles
+ * couvrent, dans le plan du dessin.
+ *
+ * C'est le pivot qu'on veut par defaut — le personnage tourne sur lui-meme
+ * plutot que d'orbiter — et il se calcule sans que l'appelant ait a savoir ou
+ * ses os sont places.
+ */
+export function pivotDesPieces(pieces: Piece[]): { x: number; y: number; z: number } {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const p of pieces) {
+    const b = p.sources[0]?.bitmap.trimBounds()
+    if (!b || !b.w) continue
+    // Les pixels d'un morceau gardent les coordonnees du dessin ; sa position
+    // dit ou son pivot atterrit. L'ecart entre les deux est le deplacement.
+    const dx = p.position.x - p.pivot.x
+    const dy = p.position.y - p.pivot.y
+    minX = Math.min(minX, b.x + dx)
+    maxX = Math.max(maxX, b.x + b.w + dx)
+    minY = Math.min(minY, b.y + dy)
+    maxY = Math.max(maxY, b.y + b.h + dy)
+  }
+  if (!Number.isFinite(minX)) return { x: 0, y: 0, z: 0 }
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, z: 0 }
+}
+
+/**
  * Rend le meme personnage sous N directions autour de lui.
  *
  * C'est la raison d'etre du module : une animation posee une fois donne les
@@ -364,13 +436,16 @@ export function planchesDeDirections(
   opts: OptionsRendu,
 ): Direction[] {
   const noms = nombre === 8 ? NOMS_8 : nombre === 4 ? NOMS_4 : null
+  // Toutes les directions tournent autour du meme point, sans quoi le
+  // personnage glisse d'une case a l'autre de la planche.
+  const cadre: OptionsRendu = { ...opts, pivotMonde: opts.pivotMonde ?? pivotDesPieces(pieces) }
   const out: Direction[] = []
   for (let i = 0; i < nombre; i++) {
     const azimut = (i / nombre) * Math.PI * 2
     out.push({
       azimut,
       nom: noms?.[i] ?? `d${i}`,
-      rendu: rendreScene(pieces, { azimut, elevation, zoom: 1 }, opts),
+      rendu: rendreScene(pieces, { azimut, elevation, zoom: 1 }, cadre),
     })
   }
   return out
