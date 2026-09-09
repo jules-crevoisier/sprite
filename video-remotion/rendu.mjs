@@ -40,7 +40,9 @@ await renderMedia({
   // CRF 17 : au-dessus, les aplats sombres du fond se mettent a baver et les
   // bords nets du pixel art prennent un halo que le film entier cherche a eviter.
   crf: 17,
-  x264Preset: 'slow',
+  // « medium » plutot que « slow » : a CRF 17 la difference ne se voit pas, et
+  // l'encodeur cesse de disputer ses coeurs au navigateur qui produit les images.
+  x264Preset: 'medium',
   pixelFormat: 'yuv420p',
   imageFormat: 'jpeg',
   jpegQuality: 100,
@@ -53,7 +55,7 @@ await renderMedia({
   logLevel: 'error',
   onProgress: ({ renderedFrames, encodedFrames }) => {
     const ecoule = (Date.now() - debut) / 1000
-    if (renderedFrames % 120 !== 0) return
+    if (renderedFrames % 60 !== 0) return
     const reste = renderedFrames ? (ecoule / renderedFrames) * (total - renderedFrames) : 0
     process.stdout.write(
       `\r  rendu ${renderedFrames}/${total} · encode ${encodedFrames}`

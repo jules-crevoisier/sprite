@@ -28,9 +28,17 @@ export function trouverChromium() {
   return null
 }
 
-/** Options de Chromium communes : sans elles le rendu varie d'un poste a l'autre. */
+/**
+ * Options de Chromium communes : sans elles le rendu varie d'un poste a l'autre.
+ *
+ * Pas de backend graphique impose. Avec « swangle », le processus GPU de
+ * Chromium s'est mis a tourner a trois cents pour cent sans jamais rendre la
+ * main : le rendu s'est fige a la quatre mille neuf cent vingtieme image
+ * pendant une demi-heure, alors que les memes images se calculent a cinq par
+ * seconde quand on les demande seules. La page ne dessine rien en WebGL — il
+ * n'y a donc rien a accelerer, et rien a bloquer.
+ */
 export const OPTIONS_CHROMIUM = {
-  gl: 'swangle',
   disableWebSecurity: false,
   headless: true,
 }
