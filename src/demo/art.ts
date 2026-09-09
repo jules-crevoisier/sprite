@@ -33,8 +33,19 @@ export function bitmapDe(d: Dessin): Bitmap {
   for (let y = 0; y < d.lignes.length; y++) {
     const ligne = d.lignes[y]
     for (let x = 0; x < ligne.length; x++) {
-      const hex = d.palette[ligne[x]]
-      if (!hex) continue
+      const lettre = ligne[x]
+      // Le point est le vide voulu. Toute autre lettre absente de la palette
+      // est une faute de frappe, et la passer sous silence laisse un trou
+      // transparent que personne ne voit : un `c` cyrillique U+0441 s'etait
+      // ainsi glisse dans la caisse du donjon. On refuse plutot que de dessiner
+      // un dessin qui n'est pas celui qui est ecrit.
+      if (lettre === '.') continue
+      const hex = d.palette[lettre]
+      if (!hex) {
+        const point = lettre.codePointAt(0)?.toString(16).padStart(4, '0').toUpperCase()
+        throw new Error(`bitmapDe : la lettre « ${lettre} » (U+${point}) `
+          + `ligne ${y} ne figure pas dans la palette`)
+      }
       const px = ox + x, py = oy + y
       if (px < 0 || py < 0 || px >= d.largeur || py >= d.hauteur) continue
       bm.set(px, py, fromHex(hex))
@@ -188,11 +199,11 @@ export const HEROS: Dessin = {
     '....osssssmo....',
     '.....oooooo.....',
     '..ooTTTTttuuoo..',
-    '..oTotTttuuoqo..',
-    '..oTotTttuuoqo..',
-    '..oTotTttuuoqo..',
-    '..osobbbbbbomo..',
-    '..osotTttuuomo..',
+    '..oTutTttuuqqo..',
+    '..oTutTttuuqqo..',
+    '..oTutTttuuqqo..',
+    '...osbbbbbbmo...',
+    '...ostTttuumo...',
     '...ootTttuuoo...',
     '....oPppppqo....',
     '....oPp..pqo....',

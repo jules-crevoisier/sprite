@@ -191,6 +191,18 @@ const m = await page.evaluate(async () => {
     }
   }
 
+  // Et le sens negatif, celui qui manquait : `bitmapDe` doit REFUSER une
+  // lettre absente de la palette au lieu de laisser un trou. Le relevé
+  // ci-dessus ne protege que les dessins du depot ; celui-ci protege la
+  // fonction, donc aussi tout dessin ecrit plus tard.
+  let refus = null
+  try {
+    art.bitmapDe({ largeur: 4, hauteur: 2, palette: { o: '#000000' }, lignes: ['oo', 'oz'] })
+    refus = '(aucune erreur levee)'
+  } catch (e) {
+    refus = e.message
+  }
+
   /* --- l'etat des dessins du depot --- */
   const depot = []
   const ajouter = (nom, bm, opts = {}) => {
@@ -221,6 +233,7 @@ const m = await page.evaluate(async () => {
     depot,
     sansDecor: sansDecor.constats.map((c) => c.id),
     lettresInconnues,
+    refus,
   }
 })
 
@@ -236,6 +249,8 @@ for (const [regle, r] of Object.entries(m.casse)) {
 check('la regle « fond-confondu » se tait quand on ne lui donne pas de decor',
   !m.sansDecor.includes('fond-confondu'), m.sansDecor.join(', ') || 'aucun constat')
 
+check('bitmapDe refuse une lettre absente de la palette',
+  /U\+007A/.test(m.refus), m.refus)
 check('aucun dessin n\'emploie une lettre absente de sa palette',
   m.lettresInconnues.length === 0,
   m.lettresInconnues.join(' ; ') || `${m.depot.length} dessins relus`)

@@ -323,11 +323,34 @@ export function verifier(bm: Bitmap, opts: OptionsVerif = {}): Rapport {
   let trait: RGBA = 0
   let mieux = 0
   for (const [c, n] of surLeBord) if (n > mieux) { mieux = n; trait = c }
-  const partCernee = bord.length ? mieux / bord.length : 1
+  // On ne juge que le bord qui PEUT porter un trait.
+  //
+  // Cerner un membre de un ou deux pixels d'epaisseur ne le cerne pas : ca
+  // l'efface, et `reposerLeContour` refuse de le faire pour cette raison. Une
+  // regle qui exige quand meme un trait a cet endroit reclame l'impossible.
+  // Le heros du donjon vu par la tranche fait de quatre a huit pixels de
+  // large : ses jambes y font un a deux pixels, et la regle lui reprochait un
+  // contour qu'aucun outil, ni aucun dessinateur, ne pourrait poser sans le
+  // faire disparaitre. Meme critere d'epaisseur des deux cotes, pour que la
+  // regle ne demande jamais autre chose que ce que l'outil sait donner.
+  const traversee = (x: number, y: number, dx: number, dy: number): number => {
+    let n = 1
+    for (let k = 1; plein(bm, x + dx * k, y + dy * k); k++) n++
+    for (let k = 1; plein(bm, x - dx * k, y - dy * k); k++) n++
+    return n
+  }
+  const cernable = bord.filter((i) => {
+    const x = i % bm.width, y = (i / bm.width) | 0
+    return Math.min(traversee(x, y, 1, 0), traversee(x, y, 0, 1)) > 2
+  })
+  let surCernable = 0
+  for (const i of cernable) if (bm.u32[i] === trait) surCernable++
+  const partCernee = cernable.length ? surCernable / cernable.length : 1
   mesures.bord = bord.length
+  mesures.bordCernable = cernable.length
   mesures.cerne = Math.round(partCernee * 100)
 
-  if (!estTuile && bord.length > 20 && partCernee < 0.7) {
+  if (!estTuile && cernable.length > 20 && partCernee < 0.7) {
     constats.push({
       id: 'contour-manquant',
       gravite: 'important',
