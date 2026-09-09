@@ -4,7 +4,11 @@ import { Sprite } from '../core/document'
 import { Palette } from '../core/palette'
 import { Viewport } from '../render/viewport'
 import { DEFAULT_EXPORT, type ExportRequest } from '../export'
-import { autosave, hasAutosave, autosaveDate, loadAutosave, deserializeSprite } from '../io/project'
+import { deserializeSprite } from '../io/project'
+import {
+  chargerProjet, enregistrerProjet, listerProjets, nouvelIdProjet,
+  reprendreAncienneSauvegarde, type FicheProjet,
+} from '../io/library'
 import { loadImageBitmap } from '../export/files'
 import { imageToBitmap, spriteFromImage } from '../io/import'
 import { pasteClipboard } from '../core/operations'
@@ -56,6 +60,15 @@ export class App {
    * Ctrl+N ramenait un editeur vide — en perdant son travail au passage.
    */
   private avantDemo: { nom: string; sprite: Sprite } | null = null
+
+  /**
+   * Entree de la bibliotheque que le document courant occupe.
+   *
+   * Elle est creee au premier enregistrement et suivie ensuite : sans elle,
+   * chaque Ctrl+S deposerait un projet de plus et la liste se remplirait de
+   * copies du meme dessin.
+   */
+  private projetId: string | null = null
 
   private commands: Command[] = []
   private commandMap = new Map<string, Command>()
@@ -235,9 +248,22 @@ export class App {
       showToast('Image importee', 'success')
     })
 
+    // Le vrai filet, c'est celui-ci et non `beforeunload` : une ecriture
+    // IndexedDB est asynchrone, et une page qui se ferme n'attend pas la fin
+    // d'une promesse. `visibilitychange` vers `hidden`, lui, part des qu'on
+    // change d'onglet ou qu'on masque la fenetre — largement avant la
+    // fermeture, avec tout le temps d'ecrire.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.maybeAutosave(true)
+    })
+
     window.addEventListener('beforeunload', (e) => {
       if (!ed.history.canUndo) return
-      autosave(ed.sprite)
+      // Lancee sans etre attendue : le navigateur laisse souvent une
+      // transaction deja ouverte se terminer, mais rien ne le garantit.
+      // C'est pour cela que le travail est aussi ecrit toutes les minutes et
+      // a chaque passage en arriere-plan.
+      void this.enregistrerDansBibliotheque()
       e.preventDefault()
       e.returnValue = ''
     })
@@ -292,9 +318,44 @@ export class App {
     const now = Date.now()
     if (!force && now - this.lastAutosave < AUTOSAVE_INTERVAL) return
     if (!this.ed.history.canUndo) return
+    // Une demonstration n'est pas le travail de la personne : l'enregistrer
+    // remplirait la bibliotheque de copies de la mascotte.
+    if (this.avantDemo) return
     this.lastAutosave = now
-    if (autosave(this.ed.sprite)) this.status.markSaved()
+    void this.enregistrerDansBibliotheque().then((ok) => { if (ok) this.status.markSaved() })
   }
+
+  /** Identifiant de l'entree occupee par le document, ou null. */
+  get projetCourant(): string | null { return this.projetId }
+
+  /**
+   * Ecrit le document dans la bibliotheque, en creant son entree au besoin.
+   *
+   * L'echec est rendu au lieu d'etre avale : l'ancienne sauvegarde renvoyait
+   * `false` quand le quota explosait et personne ne le voyait jamais.
+   */
+  async enregistrerDansBibliotheque(): Promise<boolean> {
+    try {
+      const id = this.projetId ?? nouvelIdProjet()
+      await enregistrerProjet(id, this.ed.sprite)
+      this.projetId = id
+      return true
+    } catch (e) {
+      this.ed.toast(`Enregistrement impossible : ${(e as Error).message}`, 'error')
+      return false
+    }
+  }
+
+  /** Ouvre un projet de la bibliotheque et s'y rattache. */
+  ouvrirDeLaBibliotheque(id: string, sprite: Sprite): void {
+    this.oublierDemo()
+    this.ed.loadSprite(sprite)
+    this.projetId = id
+    showToast(`« ${sprite.name} » ouvert`, 'success')
+  }
+
+  /** Detache le document de son entree : le prochain enregistrement en cree une. */
+  oublierProjetCourant(): void { this.projetId = null }
 
   /** Lecons disponibles, construites a la demande. */
   /** Nom de la demonstration affichee, ou null si c'est le projet de l'auteur. */
@@ -344,23 +405,36 @@ export class App {
     }
   }
 
-  /** Propose de reprendre le travail precedent au demarrage. */
+  /**
+   * Propose de reprendre le dernier projet au demarrage.
+   *
+   * L'ancienne sauvegarde automatique de localStorage est d'abord versee
+   * dans la bibliotheque : quelqu'un qui revient avec un travail en cours ne
+   * doit pas le perdre parce qu'on a change de rangement.
+   */
   private async offerAutosaveRestore(): Promise<boolean> {
-    if (!hasAutosave()) return false
-    const at = autosaveDate()
+    let dernier: FicheProjet | null = null
+    try {
+      dernier = await reprendreAncienneSauvegarde()
+      if (!dernier) dernier = (await listerProjets())[0] ?? null
+    } catch {
+      // Sans stockage local, on demarre simplement sur un document vierge.
+      return false
+    }
+    if (!dernier) return false
+
     const ok = await confirmDialog(
       'Reprendre votre travail ?',
-      `Une sauvegarde automatique du ${at?.toLocaleString('fr-FR') ?? '—'} a ete trouvee dans ce navigateur.`,
+      `« ${dernier.nom} » vous attend, enregistre le ${new Date(dernier.maj).toLocaleString('fr-FR')}.`,
       'Reprendre',
     )
     if (!ok) return false
-    const sprite = await loadAutosave()
-    if (sprite) {
-      this.ed.loadSprite(sprite)
-      showToast('Travail restaure', 'success')
-      return true
-    }
-    return false
+    const sprite = await chargerProjet(dernier.id)
+    if (!sprite) return false
+    this.ed.loadSprite(sprite)
+    this.projetId = dernier.id
+    showToast('Travail restaure', 'success')
+    return true
   }
 
   showAbout(): void {

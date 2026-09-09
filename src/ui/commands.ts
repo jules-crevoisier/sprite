@@ -4,18 +4,18 @@ import * as dlg from './dialogs'
 import { variantsDialog, detailDialog, shadeDialog, rampDialog, rotationDialog } from './smart-dialogs'
 import { exportFramePng, exportFramesZip, exportGif } from '../export'
 import { downloadText, pickFiles, safeName } from '../export/files'
-import { serializeSprite, deserializeSprite, PROJECT_EXT, loadAutosave, autosaveDate } from '../io/project'
+import { serializeSprite, deserializeSprite, PROJECT_EXT } from '../io/project'
+import {
+  choisirFichierEnregistrement, choisirFichierOuverture, ecrireFichier,
+  ecritureDisqueDisponible, ouvertureDisqueDisponible, poigneeRetenue, retenirPoignee,
+} from '../io/disque'
+import { bibliothequeDialog } from './library-dialog'
 import { compositeFrame } from '../render/composite'
-import { showToast, confirmDialog } from './overlay'
+import { showToast } from './overlay'
 import { invertColors, desaturate } from '../core/operations'
 import { genId as newSliceId } from '../core/document'
 import { fromHex } from '../core/color'
 import { EFFECT_KINDS, createEffect, renderEffects } from '../core/effects'
-import {
-  accountLabel, driveAccountDialog, driveMenuHint, driveSettingsDialog,
-  openFromDriveDialog, saveToDrive,
-} from './cloud-dialogs'
-import { isConfigured } from '../cloud/google-auth'
 
 export interface Command {
   id: string
@@ -41,7 +41,7 @@ export function buildCommands(app: App): Command[] {
 
   add({
     id: 'file.new', label: 'Nouveau sprite…', group: 'Fichier', keys: 'Ctrl+N', icon: 'plus',
-    run: () => { app.oublierDemo(); dlg.newSpriteDialog(ed) },
+    run: () => { app.oublierDemo(); app.oublierProjetCourant(); void retenirPoignee(null); dlg.newSpriteDialog(ed) },
   })
 
   add({
@@ -66,11 +66,25 @@ export function buildCommands(app: App): Command[] {
   add({
     id: 'file.open', label: 'Ouvrir un projet…', group: 'Fichier', keys: 'Ctrl+O', icon: 'upload',
     run: async () => {
-      const files = await pickFiles(`.${PROJECT_EXT},.json`)
-      if (!files.length) return
       try {
+        // Avec l'API du disque, le fichier ouvert devient celui que Ctrl+S
+        // reecrira : ouvrir puis enregistrer ne cree pas un second fichier.
+        if (ouvertureDisqueDisponible()) {
+          const poignee = await choisirFichierOuverture()
+          if (!poignee) return
+          const sprite = await deserializeSprite(await (await poignee.getFile()).text())
+          app.oublierDemo()
+          app.oublierProjetCourant()
+          ed.loadSprite(sprite)
+          await retenirPoignee(poignee)
+          showToast(`« ${sprite.name} » ouvert — Ctrl+S reecrira ${poignee.name}`, 'success')
+          return
+        }
+        const files = await pickFiles(`.${PROJECT_EXT},.json`)
+        if (!files.length) return
         const sprite = await deserializeSprite(await files[0].text())
         app.oublierDemo()
+        app.oublierProjetCourant()
         ed.loadSprite(sprite)
         showToast(`« ${sprite.name} » ouvert`, 'success')
       } catch (err) {
@@ -80,11 +94,59 @@ export function buildCommands(app: App): Command[] {
   })
 
   add({
-    id: 'file.save', label: 'Enregistrer le projet', group: 'Fichier', keys: 'Ctrl+S', icon: 'save',
-    run: () => {
-      downloadText(serializeSprite(ed.sprite), `${safeName(ed.sprite.name)}.${PROJECT_EXT}`, 'application/json')
-      showToast('Projet enregistre', 'success')
+    id: 'file.save', label: 'Enregistrer', group: 'Fichier', keys: 'Ctrl+S', icon: 'save',
+    hint: () => 'Dans « Mes projets », ou dans votre fichier s\'il y en a un',
+    run: async () => {
+      // Un fichier choisi une fois est reecrit sans rien demander : c'est ce
+      // qu'on attend d'un Ctrl+S. Sinon le projet va dans la bibliotheque —
+      // et personne ne se retrouve avec « heros (7).pixelforge ».
+      const poignee = await poigneeRetenue()
+      if (poignee) {
+        try {
+          if (await ecrireFichier(poignee, serializeSprite(ed.sprite))) {
+            showToast(`Enregistre dans ${poignee.name}`, 'success')
+            return
+          }
+          showToast('Autorisation d\'ecriture refusee : projet range dans « Mes projets »', 'error')
+        } catch {
+          showToast('Fichier illisible : projet range dans « Mes projets »', 'error')
+        }
+      }
+      if (await app.enregistrerDansBibliotheque()) {
+        showToast(`« ${ed.sprite.name} » enregistre dans Mes projets`, 'success')
+      }
     },
+  })
+
+  add({
+    id: 'file.save-as', label: 'Enregistrer sous…', group: 'Fichier', keys: 'Ctrl+Maj+S', icon: 'save-as',
+    hint: () => (ecritureDisqueDisponible()
+      ? 'Choisir un fichier ; Ctrl+S le reecrira ensuite'
+      : 'Telecharge une copie : ce navigateur ne sait pas ecrire sur le disque'),
+    run: async () => {
+      const contenu = serializeSprite(ed.sprite)
+      const nom = `${safeName(ed.sprite.name)}.${PROJECT_EXT}`
+      if (!ecritureDisqueDisponible()) {
+        // Firefox et Safari n'ont pas l'API : le telechargement reste le
+        // comportement normal, pas un mode degrade.
+        downloadText(contenu, nom, 'application/json')
+        showToast('Projet telecharge', 'success')
+        return
+      }
+      const poignee = await choisirFichierEnregistrement(nom)
+      if (!poignee) return
+      if (!(await ecrireFichier(poignee, contenu))) {
+        showToast('Autorisation d\'ecriture refusee', 'error')
+        return
+      }
+      await retenirPoignee(poignee)
+      showToast(`Ctrl+S reecrira ${poignee.name}`, 'success')
+    },
+  })
+
+  add({
+    id: 'file.library', label: 'Mes projets…', group: 'Fichier', keys: 'Ctrl+Maj+L', icon: 'library',
+    run: () => bibliothequeDialog(app),
   })
 
   add({
@@ -125,18 +187,6 @@ export function buildCommands(app: App): Command[] {
     run: () => exportFramesZip(ed.sprite),
   })
 
-  add({
-    id: 'file.restore', label: 'Restaurer la sauvegarde automatique', group: 'Fichier', icon: 'undo',
-    run: async () => {
-      const at = autosaveDate()
-      if (!at) { showToast('Aucune sauvegarde automatique', 'error'); return }
-      if (!(await confirmDialog('Restaurer', `Remplacer le travail en cours par la sauvegarde du ${at.toLocaleString('fr-FR')} ?`, 'Restaurer'))) return
-      const sprite = await loadAutosave()
-      if (!sprite) { showToast('Sauvegarde illisible', 'error'); return }
-      ed.loadSprite(sprite)
-      showToast('Sauvegarde restauree', 'success')
-    },
-  })
 
   add({
     id: 'file.copy-png', label: 'Copier la frame dans le presse-papiers systeme', group: 'Fichier', icon: 'copy',
@@ -152,40 +202,6 @@ export function buildCommands(app: App): Command[] {
         showToast('Le navigateur a refuse l\'acces au presse-papiers', 'error')
       }
     },
-  })
-
-  /* ---------------- Google Drive ---------------- */
-
-  // Ces entrees restent actives meme sans identifiant client : cliquer
-  // dessus ouvre alors la marche a suivre. Une entree grisee sans un mot
-  // d'explication ne dit pas quoi faire pour la degriser.
-  add({
-    id: 'cloud.open', label: 'Ouvrir depuis Google Drive…', group: 'Fichier', icon: 'cloud-download',
-    hint: driveMenuHint,
-    run: () => openFromDriveDialog(app),
-  })
-
-  add({
-    id: 'cloud.save', label: 'Enregistrer dans Google Drive', group: 'Fichier', keys: 'Ctrl+Maj+S', icon: 'cloud-upload',
-    hint: driveMenuHint,
-    run: () => saveToDrive(app),
-  })
-
-  add({
-    id: 'cloud.save-copy', label: 'Deposer une copie dans Google Drive', group: 'Fichier', icon: 'cloud',
-    hint: driveMenuHint,
-    run: () => saveToDrive(app, { copy: true }),
-  })
-
-  add({
-    id: 'cloud.account', label: 'Compte Google Drive…', group: 'Fichier', icon: 'account',
-    hint: () => (isConfigured() ? accountLabel() : driveMenuHint()),
-    run: () => driveAccountDialog(),
-  })
-
-  add({
-    id: 'cloud.settings', label: 'Identifiant client Google…', group: 'Fichier', icon: 'key',
-    run: () => driveSettingsDialog(),
   })
 
   /* ---------------- Edition ---------------- */

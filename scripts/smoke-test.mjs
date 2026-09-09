@@ -2381,411 +2381,6 @@ check('la mascotte reagit a la reussite d\'une etape', reactions.has('saut'),
 await page.evaluate(() => window.pixelforge.tutorial.stop())
 await sleep(200)
 
-/* --- Google Drive : entrees de menu, configuration manquante, API simulee --- */
-
-// Etat de depart : aucun identifiant client configure.
-await page.evaluate(() => {
-  for (const cle of ['pixelforge.google.client-id', 'pixelforge.google.connected', 'pixelforge.google.folder-id']) {
-    localStorage.removeItem(cle)
-  }
-})
-
-// Le menu Fichier doit montrer les entrees Drive, actives, avec la raison
-// pour laquelle elles ne peuvent pas encore agir.
-await page.evaluate(() => {
-  ;[...document.querySelectorAll('.menu-btn')].find((b) => b.textContent === 'Fichier')?.click()
-})
-await sleep(200)
-const menuDrive = await page.evaluate(() => {
-  const items = [...document.querySelectorAll('.dropdown .menu-item')].map((b) => ({
-    label: b.querySelector('.label > span')?.textContent ?? '',
-    hint: b.querySelector('.label .hint')?.textContent ?? '',
-    disabled: b.disabled,
-  }))
-  return items.filter((i) => /Drive|Google/.test(i.label))
-})
-await page.keyboard.press('Escape')
-await sleep(150)
-check('le menu Fichier propose Google Drive', menuDrive.length >= 4,
-  menuDrive.map((i) => i.label).join(' | '))
-check('les entrees Drive restent actives et disent ce qui manque',
-  menuDrive.length > 0 && menuDrive.every((i) => !i.disabled) &&
-  menuDrive.some((i) => /identifiant client/i.test(i.hint)),
-  menuDrive.map((i) => i.hint).filter(Boolean)[0] ?? 'aucune explication')
-
-// Sans identifiant, « Ouvrir depuis Drive » doit expliquer, pas planter.
-const erreursAvant = errors.length
-await page.evaluate(() => window.pixelforge.runCommand('cloud.open'))
-await sleep(350)
-const aide = await page.evaluate(() => ({
-  titre: document.querySelector('.modal-head h2')?.textContent ?? '',
-  corps: document.querySelector('.modal-body')?.textContent ?? '',
-  champ: !!document.querySelector('.modal-body input[type=text]'),
-}))
-await page.keyboard.press('Escape')
-await sleep(200)
-check('sans identifiant client, Drive ouvre la marche a suivre',
-  /identifiant client/i.test(aide.titre) && /console Google Cloud/i.test(aide.corps) &&
-  errors.length === erreursAvant,
-  aide.titre || 'aucun dialogue')
-check('la marche a suivre nomme le type d\'application et l\'origine',
-  /Application Web/.test(aide.corps) && aide.corps.includes('Origines JavaScript') &&
-  aide.corps.includes(URL.replace(/\/$/, '')) && aide.champ,
-  aide.champ ? 'champ present' : 'champ absent')
-
-// Google est simule de bout en bout : le banc d'essai ne doit joindre ni
-// accounts.google.com ni googleapis.com.
-const drive = await page.evaluate(async () => {
-  const auth = await import('/src/cloud/google-auth.ts')
-  const api = await import('/src/cloud/google-drive.ts')
-  const { serializeSprite, deserializeSprite } = await import('/src/io/project.ts')
-  const app = window.pixelforge
-  const out = {}
-  const CLES = ['pixelforge.google.client-id', 'pixelforge.google.connected', 'pixelforge.google.folder-id']
-  const oublier = () => CLES.forEach((c) => localStorage.removeItem(c))
-  oublier()
-
-  /* --- rien n'est configure --- */
-  out.nonConfigure = !auth.isConfigured()
-  out.etapes = auth.setupSteps().length
-  out.origineCitee = auth.setupSteps().some((e) => e.includes(location.origin))
-  try {
-    await api.listProjects()
-    out.sansId = 'aucune erreur levee'
-  } catch (e) {
-    out.sansId = e.name === 'DriveError' && e.kind === 'config' ? 'explique' : `inattendu: ${e.message}`
-    out.sansIdMessage = e.message
-  }
-  // Le script de connexion ne doit pas avoir ete telecharge : ni au
-  // demarrage, ni pour un appel qui ne peut pas aboutir.
-  out.scriptAbsent = !document.querySelector('script[src*="gsi/client"]')
-
-  /* --- faux Google Identity Services --- */
-  const clients = []
-  let jetonSuivant = 'jeton-1'
-  window.google = {
-    accounts: {
-      oauth2: {
-        initTokenClient: (cfg) => {
-          clients.push(cfg)
-          return { requestAccessToken: () => cfg.callback({ access_token: jetonSuivant, expires_in: 3600 }) }
-        },
-        revoke: (jeton, fait) => { out.jetonRevoque = jeton; if (fait) fait() },
-      },
-    },
-  }
-  auth.setClientId('000000-test.apps.googleusercontent.com')
-  out.configure = auth.isConfigured()
-
-  /* --- faux Drive --- */
-  const requetes = []
-  const vraiFetch = window.fetch
-  const json = (data, status = 200) =>
-    new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
-  const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files'
-  const COMPTE = { user: { displayName: 'Test Pixel', emailAddress: 'test@example.com' } }
-  let coupe = false
-  let repondre = () => json({}, 404)
-  window.fetch = async (url, init = {}) => {
-    if (coupe) throw new TypeError('Failed to fetch')
-    const req = {
-      url: String(url),
-      methode: init.method || 'GET',
-      corps: typeof init.body === 'string' ? init.body : '',
-      entetes: init.headers || {},
-    }
-    requetes.push(req)
-    return repondre(req)
-  }
-  const derniere = () => requetes[requetes.length - 1]
-
-  /* --- connexion --- */
-  repondre = (req) => (req.url.includes('/about') ? json(COMPTE) : json({}, 404))
-  const compte = await api.connectDrive()
-  out.compte = compte.email
-  out.scope = clients[0]?.scope
-  out.clientId = clients[0]?.client_id
-  out.connecte = auth.session().connected
-  out.barreEtat = (document.querySelector('#statusbar')?.textContent ?? '').includes('test@example.com')
-
-  /* --- premier envoi : creation du dossier puis du fichier --- */
-  repondre = (req) => {
-    if (req.url.startsWith(UPLOAD)) {
-      return json({ id: 'fichier-1', name: 'test.pixelforge', modifiedTime: '2024-01-02T09:30:00.000Z', size: '2048' })
-    }
-    if (req.url.includes('/files?') && req.methode === 'POST') return json({ id: 'dossier-1' })
-    if (req.url.includes('/files?')) return json({ files: [] })
-    return json({}, 404)
-  }
-  const cree = await api.saveProject('test', '{"format":"pixelforge"}', null)
-  const envoi = derniere()
-  const dossier = requetes.find((r) => r.methode === 'POST' && r.url.includes('/files?fields=id'))
-  out.creation = {
-    id: cree.id,
-    methode: envoi.methode,
-    multipart: envoi.url.startsWith(UPLOAD) && envoi.url.includes('uploadType=multipart'),
-    frontiere: /multipart\/related; boundary=/.test(envoi.entetes['Content-Type'] ?? ''),
-    range: envoi.corps.includes('"parents":["dossier-1"]'),
-    nom: envoi.corps.includes('test.pixelforge'),
-    contenu: envoi.corps.includes('{"format":"pixelforge"}'),
-    dossier: (dossier?.corps ?? '').includes('application/vnd.google-apps.folder') &&
-      (dossier?.corps ?? '').includes('"name":"PixelForge"'),
-    jeton: (envoi.entetes.Authorization ?? '') === 'Bearer jeton-1',
-  }
-
-  /* --- second envoi : le meme fichier est ecrase --- */
-  await api.saveProject('test', '{"format":"pixelforge","v":2}', 'fichier-1')
-  const maj = derniere()
-  out.ecrasement = {
-    methode: maj.methode,
-    cible: maj.url.includes('/files/fichier-1'),
-    sansParent: !maj.corps.includes('parents'),
-  }
-
-  /* --- le fichier a disparu de Drive : on en recree un --- */
-  repondre = (req) => {
-    if (req.url.startsWith(UPLOAD) && req.methode === 'PATCH') {
-      return json({ error: { message: 'File not found: fichier-1.', errors: [{ reason: 'notFound' }] } }, 404)
-    }
-    if (req.url.startsWith(UPLOAD)) {
-      return json({ id: 'fichier-2', name: 'test.pixelforge', modifiedTime: '2024-01-03T09:30:00.000Z', size: '2048' })
-    }
-    if (/\/files\/[^?]+\?fields=id,trashed/.test(req.url)) return json({ id: 'dossier-1', trashed: false })
-    return json({}, 404)
-  }
-  const recree = await api.saveProject('test', '{"format":"pixelforge"}', 'fichier-1')
-  out.recree = recree.id === 'fichier-2' && requetes.filter((r) => r.methode === 'POST' && r.url.startsWith(UPLOAD)).length === 2
-
-  /* --- jeton expire : renouvele en silence, requete rejouee --- */
-  jetonSuivant = 'jeton-2'
-  let premier = true
-  repondre = (req) => {
-    if (!req.url.includes('/about')) return json({}, 404)
-    if (premier) {
-      premier = false
-      return json({ error: { message: 'Invalid Credentials', errors: [{ reason: 'authError' }] } }, 401)
-    }
-    return json(COMPTE)
-  }
-  const avant = requetes.length
-  const relu = await api.driveAccount()
-  out.jetonRenouvele = requetes.length - avant === 2 &&
-    (derniere().entetes.Authorization ?? '') === 'Bearer jeton-2' &&
-    relu.email === 'test@example.com'
-
-  /* --- Drive plein --- */
-  repondre = () => json({
-    error: { message: 'The user has exceeded their Drive storage quota.', errors: [{ reason: 'storageQuotaExceeded' }] },
-  }, 403)
-  try {
-    await api.saveProject('test', '{}', 'fichier-2')
-    out.quota = 'aucune erreur levee'
-  } catch (e) {
-    out.quota = e.kind
-    out.quotaMessage = e.message
-  }
-
-  /* --- hors ligne --- */
-  coupe = true
-  try {
-    await api.listProjects()
-    out.horsLigne = 'aucune erreur levee'
-  } catch (e) {
-    out.horsLigne = e.kind
-    out.horsLigneMessage = e.message
-  }
-  coupe = false
-
-  /* --- fichier supprime a l'ouverture --- */
-  repondre = () => json({ error: { message: 'File not found.', errors: [{ reason: 'notFound' }] } }, 404)
-  try {
-    await api.downloadProject('fichier-disparu')
-    out.absent = 'aucune erreur levee'
-  } catch (e) {
-    out.absent = e.kind
-    out.absentMessage = e.message
-  }
-
-  /* --- listage et telechargement --- */
-  const projet = serializeSprite(app.ed.sprite)
-  repondre = (req) => {
-    if (req.url.includes('alt=media')) return new Response(projet, { status: 200 })
-    if (req.url.includes('/files?')) {
-      return json({
-        files: [
-          { id: 'fichier-1', name: 'heros.pixelforge', modifiedTime: '2024-05-04T12:00:00.000Z', size: '4096' },
-          { id: 'fichier-2', name: 'decor.pixelforge', modifiedTime: '2024-05-01T08:00:00.000Z', size: '128' },
-        ],
-      })
-    }
-    return json({}, 404)
-  }
-  const liste = await api.listProjects()
-  const parametres = new URLSearchParams(derniere().url.split('?')[1])
-  out.liste = {
-    nombre: liste.length,
-    nom: liste[0]?.name,
-    date: liste[0]?.modifiedTime,
-    taille: liste[0]?.size,
-    filtre: (parametres.get('q') ?? '').includes(".pixelforge'"),
-    ordre: parametres.get('orderBy') === 'modifiedTime desc',
-  }
-  const contenu = await api.downloadProject('fichier-1')
-  const rouvert = await deserializeSprite(contenu)
-  out.allerRetour = rouvert.width === app.ed.sprite.width &&
-    rouvert.layers.length === app.ed.sprite.layers.length &&
-    rouvert.frameCount === app.ed.sprite.frameCount
-
-  /* --- le lien vers le fichier Drive suit le projet --- */
-  app.ed.sprite.driveFileId = 'fichier-42'
-  const relie = await deserializeSprite(serializeSprite(app.ed.sprite))
-  out.lienConserve = relie.driveFileId === 'fichier-42'
-
-  /* --- la commande de menu enregistre et retient le fichier --- */
-  app.ed.sprite.driveFileId = null
-  repondre = (req) => {
-    if (req.url.startsWith(UPLOAD)) {
-      return json({ id: 'fichier-9', name: 'heros.pixelforge', modifiedTime: '2024-05-04T12:00:00.000Z', size: '4096' })
-    }
-    if (/\/files\/[^?]+\?fields=id,trashed/.test(req.url)) return json({ id: 'dossier-1', trashed: false })
-    if (req.url.includes('/about')) return json(COMPTE)
-    return json({}, 404)
-  }
-  await app.command('cloud.save').run()
-  out.commandeLie = app.ed.sprite.driveFileId === 'fichier-9'
-  await app.command('cloud.save').run()
-  out.commandeEcrase = derniere().methode === 'PATCH' && derniere().url.includes('/files/fichier-9')
-
-  /* --- remise en etat : rien ne doit survivre a ce test --- */
-  window.fetch = vraiFetch
-  await auth.disconnect()
-  out.deconnecte = !auth.session().connected && out.jetonRevoque === 'jeton-2'
-  auth.setClientId('')
-  oublier()
-  delete window.google
-  app.ed.sprite.driveFileId = null
-  out.scriptJamaisCharge = !document.querySelector('script[src*="gsi/client"]')
-  out.requetesLocales = requetes.every((r) => r.url.startsWith('https://www.googleapis.com/'))
-  return out
-})
-
-check('sans identifiant client, l\'API Drive explique au lieu d\'echouer',
-  drive.nonConfigure && drive.sansId === 'explique', drive.sansIdMessage ?? drive.sansId)
-check('la marche a suivre est complete et cite l\'origine du site',
-  drive.etapes >= 5 && drive.origineCitee, `${drive.etapes} etapes`)
-check('le script Google n\'est charge qu\'a la demande', drive.scriptAbsent && drive.scriptJamaisCharge)
-check('la connexion demande le seul scope drive.file',
-  drive.scope === 'https://www.googleapis.com/auth/drive.file' &&
-  drive.clientId === '000000-test.apps.googleusercontent.com', drive.scope)
-check('le compte connecte s\'affiche dans la barre d\'etat',
-  drive.connecte && drive.compte === 'test@example.com' && drive.barreEtat)
-check('l\'envoi est un multipart depose dans le dossier PixelForge',
-  drive.creation.methode === 'POST' && drive.creation.multipart && drive.creation.frontiere &&
-  drive.creation.range && drive.creation.nom && drive.creation.contenu &&
-  drive.creation.dossier && drive.creation.jeton,
-  JSON.stringify(drive.creation))
-check('enregistrer a nouveau ecrase le fichier au lieu de le dupliquer',
-  drive.ecrasement.methode === 'PATCH' && drive.ecrasement.cible && drive.ecrasement.sansParent,
-  JSON.stringify(drive.ecrasement))
-check('un fichier supprime cote Drive est recree a l\'enregistrement', drive.recree)
-check('un jeton expire est renouvele et la requete rejouee', drive.jetonRenouvele)
-check('un Drive plein est explique', drive.quota === 'quota' && /plein/i.test(drive.quotaMessage ?? ''),
-  drive.quotaMessage ?? drive.quota)
-check('hors ligne, le message parle de la connexion',
-  drive.horsLigne === 'reseau' && /connexion/i.test(drive.horsLigneMessage ?? ''),
-  drive.horsLigneMessage ?? drive.horsLigne)
-check('un projet disparu de Drive est signale comme tel',
-  drive.absent === 'absent' && /supprime|corbeille/i.test(drive.absentMessage ?? ''),
-  drive.absentMessage ?? drive.absent)
-check('la liste ne demande que les projets PixelForge, les plus recents d\'abord',
-  drive.liste.nombre === 2 && drive.liste.filtre && drive.liste.ordre &&
-  drive.liste.taille === 4096 && drive.liste.date === '2024-05-04T12:00:00.000Z',
-  JSON.stringify(drive.liste))
-check('un projet telecharge depuis Drive se relit sans perte', drive.allerRetour)
-check('le fichier Drive reste lie au projet enregistre', drive.lienConserve)
-check('la commande Drive lie puis reecrit le meme fichier',
-  drive.commandeLie && drive.commandeEcrase)
-check('la deconnexion revoque le jeton', drive.deconnecte)
-check('les requetes Drive visent les endpoints officiels', drive.requetesLocales)
-
-/* --- le dialogue « Ouvrir depuis Drive » : connexion, liste, ouverture --- */
-await page.evaluate(async () => {
-  const auth = await import('/src/cloud/google-auth.ts')
-  const { serializeSprite } = await import('/src/io/project.ts')
-  const app = window.pixelforge
-
-  const nomInitial = app.ed.sprite.name
-  app.ed.sprite.name = 'projet-drive'
-  const projet = serializeSprite(app.ed.sprite)
-  app.ed.sprite.name = nomInitial
-
-  window.google = {
-    accounts: {
-      oauth2: {
-        initTokenClient: (cfg) => ({ requestAccessToken: () => cfg.callback({ access_token: 'jeton-ui', expires_in: 3600 }) }),
-        revoke: (_jeton, fait) => { if (fait) fait() },
-      },
-    },
-  }
-  auth.setClientId('000000-test.apps.googleusercontent.com')
-
-  const json = (data) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } })
-  window.__driveFake = { fetch: window.fetch, nomInitial }
-  window.fetch = async (url) => {
-    const u = String(url)
-    if (u.includes('/about')) return json({ user: { displayName: 'Test Pixel', emailAddress: 'test@example.com' } })
-    if (u.includes('alt=media')) return new Response(projet, { status: 200 })
-    if (u.includes('/files?')) {
-      return json({ files: [{ id: 'fichier-ui', name: 'projet-drive.pixelforge', modifiedTime: '2024-03-09T14:25:00.000Z', size: '3072' }] })
-    }
-    return json({})
-  }
-})
-
-await page.evaluate(() => window.pixelforge.runCommand('cloud.open'))
-await sleep(300)
-const avantConnexion = await page.evaluate(() => ({
-  titre: document.querySelector('.modal-head h2')?.textContent ?? '',
-  bouton: document.querySelector('.modal-body .form-row button')?.textContent ?? '',
-}))
-await page.evaluate(() => document.querySelector('.modal-body .form-row button')?.click())
-await sleep(400)
-const listeUI = await page.evaluate(() =>
-  [...document.querySelectorAll('.modal-body .layer-row .lname')].map((n) => n.textContent ?? ''))
-await page.evaluate(() => document.querySelector('.modal-body .layer-row button')?.click())
-await sleep(500)
-const ouvert = await page.evaluate(() => ({
-  nom: window.pixelforge.ed.sprite.name,
-  lien: window.pixelforge.ed.sprite.driveFileId,
-  fermee: !document.querySelector('.modal-backdrop'),
-}))
-await page.evaluate(async () => {
-  const auth = await import('/src/cloud/google-auth.ts')
-  window.fetch = window.__driveFake.fetch
-  window.pixelforge.ed.sprite.name = window.__driveFake.nomInitial
-  window.pixelforge.ed.sprite.driveFileId = null
-  delete window.__driveFake
-  // La deconnexion revoque le jeton par le script Google : il doit encore
-  // etre en place, sinon le vrai script serait telecharge pour de bon.
-  await auth.disconnect()
-  delete window.google
-  auth.setClientId('')
-  for (const cle of ['pixelforge.google.client-id', 'pixelforge.google.connected', 'pixelforge.google.folder-id']) {
-    localStorage.removeItem(cle)
-  }
-})
-
-check('le dialogue Drive demande d\'abord la connexion',
-  /Ouvrir depuis Google Drive/.test(avantConnexion.titre) && /connecter/i.test(avantConnexion.bouton),
-  avantConnexion.bouton || avantConnexion.titre)
-check('le dialogue liste les projets avec leur date',
-  listeUI.length === 1 && listeUI[0].includes('projet-drive') && /09\/03\/2024/.test(listeUI[0]) &&
-  listeUI[0].includes('3 Ko'),
-  listeUI[0] ?? 'liste vide')
-check('ouvrir un projet du Drive le charge et retient son fichier',
-  ouvert.nom === 'projet-drive' && ouvert.lien === 'fichier-ui' && ouvert.fermee,
-  `${ouvert.nom} / ${ouvert.lien}`)
-
 // `ClipId` est une union figee et `clipDe` retombe silencieusement sur le
 // premier cycle quand l'identifiant lui est inconnu : un septieme cycle
 // ajoute a CLIPS_PIXL s'afficherait donc en repos sans que rien ne le dise.
@@ -3096,6 +2691,180 @@ check('tourner change le dessin sans le vider',
 check('la pose tournee peut partir sur sa propre frame',
   apresRotation === avantRotation.frames + 1,
   `${avantRotation.frames} -> ${apresRotation} frames`)
+
+/* ------------------------------------------------------------------ */
+/* Bibliotheque de projets                                             */
+/* ------------------------------------------------------------------ */
+
+// L'ancienne sauvegarde tenait dans localStorage, a un seul emplacement et
+// sous un quota d'environ 5 Mo pour toute l'origine. Un projet de jeu
+// ordinaire — 64x64, quatre calques, soixante images — en pese pres d'un :
+// au troisieme, `setItem` levait et `autosave()` renvoyait `false` sans que
+// personne ne le voie. Ce banc verifie que ce cas-la passe desormais.
+await page.keyboard.press('Escape')
+await sleep(300)
+
+const bibli = await page.evaluate(async () => {
+  const lib = await import('/src/io/library.ts')
+  const { Sprite } = await import('/src/core/document.ts')
+  const { Palette } = await import('/src/core/palette.ts')
+  const { serializeSprite } = await import('/src/io/project.ts')
+
+  // Un projet volumineux, avec du bruit partout pour que le PNG ne le
+  // compresse pas a rien.
+  const gros = new Sprite(64, 64, Palette.preset('DawnBringer 32'))
+  for (let l = 0; l < 4; l++) {
+    const couche = l === 0 ? gros.layers[0] : gros.addLayer(`Calque ${l}`)
+    for (let f = 0; f < 60; f++) {
+      const cel = gros.ensureCel(gros.layers.indexOf(couche), f)
+      for (let i = 0; i < cel.bitmap.u32.length; i++) {
+        cel.bitmap.u32[i] = 0xff000000 | ((i * 2654435761 + f * 97 + l) & 0xffffff)
+      }
+    }
+  }
+  gros.name = 'gros-projet'
+  const octets = serializeSprite(gros).length
+
+  // Le meme projet aurait-il tenu dans l'ancien rangement ?
+  let tenaitEnLocalStorage = true
+  try { localStorage.setItem('essai.quota', serializeSprite(gros)) } catch { tenaitEnLocalStorage = false }
+  try { localStorage.removeItem('essai.quota') } catch { /* rien */ }
+
+  // L'application a pu ranger son propre travail pendant les sections
+  // precedentes : on compte a partir de la, pas a partir de zero.
+  const auDepart = (await lib.listerProjets()).length
+
+  const id = lib.nouvelIdProjet()
+  const fiche = await lib.enregistrerProjet(id, gros)
+
+  // Un second projet, pour verifier que le premier n'est pas ecrase.
+  const petit = new Sprite(16, 16, Palette.preset('DawnBringer 32'))
+  petit.name = 'petit-projet'
+  petit.ensureCel(0, 0).bitmap.set(3, 3, 0xff3388ff)
+  await lib.enregistrerProjet(lib.nouvelIdProjet(), petit)
+
+  const liste = await lib.listerProjets()
+  const relu = await lib.chargerProjet(id)
+
+  // Signature des pixels : le projet doit revenir identique.
+  const signer = (sprite) => {
+    let h = 0
+    for (const couche of sprite.layers) {
+      for (const cel of couche.cels) {
+        if (!cel) { h = (h * 31 + 7) | 0; continue }
+        for (let i = 0; i < cel.bitmap.u32.length; i++) h = (h * 31 + cel.bitmap.u32[i]) | 0
+      }
+    }
+    return h
+  }
+
+  const copie = await lib.dupliquerProjet(id)
+  const apresCopie = (await lib.listerProjets()).length
+  await lib.supprimerProjet(copie.id)
+  const apresSuppression = (await lib.listerProjets()).length
+
+  return {
+    octets, tenaitEnLocalStorage, auDepart,
+    ajoutes: liste.length - auDepart,
+    noms: liste.map((f) => f.nom).filter((n) => n.endsWith('-projet')).sort().join(','),
+    vignette: fiche.vignette.startsWith('data:image/png'),
+    memesPixels: !!relu && signer(relu) === signer(gros),
+    memeNom: relu?.name === 'gros-projet',
+    apresCopie, apresSuppression,
+  }
+})
+
+check('un projet trop gros pour l\'ancien rangement passe dans la bibliotheque',
+  bibli.memesPixels && bibli.memeNom,
+  `${Math.round(bibli.octets / 1024)} Ko`
+  + (bibli.tenaitEnLocalStorage ? '' : ' — localStorage l\'aurait refuse'))
+check('deux projets coexistent au lieu de s\'ecraser',
+  bibli.ajoutes === 2 && bibli.noms === 'gros-projet,petit-projet', bibli.noms)
+check('chaque projet porte sa vignette', bibli.vignette)
+check('dupliquer puis supprimer laisse la liste comme avant',
+  bibli.apresCopie === bibli.auDepart + 3 && bibli.apresSuppression === bibli.auDepart + 2,
+  `${bibli.apresCopie} puis ${bibli.apresSuppression}`)
+
+// La reprise de l'ancienne sauvegarde : quelqu'un qui revient avec un
+// travail en cours ne doit pas le perdre parce qu'on a change de rangement.
+const reprise = await page.evaluate(async () => {
+  const lib = await import('/src/io/library.ts')
+  const { serializeSprite } = await import('/src/io/project.ts')
+  const { Sprite } = await import('/src/core/document.ts')
+  const { Palette } = await import('/src/core/palette.ts')
+  const ancien = new Sprite(16, 16, Palette.preset('DawnBringer 32'))
+  ancien.name = 'travail-d-avant'
+  ancien.ensureCel(0, 0).bitmap.set(1, 1, 0xffff0000)
+  localStorage.setItem('pixelforge.autosave.v1', serializeSprite(ancien))
+  localStorage.setItem('pixelforge.autosave.v1.at', String(Date.now() - 3600_000))
+
+  const fiche = await lib.reprendreAncienneSauvegarde()
+  return {
+    nom: fiche?.nom ?? null,
+    // Reprise une seule fois : sinon le travail d'aujourd'hui serait chasse
+    // par celui d'avant-hier a chaque ouverture.
+    encoreLa: localStorage.getItem('pixelforge.autosave.v1') !== null,
+    deuxieme: (await lib.reprendreAncienneSauvegarde()) === null,
+  }
+})
+check('l\'ancienne sauvegarde automatique est reprise, et une seule fois',
+  reprise.nom === 'travail-d-avant' && !reprise.encoreLa && reprise.deuxieme,
+  reprise.nom ?? 'non reprise')
+
+// Le dialogue, et le fait qu'il dise ou vivent ces fichiers : une
+// bibliotheque qui a l'air d'un disque dur fait perdre du travail le jour ou
+// quelqu'un nettoie son navigateur.
+await page.evaluate(() => window.pixelforge.runCommand('file.library'))
+await sleep(600)
+const dialogueBibli = await page.evaluate(() => ({
+  titre: document.querySelector('.modal-head h2')?.textContent ?? '',
+  cartes: document.querySelectorAll('.proj-carte').length,
+  vignettes: document.querySelectorAll('.proj-vignette').length,
+  pied: [...document.querySelectorAll('.modal .form-note')].map((p) => p.textContent).join(' '),
+}))
+check('« Mes projets » liste les projets avec leur vignette',
+  dialogueBibli.titre === 'Mes projets' && dialogueBibli.cartes >= 2
+  && dialogueBibli.vignettes >= 2,
+  `${dialogueBibli.cartes} carte(s)`)
+check('la bibliotheque dit ou vivent les fichiers',
+  /navigateur/i.test(dialogueBibli.pied), dialogueBibli.pied.slice(0, 80))
+
+// Ouvrir depuis la liste doit charger le projet ET s'y rattacher : sans ce
+// lien, chaque Ctrl+S deposerait une copie de plus.
+await page.locator('.proj-ouvrir').first().click()
+await sleep(600)
+const apresOuverture = await page.evaluate(async () => {
+  const avant = (await (await import('/src/io/library.ts')).listerProjets()).length
+  window.pixelforge.ed.run('trait', () => {
+    window.pixelforge.ed.peekCel().bitmap.set(0, 0, 0xff00ff00)
+  })
+  await window.pixelforge.enregistrerDansBibliotheque()
+  return {
+    rattache: window.pixelforge.projetCourant !== null,
+    avant,
+    apres: (await (await import('/src/io/library.ts')).listerProjets()).length,
+  }
+})
+check('enregistrer un projet ouvert le met a jour au lieu d\'en creer un',
+  apresOuverture.rattache && apresOuverture.apres === apresOuverture.avant,
+  `${apresOuverture.avant} -> ${apresOuverture.apres} projet(s)`)
+
+// Le repli quand le navigateur n'a pas l'API d'ecriture disque : Firefox et
+// Safari ne l'ont pas, et le telechargement doit rester un comportement
+// normal, pas un plantage.
+const disque = await page.evaluate(async () => {
+  const d = await import('/src/io/disque.ts')
+  const vrai = d.ecritureDisqueDisponible()
+  const sauve = window.showSaveFilePicker
+  delete window.showSaveFilePicker
+  const sansApi = d.ecritureDisqueDisponible()
+  const rendNull = (await d.choisirFichierEnregistrement('x.pixelforge')) === null
+  if (sauve) window.showSaveFilePicker = sauve
+  return { vrai, sansApi, rendNull }
+})
+check('l\'ecriture disque se detecte et se replie proprement',
+  disque.sansApi === false && disque.rendNull,
+  disque.vrai ? 'API presente dans ce navigateur' : 'API absente, repli teste')
 
 check('aucune erreur JavaScript', errors.length === 0, errors.join(' | '))
 

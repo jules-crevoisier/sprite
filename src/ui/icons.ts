@@ -18,7 +18,7 @@ import {
   PanelBottom, PanelRight, PanelLeft, Columns2, Sparkles, Bone, PersonStanding,
   Shuffle, SlidersHorizontal, Image as ImageIcon, Package, Scissors,
   ClipboardPaste, Leaf, Dices, RefreshCw, Maximize2, Group, ZoomOut, Scan,
-  Cloud, CloudUpload, CloudDownload, CloudOff, UserRound, KeyRound, LogOut,
+  FolderOpen, HardDriveDownload,
   Swords,
 } from 'lucide'
 
@@ -96,14 +96,9 @@ const SOURCE: Record<string, IconNode> = {
   image: ImageIcon as IconNode,
   package: Package as IconNode,
 
-  // Google Drive
-  cloud: Cloud as IconNode,
-  'cloud-upload': CloudUpload as IconNode,
-  'cloud-download': CloudDownload as IconNode,
-  'cloud-off': CloudOff as IconNode,
-  account: UserRound as IconNode,
-  key: KeyRound as IconNode,
-  logout: LogOut as IconNode,
+  // Bibliotheque de projets
+  library: FolderOpen as IconNode,
+  'save-as': HardDriveDownload as IconNode,
 
   // Interface
   settings: Settings2 as IconNode,

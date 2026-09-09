@@ -22,14 +22,6 @@ RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
 COPY tsconfig.json vite.config.ts index.html ./
 COPY src ./src
 
-# Identifiant client OAuth pour Google Drive, facultatif. Ce n'est pas un
-# secret — il part en clair dans chaque requete de connexion — donc un ARG
-# suffit ; sans lui l'image se construit et l'application fonctionne, les
-# entrees Drive expliquant alors comment en obtenir un.
-#   docker build --build-arg VITE_GOOGLE_CLIENT_ID=...apps.googleusercontent.com .
-ARG VITE_GOOGLE_CLIENT_ID=""
-ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
-
 # `npm run build` verifie aussi les types : une erreur casse la construction
 # de l'image plutot que d'atterrir en production.
 RUN npm run build

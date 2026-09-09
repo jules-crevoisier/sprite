@@ -16,10 +16,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # Facultatif : sauvegarde des projets dans Google Drive. Voir
-        # .env.example et la section « Google Drive » du README.
-        VITE_GOOGLE_CLIENT_ID: "${VITE_GOOGLE_CLIENT_ID:-}"
     image: pixelforge:latest
     restart: unless-stopped
 

@@ -28,7 +28,6 @@ const BINDINGS: Record<string, string> = {
   'ctrl+s': 'file.save',
   'ctrl+e': 'file.export',
   'ctrl+shift+e': 'file.export-png',
-  'ctrl+shift+s': 'cloud.save',
 
   'ctrl+z': 'edit.undo',
   'ctrl+shift+z': 'edit.redo',
@@ -47,6 +46,8 @@ const BINDINGS: Record<string, string> = {
   'ctrl+shift+v': 'sprite.variants',
   'ctrl+shift+d': 'sprite.detail',
   'ctrl+shift+g': 'sprite.ramp',
+  'ctrl+shift+s': 'file.save-as',
+  'ctrl+shift+l': 'file.library',
   'ctrl+shift+o': 'sprite.shade',
   'ctrl+shift+r': 'sprite.rotate3d',
   'ctrl+alt+c': 'sprite.canvas-size',

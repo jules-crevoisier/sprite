@@ -4,11 +4,10 @@
 game dev. Dessin, timeline, tags d'animation, et surtout des exports qui
 tombent directement dans un projet Unity ou Godot sans retouche.
 
-Tout tourne côté client : aucun serveur, aucune donnée envoyée. Le document
-vit dans l'onglet et une sauvegarde automatique reste dans le stockage local
-du navigateur. La sauvegarde dans Google Drive existe, mais elle est
-facultative et ne s'active qu'à la demande : sans compte connecté, l'éditeur
-est exactement le même.
+Tout tourne côté client : aucun serveur, aucun compte, aucune donnée envoyée.
+Les projets sont rangés dans le navigateur — plusieurs, nommés, avec leur
+vignette — et `Ctrl+S` réécrit en plus un vrai fichier sur le disque quand le
+navigateur le permet.
 
 ![Interface de PixelForge](docs/apercu.png)
 
@@ -54,9 +53,7 @@ par le réseau interne `dokploy-network`. C'est ce que Dokploy attend, et cela
 le port sur la machine.
 
 Aucune variable d'environnement n'est requise : l'application est entièrement
-statique. La seule qui existe, `VITE_GOOGLE_CLIENT_ID`, active la sauvegarde
-facultative dans Google Drive et se passe très bien d'être définie (voir
-[Google Drive](#google-drive-facultatif)).
+statique et ne parle à aucun service.
 
 ### Docker, sans Dokploy
 
@@ -92,10 +89,8 @@ et les fichiers temporaires de nginx en mémoire.
   navigateurs sur l'ancienne version.
 - **En-têtes** : CSP stricte (`default-src 'self'` — `blob:` et `data:`
   restent autorisés pour les exports), `nosniff`, `no-referrer`,
-  `frame-ancestors 'none'`. Les seules origines externes tolérées sont celles
-  de Google Drive : le script de connexion, son iframe de renouvellement et
-  l'API. `Cross-Origin-Opener-Policy` est en `same-origin-allow-popups`, sans
-  quoi la fenêtre de connexion ne pourrait pas répondre à la page.
+  `frame-ancestors 'none'`. Aucune origine externe n'est autorisée : la page
+  ne charge rien qu'elle ne serve elle-même.
 - **Sonde `/healthz`** utilisée par le `HEALTHCHECK` du conteneur et
   exploitable par l'orchestrateur.
 
@@ -285,102 +280,55 @@ frames en indiquant la taille des cases, l'espacement et la marge.
 `.gpl` et `.hex` (Lospec), tri par luminosité ou par teinte. Remplacer une
 couleur de la palette la remplace dans tout le sprite.
 
-## Google Drive (facultatif)
+## Enregistrer son travail
 
-Un compte Google permet d'enregistrer les projets dans un dossier
-**PixelForge** de votre Drive et de les rouvrir depuis n'importe quelle
-machine. Menu **Fichier** : *Ouvrir depuis Google Drive*, *Enregistrer dans
-Google Drive* (`Ctrl+Maj+S`), *Déposer une copie*, *Compte Google Drive*.
+Trois rangements, du plus automatique au plus définitif.
 
-Ce que fait l'intégration, et surtout ce qu'elle ne fait pas :
+### Mes projets — `Ctrl+Maj+L`
 
-- Le droit demandé est **`drive.file`** et rien d'autre : PixelForge ne voit
-  que les fichiers qu'il a créés ou que vous lui ouvrez explicitement. Le
-  reste de votre Drive lui est invisible, y compris au listage.
-- Le script de connexion Google n'est téléchargé qu'au premier usage d'une
-  commande Drive. Tant que vous n'en ouvrez aucune, l'application ne parle à
-  personne — au démarrage comme ensuite.
-- Le jeton d'accès reste en mémoire ; seul le fait d'avoir été connecté est
-  retenu, pour renouveler l'accès sans un clic à la session suivante.
-- Chaque projet retient le fichier Drive dont il vient : *Enregistrer*
-  écrase ce fichier au lieu d'empiler les copies. Si le fichier a été
-  supprimé entre-temps, un nouveau est créé et vous êtes prévenu.
-- Hors ligne, tout continue : dessin, export, sauvegarde automatique locale,
-  `Ctrl+S` sur le disque. Drive est un ajout, jamais un passage obligé.
+La bibliothèque du navigateur : plusieurs projets nommés, chacun avec sa
+vignette, sa date et son poids. `Ctrl+S` y range le document courant, et
+l'éditeur l'y réécrit tout seul toutes les minutes ainsi qu'à chaque fois que
+l'onglet passe en arrière-plan. Au lancement suivant, il propose de reprendre
+là où vous en étiez.
 
-### Obtenir un identifiant client OAuth
+Un projet ouvert depuis la liste reste **rattaché à son entrée** : les
+enregistrements suivants le mettent à jour au lieu d'empiler des copies.
 
-Aucun identifiant n'est fourni avec le dépôt : chaque déploiement a le sien.
-Sans identifiant, les entrées de menu Drive restent visibles et affichent la
-marche à suivre plutôt qu'une erreur.
+Le rangement est **IndexedDB**, et c'est ce qui rend la chose utilisable. La
+version précédente écrivait dans `localStorage`, à un seul emplacement et sous
+un quota d'environ 5 Mo pour toute l'origine — mesuré. Un projet de jeu
+ordinaire, 64×64 sur quatre calques et soixante images, en pèse près d'un :
+au troisième, l'écriture échouait, et elle échouait **en silence**. Le banc
+enregistre désormais ce projet-là et vérifie qu'il revient au pixel près.
 
-1. Sur [console.cloud.google.com](https://console.cloud.google.com), créez ou
-   choisissez un projet.
-2. **API et services → Écran de consentement OAuth** : type *Externe*,
-   ajoutez votre compte comme utilisateur de test (une application non
-   vérifiée n'accepte que ses testeurs).
-3. **API et services → Bibliothèque** : activez **Google Drive API**.
-4. **API et services → Identifiants → Créer des identifiants → ID client
-   OAuth**, type **Application Web**.
-5. **Origines JavaScript autorisées** : l'URL exacte du site, par exemple
-   `http://localhost:5173` en développement et `https://pixelforge.exemple.com`
-   en production. Aucune URI de redirection n'est nécessaire : le flux
-   implicite renvoie le jeton à la page elle-même.
-6. Copiez l'ID client — il se termine par `.apps.googleusercontent.com`.
+Ce que ce n'est pas : un coffre-fort. Ces données vivent dans le navigateur de
+la personne. Vider les données du site les efface, une fenêtre privée repart
+de zéro, et un navigateur à court de place peut évincer une origine qui n'a
+rien demandé. Le bouton **Garder durablement** demande au navigateur de s'en
+abstenir (`navigator.storage.persist()`) ; un refus n'est pas une erreur, il
+n'y a simplement rien de plus à faire. C'est pourquoi la liste dit franchement
+où vivent ces fichiers, et met l'export sur disque à portée de main sur chaque
+projet.
 
-Un ID client de type « Application Web » **n'est pas un secret** : il circule
-en clair à chaque connexion. Ce qui protège le compte, c'est la liste des
-origines autorisées. Il n'a pour autant rien à faire dans le dépôt, puisqu'il
-change d'un déploiement à l'autre : il se configure de deux façons.
+### Un vrai fichier — `Ctrl+Maj+S`
 
-**Pour tout le monde, à la construction** — variable Vite, lue par
-`npm run build` :
+*Enregistrer sous…* ouvre le sélecteur du système. Une fois le fichier choisi,
+`Ctrl+S` le **réécrit en silence**, comme une application de bureau : plus de
+`heros (7).pixelforge` dans le dossier des téléchargements. Le fichier est
+retenu d'une session à l'autre ; le navigateur redemande simplement
+l'autorisation d'écrire au premier enregistrement de chaque session, et aucune
+page ne peut s'en dispenser.
 
-```bash
-VITE_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com npm run build
+Cela repose sur l'API File System Access, que **Chrome et Edge** ont et que
+**Firefox et Safari** n'ont pas. Là où elle manque, *Enregistrer sous…*
+télécharge une copie — le comportement de tout le monde jusqu'ici, pas un mode
+dégradé.
 
-# avec Docker (voir aussi .env.example et les fichiers compose)
-docker build --build-arg VITE_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com -t pixelforge .
-```
+### Exporter
 
-**Pour un seul navigateur, sans reconstruire** — menu **Fichier → Identifiant
-client Google…**, coller l'ID. Il est conservé dans le stockage local et
-prime sur celui du site.
-
-### Que personne n'ait à créer le sien
-
-C'est le cas normal : les visiteurs ne doivent voir qu'un bouton **Se
-connecter à Google**, jamais un formulaire d'identifiant. Il suffit que
-l'identifiant soit posé une fois, à la construction — le dialogue
-d'identifiant devient alors une porte de service que plus rien n'ouvre tout
-seul.
-
-Sur Dokploy, c'est une variable d'environnement à déclarer dans l'onglet
-**Environment** de l'application : `docker-compose.yml` la passe en
-`build-arg` au `Dockerfile`, qui la donne à Vite au moment du build.
-
-```
-VITE_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
-```
-
-Attention : c'est une variable **de construction**, pas d'exécution. La
-changer demande de reconstruire l'image, pas seulement de redémarrer le
-conteneur.
-
-Deux réglages, dans la console Google Cloud, décident ensuite qui peut se
-connecter :
-
-- **Origines JavaScript autorisées** : l'URL exacte du site publié, votre
-  domaine Dokploy — sans elle, Google refuse la connexion.
-- **Écran de consentement OAuth → Publier l'application**. Tant qu'il reste
-  *En test*, seuls les comptes ajoutés en utilisateurs de test peuvent se
-  connecter. `drive.file` est un droit *non sensible* : publier ne demande
-  aucune vérification Google, l'application passe en production tout de suite.
-  L'écran « application non vérifiée » disparaît par la même occasion.
-
-Si vous servez l'image Docker fournie, les en-têtes de sécurité autorisent
-déjà `accounts.google.com` (script et iframe de renouvellement) et
-`www.googleapis.com` (API Drive), et rien d'autre.
+Pour un moteur de jeu, c'est `Ctrl+E` : planche, GIF, Unity, Godot. Voir
+[Exporter](#exporter).
 
 ## Apprendre
 
@@ -488,7 +436,6 @@ src/
   render/      composition des calques et viewport (zoom, grilles, onion skin)
   export/      planches, JSON, Unity, Godot, GIF, ZIP
   smart/       analyse des familles de couleurs, variantes, détail, squelette
-  cloud/       connexion Google et API Drive (facultatif, chargé à la demande)
   io/          sauvegarde du projet et import d'images
   ui/          panneaux, menus, dialogues, raccourcis
 docker/        configuration nginx de l'image de production
@@ -518,13 +465,6 @@ pixels identiques aux frames source), l'extrusion, le JSON, le `.meta` Unity et
 son inversion en Y, les `AnimationClip`, la ressource Godot, le GIF relu par le
 décodeur du navigateur, la signature du ZIP et l'aller-retour du projet.
 
-Google Drive y est **simulé** — jamais appelé pour de vrai : le banc d'essai
-remplace le script de connexion et `fetch`, puis vérifie le format de l'envoi
-multipart, l'écrasement du fichier lié plutôt que sa duplication, la reprise
-après un jeton expiré, et les messages rendus pour un Drive plein, une
-coupure réseau ou un fichier supprimé. Il vérifie aussi que sans identifiant
-client, les commandes ouvrent la marche à suivre au lieu d'échouer.
-
 Le banc de rotation balaie le lacet **degré par degré**, de −75° à +75°, sur
 quatre sujets choisis pour leurs pièges : la mascotte, un disque (le relief le
 plus haut), une lame (longue et fine) et un anneau (un vrai trou, qu'aucun
@@ -547,6 +487,7 @@ en fait tomber huit. Un banc qui ne sait pas échouer ne protège rien.
   par le PNG et le JSON.
 - Le mode couleur est RGBA : pas d'indexé strict, mais l'alignement sur la
   palette permet de s'y contraindre.
-- Google Drive : pas de synchronisation continue ni de fusion. L'envoi est
-  manuel et le dernier enregistrement gagne — deux onglets ouverts sur le
-  même projet se marchent dessus.
+- Les projets ne quittent pas la machine : pas de compte, donc pas de reprise
+  sur un autre poste. C'est l'export sur disque qui les déplace.
+- Deux onglets ouverts sur le même projet se marchent dessus : le dernier
+  enregistrement gagne, sans fusion ni avertissement.
