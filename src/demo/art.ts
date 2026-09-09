@@ -70,8 +70,8 @@ export function bitmapDe(d: Dessin): Bitmap {
  */
 const PAL_HEROS: Palette = {
   o: '#1a1420',
-  h: '#8a4b2a',
-  H: '#b36a3c',
+  h: '#8f3f2a',
+  H: '#c05f38',
   s: '#e8b892',
   m: '#c08a63',
   t: '#3f6fb5',
@@ -81,11 +81,11 @@ const PAL_HEROS: Palette = {
   p: '#46536f',
   P: '#5e6d8c',
   q: '#3c4763',
-  B: '#3a2b22',
+  B: '#2e2018',
 }
 
 /**
- * Le heros, apres deux tours de critique.
+ * Le heros, apres trois tours de critique.
  *
  * ## Ce que le tour 2 a repris au tour 1
  *
@@ -101,12 +101,34 @@ const PAL_HEROS: Palette = {
  * centre a 8,0 quand tout le reste est a 7,5. Le miroir de `vues.ts` se fait
  * autour d'un axe fixe, donc entre la vue de gauche et celle de droite la tete
  * sautait d'un pixel sur un corps immobile. Elle fait maintenant dix de large,
- * centree comme le corps — et les epaules depassent de deux pixels au lieu
- * d'un, ce qui est le minimum pour qu'on lise des epaules.
+ * centree comme le corps, et les epaules la debordent d'UNE colonne de chaque
+ * cote. La version precedente de ce commentaire disait « deux pixels au lieu
+ * d'un » sans dire de quoi, ce qui se lisait par cote : c'est deux au total.
  *
- * Les cheveux etaient eclaires a l'envers : la calotte entierement sombre
- * au-dessus d'une bande claire, et aucune information gauche-droite alors que
- * le visage juste dessous est franchement eclaire de gauche.
+ * ## Ce que le tour 3 a repris au tour 2
+ *
+ * Le tour 3 a d'abord rendu une planche identique a celle du tour 2, au
+ * pixel pres, presentee comme un progres. Le critique l'a vu au md5. Les
+ * corrections ci-dessous sont les vraies.
+ *
+ * Les bras ne se distinguaient pas du torse. Chacun portait EXACTEMENT la
+ * couleur de la colonne de torse qu'il touche — `T` contre `T` a gauche, `u`
+ * contre `u` a droite — separes par une seule colonne de contour, c'est-a-dire
+ * par ce que la compression ravale en premier. Le commentaire ci-dessous
+ * refusait le vide en promettant que les bras se liraient « par la couleur » :
+ * la promesse n'etait pas tenue. Elle l'est maintenant, a largeur constante et
+ * sans couleur ajoutee : le torse va de `t` a `u` en passant par sa haute
+ * lumiere `T`, et chaque bras tranche d'une trentaine d'unites sur la colonne
+ * qu'il touche.
+ *
+ * Les cheveux n'etaient remis a l'endroit qu'au sommet du crane : la tempe
+ * gauche, du cote eclaire, restait au ton sombre, et les deux tempes avaient
+ * la meme valeur. La gauche passe au ton clair.
+ *
+ * Les cheveux, enfin, etaient de la couleur des caisses du donjon — quinze
+ * unites d'ecart — et les bottes de celle du bois sombre des portes. Les uns
+ * virent a l'auburn, les autres s'assombrissent. Ce n'est pas un jugement de
+ * gout : c'est la regle `fond-confondu` qui l'a chiffre.
  *
  * ## Ce qui a ete refuse, et pourquoi
  *
@@ -114,10 +136,16 @@ const PAL_HEROS: Palette = {
  * d'autre — un seul est ravale par la compression — donc trois colonnes de
  * bras, deux de vide, six de torse, deux de vide, trois de bras : seize de
  * large au lieu de douze. C'est un tiers de largeur en plus sur un sprite de
- * douze pixels, a une taille ou aucune reference ne detache les bras : ils s'y
- * lisent par la couleur, pas par la silhouette. Les huit directions calculees
- * passent le controle qualite a sept sur huit, la huitieme etant le profil et
- * son defaut de trait deja nomme.
+ * douze pixels, a une taille ou aucune reference ne detache les bras. Le refus
+ * ne tenait que si la contrepartie en couleur etait payee ; elle l'est.
+ *
+ * Fondre les deux bruns `b` (ceinture) et `B` (bottes), qu'un critique
+ * declarait a trente-cinq unites l'un de l'autre. Mesure : cinquante et une,
+ * et douze de luminance. Ce ne sont pas des doublons, et la regle qui les
+ * jugerait tels ne les a pas signales.
+ *
+ * Les huit directions calculees passent toutes le controle qualite depuis que
+ * la coquille de contour est reposee apres rotation.
  */
 export const HEROS: Dessin = {
   largeur: 20,
@@ -126,19 +154,19 @@ export const HEROS: Dessin = {
   lignes: [
     '.....oooooo.....',
     '....oHHHhhho....',
-    '...ohHHHhhhho...',
-    '...ohsssssmho...',
-    '...ohsossomho...',
-    '...ohsssssmho...',
+    '...oHHHHhhhho...',
+    '...oHsssssmho...',
+    '...oHsossomho...',
+    '...oHsssssmho...',
     '....osssssmo....',
     '.....oooooo.....',
     '..ooTTTTttuuoo..',
-    '..oToTttttuouo..',
-    '..oToTttttuouo..',
-    '..oToTttttuouo..',
+    '..oTotTttuuoto..',
+    '..oTotTttuuoto..',
+    '..oTotTttuuoto..',
     '..osobbbbbbomo..',
-    '..osotttttuomo..',
-    '...ootttttuoo...',
+    '..osotTttuuomo..',
+    '...ootTttuuoo...',
     '....oPpppqqo....',
     '....oPp..qqo....',
     '....oPp..qqo....',
@@ -188,8 +216,8 @@ export const SLIME: Dessin = {
 
 const PAL_DECOR: Palette = {
   o: '#14101a',
-  s: '#3a3a4e',
-  S: '#4a4a62',
+  s: '#26263a',
+  S: '#32324a',
   d: '#2b2b3c',
   m: '#5e5a52',
   M: '#7a7466',

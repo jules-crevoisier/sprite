@@ -50,6 +50,21 @@ export interface Rapport {
 export interface OptionsVerif {
   /** Palette du projet ; toute couleur hors de cette liste est signalee. */
   palette?: RGBA[]
+  /**
+   * Les tuiles du decor sur lequel ce sprite sera pose.
+   *
+   * Sans elles, le verificateur ne compare les couleurs d'un dessin qu'entre
+   * elles. Un personnage peut donc passer toutes les regles, dans ses huit
+   * directions, en etant peint de la couleur du sol qu'il foule : il se
+   * dissout a l'ecran sans qu'aucune mesure ne l'ait vu.
+   *
+   * Ce sont bien les tuiles et non une liste de couleurs : il faut savoir
+   * quelle SURFACE chaque couleur occupe. La premiere version prenait la
+   * liste, et accusait le heros a 66% — sur son propre trait de contour, qui
+   * doit ressembler a celui du decor, et sur un brun de caisse qui ne couvre
+   * que quelques pixels d'une seule tuile.
+   */
+  decor?: Bitmap[]
   /** Le dessin doit-il tenir dans une silhouette d'un seul tenant ? */
   unSeulMorceau?: boolean
   /**
@@ -427,6 +442,73 @@ export function verifier(bm: Bitmap, opts: OptionsVerif = {}): Rapport {
       quoiFaire: 'Une ombre et une lumière suffisent à donner du volume. '
         + 'Assisté ▸ Ombrage automatique en pose une base.',
     })
+  }
+
+  /* --- 10. Le sprite contre le decor qui le portera --- */
+  //
+  // Un personnage se lit sur un fond, pas dans le vide. C'est le seul controle
+  // qui regarde en dehors du dessin, et il a fallu qu'un critique le reclame :
+  // le heros du donjon avait un pantalon a cinq unites de luminance de la
+  // dalle, et il passait ses huit directions sans qu'une regle s'en emeuve.
+  //
+  // Ce qui se dissout, c'est une masse dans une masse. Deux precautions donc :
+  //
+  // - on ne retient du decor que ses aplats : une couleur qui couvre au moins
+  //   un dixieme d'UNE tuile. Un accent de trois pixels sur une caisse n'avale
+  //   personne, et le sol, lui, pave tout le niveau. La tuile est la bonne
+  //   unite parce qu'on se tient sur une tuile a la fois : mesuree sur la
+  //   reunion des tuiles, la dalle claire du donjon tombait a 6,9% et passait
+  //   sous le seuil, alors qu'elle couvre 28% du sol.
+  // - le trait du sprite est exclu. Il RESSEMBLE au trait du decor, et c'est
+  //   voulu — c'est ce qui fait qu'ils appartiennent au meme jeu. Un trait ne
+  //   dissout rien : il est mince, et bien plus sombre que tout le reste.
+  if (!estTuile && opts.decor?.length) {
+    const aplats = new Set<RGBA>()
+    for (const tuile of opts.decor) {
+      const surTuile = new Map<RGBA, number>()
+      let n = 0
+      for (let i = 0; i < tuile.u32.length; i++) {
+        const c = tuile.u32[i]
+        if (getA(c) === 0) continue
+        surTuile.set(c, (surTuile.get(c) ?? 0) + 1)
+        n++
+      }
+      for (const [c, k] of surTuile) if (k >= n * 0.1) aplats.add(c)
+    }
+    const aplatsDuDecor = [...aplats]
+
+    let enDanger = 0
+    const coupables: string[] = []
+    for (const [c, n] of compte) {
+      if (getA(c) === 0 || c === trait) continue
+      let pire: { d: number; dl: number; f: RGBA } | null = null
+      for (const f of aplatsDuDecor) {
+        const d = distance(c, f)
+        const dl = Math.abs(luminance(c) - luminance(f))
+        // Se confondre, c'est etre proche ET porter la meme valeur : c'est la
+        // valeur qui decide de ce qu'on distingue a distance, pas la teinte.
+        if (d < 40 && dl < 12 && (!pire || d < pire.d)) pire = { d, dl, f }
+      }
+      if (!pire) continue
+      enDanger += n
+      if (coupables.length < 3) {
+        coupables.push(`${toHex(c)} (${n} px) contre ${toHex(pire.f)} `
+          + `— écart ${pire.d}, valeur ${Math.round(pire.dl)}`)
+      }
+    }
+    const part = total ? enDanger / total : 0
+    mesures.confonduAvecDecor = Math.round(part * 100)
+    if (part > 0.1) {
+      constats.push({
+        id: 'fond-confondu',
+        gravite: 'important',
+        quoi: `${Math.round(part * 100)}% du sprite porte la couleur d'un aplat du décor : `
+          + coupables.join(' ; '),
+        quoiFaire: 'Écarter ces couleurs de celles du décor — par la teinte plutôt que '
+          + 'par la valeur, si le dessin doit rester dans cette gamme. Un personnage '
+          + 'qui partage la valeur de sa dalle disparaît en jeu.',
+      })
+    }
   }
 
   return { constats, mesures, passe: !constats.some((c) => c.gravite === 'bloquant') }

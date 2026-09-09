@@ -157,10 +157,28 @@ const m = await page.evaluate(async () => {
   }
   casse.plat = verifier(bPlat)
 
+  // fond-confondu : un personnage peint de la couleur de la dalle qu'il foule.
+  // C'est le seul controle qui regarde en dehors du dessin — sans lui, un
+  // sprite passe ses huit directions en se dissolvant dans le decor.
+  const decorDuDonjon = [art.bitmapDe(art.SOL), art.bitmapDe(art.MUR)]
+  const dalle = art.bitmapDe(art.SOL).u32[0]
+  const bFondu = new Bitmap(24, 24)
+  for (let y = 2; y < 22; y++) {
+    for (let x = 2; x < 22; x++) {
+      const bord = x === 2 || x === 21 || y === 2 || y === 21
+      bFondu.set(x, y, bord ? rgba(20, 16, 28, 255) : dalle)
+    }
+  }
+  casse['fond-confondu'] = verifier(bFondu, { decor: decorDuDonjon })
+
+  // Et le meme dessin, sans le decor, ne doit rien declencher : la regle ne
+  // doit parler que quand on lui donne le fond.
+  const sansDecor = verifier(bFondu)
+
   /* --- l'etat des dessins du depot --- */
   const depot = []
-  const ajouter = (nom, bm) => {
-    const r = verifier(bm)
+  const ajouter = (nom, bm, opts = {}) => {
+    const r = verifier(bm, opts)
     depot.push({
       nom,
       constats: r.constats.map((c) => `${c.gravite}:${c.id}`),
@@ -170,8 +188,12 @@ const m = await page.evaluate(async () => {
   }
   ajouter('personnage', perso)
   for (const mas of MASCOTTES) ajouter(`mascotte ${mas.nom}`, mascotteSprite(mas).layers[0].cels[0].bitmap)
+  // Les dessins du donjon sont juges CONTRE le donjon : c'est la seule facon
+  // de voir un personnage se fondre dans le sol qu'il foule. Le decor, ce sont
+  // les surfaces sur lesquelles on pose quelque chose — le sol et le mur ; une
+  // caisse comparee a elle-meme donnerait un ecart nul et un faux constat.
   for (const nom of ['HEROS', 'SLIME', 'SOL', 'MUR', 'CAISSE', 'PORTE']) {
-    ajouter(`donjon ${nom.toLowerCase()}`, art.bitmapDe(art[nom]))
+    ajouter(`donjon ${nom.toLowerCase()}`, art.bitmapDe(art[nom]), { decor: decorDuDonjon })
   }
 
   return {
@@ -181,6 +203,7 @@ const m = await page.evaluate(async () => {
       texte: a(k, r)?.quoi ?? `(rien) mesures ${JSON.stringify(r.mesures)}`,
     }])),
     depot,
+    sansDecor: sansDecor.constats.map((c) => c.id),
   }
 })
 
@@ -192,6 +215,9 @@ console.log('\n--- le verificateur sait parler ---')
 for (const [regle, r] of Object.entries(m.casse)) {
   check(`la regle « ${regle} » voit le defaut qu'on lui a fabrique`, r.trouve, r.texte)
 }
+
+check('la regle « fond-confondu » se tait quand on ne lui donne pas de decor',
+  !m.sansDecor.includes('fond-confondu'), m.sansDecor.join(', ') || 'aucun constat')
 
 console.log('\n--- etat des dessins du depot ---')
 let sansDefaut = 0
