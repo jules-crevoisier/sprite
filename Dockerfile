@@ -19,7 +19,12 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
 
-COPY tsconfig.json vite.config.ts index.html ./
+# Toutes les pages, et non `index.html` nommement : `vite.config.ts` declare
+# une entree par page, et une page ajoutee sans que cette ligne bouge fait
+# echouer la construction de l'image — avec un message qui parle de rollup et
+# non du Dockerfile. C'est exactement ce qui est arrive a `demo.html`.
+COPY tsconfig.json vite.config.ts ./
+COPY *.html ./
 COPY src ./src
 
 # `npm run build` verifie aussi les types : une erreur casse la construction
