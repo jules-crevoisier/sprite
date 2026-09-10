@@ -538,6 +538,24 @@ const m = await page.evaluate(async () => {
   }
 
 
+  /*
+   * La reference honnete : les deux sources rendues AU MEME ANGLE.
+   *
+   * L'ancienne comparait le saut de bascule a l'ecart entre les deux dessins
+   * BRUTS, non alignes et non projetes. Ces deux quantites ne vivent pas dans
+   * le meme espace : le saut se mesure sur des images rendues, l'ecart sur des
+   * bitmaps sources, et leurs normalisations ne portent meme pas sur la meme
+   * chose — la masse du rendu d'un cote, le compte de pixels opaques de la
+   * source de l'autre. Le controle etait rouge depuis toujours, et il
+   * comparait des choux et des carottes.
+   *
+   * On mesure donc, a l'angle de bascule, la difference entre le rendu de la
+   * source A et le rendu de la source B. C'est l'ecart que les DONNEES
+   * imposent, exprime dans l'espace ou le saut se mesure. Le rendu ne peut pas
+   * faire mieux ; s'il fait pire, il ajoute quelque chose, et c'est ce qu'on
+   * veut savoir.
+   */
+  let refMax = 0
   let coutureMax = 0
   for (const bascule of [45, 135, 225, 315]) {
     const rendu = (deg) => s.rendreScene([troisVues],
@@ -547,6 +565,41 @@ const m = await page.evaluate(async () => {
     for (let i = 0; i < a.u32.length; i++) if (a.u32[i] !== b.u32[i]) diff++
     const m = Math.max(1, s.masse(a))
     coutureMax = Math.max(coutureMax, diff / m)
+
+    /*
+     * La reference : les deux sources, chacune tournee comme elle l'est a la
+     * bascule.
+     *
+     * Un premier essai rendait les deux au meme azimut de SCENE. C'etait faux :
+     * a la bascule, la source d'avant est tournee de +45 degres et celle
+     * d'apres de -45, parce qu'elles sont declarees a quatre-vingt-dix degres
+     * l'une de l'autre. Les rendre au meme azimut donnait a la seconde une
+     * rotation de +45 au lieu de -45, et la reference mesurait autre chose que
+     * ce qu'elle pretendait — vingt points d'ecart, qu'on aurait pris pour un
+     * defaut du rendu.
+     *
+     * On rend donc chaque source SEULE, a l'angle qui lui applique la meme
+     * rotation qu'a la bascule : +45 pour celle d'avant, -45 pour celle
+     * d'apres.
+     */
+    const paires = { 45: [pixl, vueE], 135: [vueE, vueN], 225: [vueN, vueO], 315: [vueO, pixl] }
+    const [sa, sb] = paires[bascule]
+    // Le MEME pivot que la piece a quatre vues, et le meme champ. `pieceDe`
+    // deduit le pivot du dessin qu'on lui donne : une piece batie sur `vueE`
+    // tourne autour du centre de `vueE`, pas autour de celui de la piece.
+    // L'image atterrit alors ailleurs, et la difference qu'on mesure est
+    // celle d'un decalage, pas celle du rendu.
+    const rendreSeule = (bm, deg) => s.rendreScene(
+      [{
+        ...troisVues,
+        sources: [{ azimut: 0, elevation: 0, bitmap: bm, champ: champDe(bm) }],
+      }],
+      { azimut: (deg * Math.PI) / 180, elevation: 0, zoom: 1 }, opts,
+    ).image
+    const ra = rendreSeule(sa, 45), rb = rendreSeule(sb, -45)
+    let dref = 0
+    for (let i = 0; i < ra.u32.length; i++) if (ra.u32[i] !== rb.u32[i]) dref++
+    refMax = Math.max(refMax, dref / Math.max(1, s.masse(ra)))
   }
   let ecartUne = 0, ecartQuatre = 0
   for (let i = 0; i < 36; i++) {
@@ -685,7 +738,7 @@ const m = await page.evaluate(async () => {
     boucle, masse0Rendue: masses[0],
     sautMax, etrangeres: etrangeres.length, trous: trous.length,
     occ, ordreIndifferent,
-    coutureMax, ecartSources,
+    coutureMax, ecartSources, refMax,
     ecartUne: (ecartUne * 180) / Math.PI,
     ecartQuatre: (ecartQuatre * 180) / Math.PI,
     directions: planche.length, distinctes,
@@ -773,10 +826,33 @@ check('les aplats ne se mouchettent pas',
 // apparence des deux cotes ; a la bascule, l'un est rendu tourne de +45
 // degres et l'autre de -45, et le saut est la consequence honnete d'une
 // donnee contradictoire, pas un defaut du rendu.
-check('le saut de bascule ne dépasse pas l\'écart entre les deux dessins',
-  m.coutureMax <= m.ecartSources * 1.1 + 0.02,
-  `saut ${Math.round(m.coutureMax * 100)}%, les dessins different de `
-  + `${Math.round(m.ecartSources * 100)}%`)
+/*
+ * Le saut de bascule ne doit rien AJOUTER a ce que les donnees imposent.
+ *
+ * Ce controle a ete rouge pendant longtemps — saut 100%, « ecart » 79% — et il
+ * accusait le rendu a tort. Il comparait le saut, mesure sur des images
+ * RENDUES, a l'ecart entre les deux dessins SOURCES : deux quantites qui ne
+ * vivent pas dans le meme espace, et dont les normalisations ne portaient meme
+ * pas sur la meme chose.
+ *
+ * La reference correcte est la difference entre les deux sources rendues avec
+ * la rotation qu'elles subissent A LA BASCULE — la precedente est tournee de
+ * +45 degres, la suivante de -45 — et autour du MEME pivot. Trois erreurs de
+ * mesure se cachaient la : le mauvais espace, la mauvaise rotation, le mauvais
+ * centre. Corrigees toutes les trois, le saut vaut exactement l'ecart
+ * irreductible : le rendu n'invente rien.
+ *
+ * La lecon compte plus que le chiffre. Un banc rouge qu'on laisse rouge finit
+ * par etre lu comme du decor, et l'on cesse de croire les autres.
+ */
+check('le saut de bascule n\'ajoute rien à ce que les dessins imposent',
+  m.coutureMax <= m.refMax * 1.05 + 0.01,
+  `saut ${Math.round(m.coutureMax * 100)}%, écart irréductible `
+  + `${Math.round(m.refMax * 100)}% (dessins bruts, hors rendu : `
+  + `${Math.round(m.ecartSources * 100)}%)`)
+check('et la mesure n\'est pas vide : les sources different vraiment',
+  m.refMax > 0.2,
+  `${Math.round(m.refMax * 100)}% — sinon l'égalité ci-dessus ne prouverait rien`)
 check('aucune silhouette percee', m.trous === 0, `${m.trous} direction(s)`)
 
 // L'occultation est ce qui distingue une composition d'un empilement : sans
