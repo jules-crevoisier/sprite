@@ -104,8 +104,21 @@ export async function autoriserEcriture(poignee: PoigneeFichier): Promise<boolea
   }
 }
 
+/**
+ * Vrai si cette poignee-la sait etre reecrite.
+ *
+ * Un fichier tire d'un dossier ouvert en lecture — `webkitdirectory`, sur
+ * Firefox et Safari — n'a pas de `createWritable`. On le demande AVANT de
+ * tenter l'ecriture : essayer puis rattraper l'exception marche aussi, mais
+ * l'interface ne peut alors annoncer la verite qu'apres coup, c'est-a-dire
+ * apres avoir laisse croire.
+ */
+export const poigneeInscriptible = (p: PoigneeFichier | null | undefined): boolean =>
+  !!p && typeof p.createWritable === 'function'
+
 /** Reecrit le fichier. Rend false si l'autorisation manque. */
 export async function ecrireFichier(poignee: PoigneeFichier, contenu: string): Promise<boolean> {
+  if (!poigneeInscriptible(poignee)) return false
   if (!(await autoriserEcriture(poignee))) return false
   const flux = await poignee.createWritable()
   await flux.write(contenu)

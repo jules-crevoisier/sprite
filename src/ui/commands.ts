@@ -11,6 +11,7 @@ import { serializeSprite, deserializeSprite, PROJECT_EXT } from '../io/project'
 import {
   choisirFichierEnregistrement, choisirFichierOuverture, ecrireFichier,
   ecritureDisqueDisponible, ouvertureDisqueDisponible, poigneeRetenue, retenirPoignee,
+  poigneeInscriptible,
 } from '../io/disque'
 import { bibliothequeDialog } from './library-dialog'
 import { compositeFrame } from '../render/composite'
@@ -132,6 +133,16 @@ export function buildCommands(app: App): Command[] {
       // plusieurs onglets, une poignee globale ferait ecrire le sprite d'un
       // onglet dans le fichier d'un autre.
       const poignee = app.documents.actif.poignee ?? await poigneeRetenue()
+      // Une poignee qu'on ne sait pas reecrire — un fichier tire d'un dossier
+      // ouvert en lecture sur Firefox — ne passe pas par la tentative
+      // d'ecriture : elle echouerait, et le message parlerait d'une
+      // « autorisation refusee » qui n'a rien a voir. On range, et on le dit.
+      if (poignee && !poigneeInscriptible(poignee)) {
+        if (await app.enregistrerDansBibliotheque()) {
+          showToast(`Ce navigateur ne reecrit pas ${poignee.name} : range dans « Mes projets »`, 'info')
+        }
+        return
+      }
       if (poignee) {
         try {
           if (await ecrireFichier(poignee, serializeSprite(ed.sprite))) {

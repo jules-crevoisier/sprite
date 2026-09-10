@@ -4,6 +4,7 @@ import { icon } from './icons'
 import { showToast } from './overlay'
 import {
   choisirDossier, dossierDisponible, dossierRetenu, retenirDossier,
+  choisirDossierEnLecture, parcoursDossierDisponible,
   lireDossier, autoriser, type PoigneeDossier, type Entree,
 } from '../io/dossier'
 import { ouvrirFichier } from '../io/formats'
@@ -52,17 +53,29 @@ export class DossierPanel {
     this.rendreAReprendre(d.name)
   }
 
+  /**
+   * Ouvre un dossier, du mieux que ce navigateur sache.
+   *
+   * Chrome et Edge donnent une poignee inscriptible : Ctrl+S reecrira les
+   * fichiers sur place. Firefox et Safari donnent le contenu en lecture, ce
+   * qui suffit pour tout parcourir et tout ouvrir — et l'on DIT que
+   * l'enregistrement ira dans « Mes projets », avant que la personne ait
+   * travaille dessus.
+   */
   async ouvrirUnDossier(): Promise<void> {
-    if (!dossierDisponible()) {
-      showToast('Ce navigateur ne sait pas ouvrir un dossier — Chrome ou Edge le savent', 'error')
+    if (!parcoursDossierDisponible()) {
+      showToast('Ce navigateur ne sait pas ouvrir un dossier du tout', 'error')
       return
     }
-    const d = await choisirDossier()
+    const d = dossierDisponible() ? await choisirDossier() : await choisirDossierEnLecture()
     if (!d) return
     this.chemin = [{ nom: d.name, poignee: d }]
     this.vignettes.clear()
     await retenirDossier(d)
     await this.rafraichir()
+    if (d.lectureSeule) {
+      showToast(`« ${d.name} » ouvert en lecture — Ctrl+S rangera dans Mes projets`, 'info')
+    }
   }
 
   async rafraichir(): Promise<void> {
@@ -144,7 +157,12 @@ export class DossierPanel {
       if (res.genre === 'sprite') {
         // La poignee suit le document : Ctrl+S reecrira CE fichier-la.
         this.app.ouvrirDansUnOnglet(res.sprite, f.poignee)
-        showToast(`« ${f.nom} » ouvert — Ctrl+S le reecrira`, 'success')
+        // Le message dit ce qui va REELLEMENT se passer au prochain Ctrl+S.
+        // Promettre une reecriture qui n'aura pas lieu est la seule chose
+        // qu'on ne peut pas se permettre ici.
+        showToast(f.lectureSeule
+          ? `« ${f.nom} » ouvert en lecture — Ctrl+S rangera dans Mes projets`
+          : `« ${f.nom} » ouvert — Ctrl+S le reecrira`, 'success')
       } else if (res.genre === 'palette') {
         const { Palette } = await import('../core/palette')
         const p = res.palette
@@ -191,18 +209,25 @@ export class DossierPanel {
 
   private rendreVide(): void {
     clear(this.fil); clear(this.corps)
-    const dispo = dossierDisponible()
+    const ecrit = dossierDisponible()
+    const parcourt = parcoursDossierDisponible()
     const b = el('button', { class: 'dos-choisir' },
       el('span', { html: icon('folder', 15) }),
       el('span', null, 'Choisir un dossier de travail'))
+    b.disabled = !parcourt
     b.addEventListener('click', () => void this.ouvrirUnDossier())
-    this.corps.appendChild(el('div', { class: 'dos-accueil' },
-      b,
-      el('p', { class: 'dos-vide' }, dispo
-        ? 'Tous les sprites du dossier s’ouvrent alors d’un clic, et Ctrl+S les réécrit sur place.'
-        : 'Ce navigateur ne sait pas ouvrir un dossier. Chrome et Edge le savent ; '
-          + 'Firefox et Safari n’ont pas encore l’API.'),
-    ))
+    // Trois cas, trois phrases. « Ce navigateur ne sait pas ouvrir un
+    // dossier » etait faux pour Firefox, qui sait le lire : c'est
+    // l'ECRITURE sur place qui lui manque, et le dire autrement decourage
+    // d'essayer quelque chose qui marche.
+    const dit = ecrit
+      ? 'Tous les sprites du dossier s’ouvrent alors d’un clic, et Ctrl+S les réécrit sur place.'
+      : parcourt
+        ? 'Tous les sprites du dossier s’ouvrent alors d’un clic. Ce navigateur ne sait pas '
+          + 'réécrire un fichier sur place : Ctrl+S rangera dans « Mes projets », et '
+          + '« Enregistrer sous… » téléchargera. Chrome et Edge, eux, réécrivent.'
+        : 'Ce navigateur ne sait ouvrir aucun dossier.'
+    this.corps.appendChild(el('div', { class: 'dos-accueil' }, b, el('p', { class: 'dos-vide' }, dit)))
   }
 
   private rendreAReprendre(nom: string): void {
