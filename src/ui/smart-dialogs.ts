@@ -287,6 +287,30 @@ export function detailDialog(ed: Editor): void {
   const apercu = zoomablePreview({ hauteur: 200 })
   const preview = apercu.node
   const info = el('p', { class: 'form-note' })
+  /** Les teintes que la derniere passe a fabriquees, pour la palette. */
+  let dernieresTeintes: number[] = []
+  const rangee = el('div', { class: 'form-row' })
+  const majPalette = () => {
+    rangee.replaceChildren()
+    if (!dernieresTeintes.length) return
+    for (const c of dernieresTeintes.slice(0, 12)) {
+      rangee.appendChild(el('span', {
+        class: 'pastille-teinte',
+        title: toHex(c),
+        style: { background: toHex(c) },
+      }))
+    }
+    rangee.appendChild(el('button', {
+      class: 'btn sm',
+      onclick: () => {
+        const combien = dernieresTeintes.length
+        ed.run('Teintes du détail', () => {
+          for (const c of dernieresTeintes) ed.sprite.palette.add(c)
+        })
+        showToast(`${combien} teinte(s) ajoutée(s) à la palette`, 'success')
+      },
+    }, 'Ajouter à la palette'))
+  }
 
   const apply = () => {
     ed.resetStroke()
@@ -294,14 +318,28 @@ export function detailDialog(ed: Editor): void {
     if (!target) return
     const index = RampIndex.fromBitmaps([target.bitmap])
     const within = onlySelection && ed.selection.active ? ed.selection.mask : null
+    /*
+     * Les teintes FABRIQUEES sont recensees : un dessin a plat n'a pas de
+     * rampe ou puiser, et l'outil en invente a partir de la couleur elle-meme.
+     * Le dire evite la surprise — « d'ou sortent ces deux verts ? » — et
+     * permet de les ranger dans la palette d'un clic.
+     */
+    const nouvelles = new Set<number>()
     const touched = presetId
-      ? applyPreset(target.bitmap, index, presetId, seed, intensity, within)
-      : addDetail(target.bitmap, index, { mode, density, strength: 1, seed, within })
+      ? applyPreset(target.bitmap, index, presetId, seed, intensity, within, nouvelles)
+      : addDetail(target.bitmap, index, {
+        mode, density, strength: 1, seed, within, nouvelles,
+      })
+    dernieresTeintes = [...nouvelles]
     ed.events.emit('doc', undefined)
     apercu.show(target.bitmap)
+    const creees = dernieresTeintes.length
+      ? ` · ${dernieresTeintes.length} teinte(s) créée(s)`
+      : ''
     info.textContent = touched
-      ? `${touched} pixels modifies · ${passes} passe(s) déjà figee(s) · graine ${seed}`
-      : 'Aucun pixel touche : baissez la sélection ou augmentez la densité.'
+      ? `${touched} pixels modifiés${creees} · ${passes} passe(s) déjà figée(s) · graine ${seed}`
+      : 'Aucun pixel touché : baissez la sélection ou augmentez la densité.'
+    majPalette()
   }
 
   const presetRow = el('div', { class: 'form-row' })
@@ -361,6 +399,7 @@ export function detailDialog(ed: Editor): void {
     el('div', { class: 'form-section' }, 'Aperçu'),
     preview,
     info,
+    rangee,
   )
 
   const handle = openModal({

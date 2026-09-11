@@ -180,8 +180,70 @@ export class RampIndex {
     return best
   }
 
+  /**
+   * Deplace une couleur d'un cran, EN FABRIQUANT la teinte qui manque.
+   *
+   * ## Pourquoi `step` ne suffisait pas
+   *
+   * `step` reste dans les couleurs deja presentes : c'est le bon contrat pour
+   * ombrer un dessin qui a deja ses tons. Mais il BUTE aux extremites — une
+   * couleur seule dans sa rampe n'a ni voisin plus clair ni voisin plus
+   * sombre, et `step` la rend inchangee.
+   *
+   * C'est ce qui faisait que « Ajouter du détail » ne faisait rien du tout
+   * sur un dessin a plat : on pose une forme d'un seul vert, on demande de
+   * l'herbe, et la boite repond « Aucun pixel touche ». Or c'est exactement
+   * la qu'on veut du detail — un dessin qui a deja cinq verts n'en a pas
+   * besoin.
+   *
+   * La teinte fabriquee est DETERMINISTE et derivee de la couleur elle-meme :
+   * un meme vert donne toujours le meme vert clair, si bien que toute la
+   * surface se detaille avec deux ou trois teintes et non trente. C'est la
+   * meme loi que le repli de `step` pour une couleur inconnue — un cran de
+   * valeur, un souffle de saturation en moins.
+   */
+  stepOrInvent(color: RGBA, delta: number): RGBA {
+    const hit = this.map.get(color)
+    /*
+     * Une rampe qui a des voisins SUFFIT : on n'invente rien.
+     *
+     * Y compris a ses extremites. Le ton le plus sombre d'une rampe de quatre
+     * verts ne descend pas plus bas, et c'est juste : quatre verts disent
+     * deja tout ce qu'il faut, et en fabriquer un cinquieme etendrait la
+     * palette du sprite sans qu'on l'ait demande. Le premier jet inventait
+     * aux deux bouts — le banc l'a vu en comptant les couleurs etrangeres
+     * apparues dans un dessin qui avait pourtant sa rampe.
+     */
+    if (hit && hit.ramp.colors.length > 1) return this.step(color, delta)
+    // Rampe d'une seule couleur, ou couleur inconnue : le cran n'existe
+    // nulle part, il faut le faire.
+    return teinteVoisine(color, delta)
+  }
+
   /** Toutes les couleurs connues, tous rampes confondues. */
   allColors(): RGBA[] { return [...this.map.keys()] }
+}
+
+/**
+ * La teinte voisine d'une couleur : un cran plus claire, ou plus sombre.
+ *
+ * Elle garde la TEINTE et l'opacite, change la valeur, et baisse un peu la
+ * saturation en montant — c'est ce que fait un peintre, et c'est ce qui evite
+ * qu'un vert eclairci vire au fluo. Deterministe : la meme entree rend
+ * toujours la meme sortie, faute de quoi un aplat se couvrirait de trente
+ * teintes voisines au lieu de deux.
+ *
+ * Aux extremites, la couleur ne peut plus monter ni descendre : on rend alors
+ * la couleur telle quelle, et l'appelant sait que rien n'a bouge.
+ */
+export function teinteVoisine(color: RGBA, delta: number): RGBA {
+  const hsv = rgbaToHsv(color)
+  const v = Math.min(1, Math.max(0, hsv.v + delta * 0.14))
+  // Un noir pur n'a pas de teinte : l'eclaircir par la valeur seule donnerait
+  // du gris. On lui accorde un minimum de valeur pour que le cran existe.
+  const s = Math.min(1, Math.max(0, hsv.s - delta * 0.04))
+  const neuf = hsvToRgba({ ...hsv, v, s })
+  return neuf === color ? color : neuf
 }
 
 /** Masque des pixels dont la couleur appartient a la rampe donnee. */

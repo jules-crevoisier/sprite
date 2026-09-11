@@ -19,6 +19,14 @@ export interface DetailOptions {
   seed: number
   /** Restreint l'effet a ces pixels (masque de selection). */
   within?: Uint8Array | null
+  /**
+   * Recueille les teintes FABRIQUEES, quand la rampe n'en avait pas.
+   *
+   * L'appelant le fournit s'il veut les nommer — le dialogue les compte, et
+   * la palette du document les adopte. Absent : elles sont posees quand meme,
+   * simplement personne ne les recense.
+   */
+  nouvelles?: Set<RGBA> | null
 }
 
 export const DETAIL_MODES: { id: DetailMode; label: string; hint: string }[] = [
@@ -100,14 +108,18 @@ function valueNoise(x: number, y: number, scale: number, seed: number): number {
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
 
 /**
- * Ajoute du detail sur les pixels opaques d'un bitmap, en restant dans les
- * couleurs deja presentes : chaque pixel se decale d'un cran dans sa propre
- * rampe, donc le resultat reste coherent avec le dessin.
+ * Ajoute du detail sur les pixels opaques d'un bitmap.
+ *
+ * Chaque pixel se decale d'un cran dans sa propre rampe : le resultat reste
+ * coherent avec le dessin. Quand la rampe n'a pas de voisin dans la direction
+ * demandee — une forme peinte d'un seul ton, le cas ordinaire quand on VEUT
+ * du detail — la teinte est fabriquee a partir de la couleur elle-meme. Sans
+ * cela l'outil ne faisait rien du tout sur un aplat, et disait « aucun pixel
+ * touche » a quelqu'un qui regardait sa forme pleine.
  */
 export function addDetail(bitmap: Bitmap, index: RampIndex, options: DetailOptions): number {
-  const { mode, density, strength, seed, within } = options
+  const { mode, density, strength, seed, within, nouvelles } = options
   const w = bitmap.width, h = bitmap.height
-  const palette = index.allColors()
   const source = bitmap.clone()
   let touched = 0
 
@@ -119,8 +131,13 @@ export function addDetail(bitmap: Bitmap, index: RampIndex, options: DetailOptio
     if (within && !within[i]) return
     const before = bitmap.u32[i]
     if (getA(before) === 0) return
-    const next: RGBA = index.step(before, delta, palette)
-    if (next !== before) { bitmap.u32[i] = next; touched++ }
+    const next: RGBA = index.stepOrInvent(before, delta)
+    if (next === before) return
+    bitmap.u32[i] = next
+    touched++
+    // Une teinte que la rampe ne connaissait pas vient d'etre fabriquee :
+    // l'appelant voudra la dire, et la ranger dans la palette.
+    if (nouvelles && !index.find(next)) nouvelles.add(next)
   }
 
   // Boite englobante des pixels concernes, pour le mode volume.
@@ -232,17 +249,31 @@ export function applyPreset(
   seed: number,
   intensity: number,
   within?: Uint8Array | null,
+  nouvelles?: Set<RGBA> | null,
 ): number {
   const preset = DETAIL_PRESETS.find((p) => p.id === presetId)
   if (!preset) return 0
   let total = 0
+  /*
+   * L'index se REFAIT entre deux passes.
+   *
+   * La premiere passe d'un aplat fabrique une teinte claire et une sombre :
+   * le dessin a desormais une vraie rampe de trois tons. Garder l'index de
+   * depart ferait que la deuxieme passe ne les reconnaitrait pas — elle les
+   * prendrait pour des couleurs inconnues et en fabriquerait encore, puis
+   * encore : cinq teintes la ou trois suffisent. C'est le banc qui l'a
+   * compte.
+   */
+  let courant = index
   preset.steps.forEach((stepOptions, i) => {
-    total += addDetail(bitmap, index, {
+    if (i > 0) courant = RampIndex.fromBitmaps([bitmap])
+    total += addDetail(bitmap, courant, {
       mode: stepOptions.mode ?? 'speckle',
       density: Math.min(1, (stepOptions.density ?? 0.2) * intensity),
       strength: stepOptions.strength ?? 1,
       seed: seed + i * 977,
       within,
+      nouvelles,
     })
   })
   return total

@@ -1046,6 +1046,13 @@ input[type="range"]::-moz-range-thumb {
 .form-grid > label { color: var(--text-dim); font-size: 12px; }
 .form-grid .full { grid-column: 1 / -1; }
 .form-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Les teintes fabriquees par « Ajouter du detail » : on les MONTRE avant de
+   proposer de les ranger dans la palette. Une couleur apparue sans qu'on
+   sache d'ou elle vient est une couleur qu'on soupconne. */
+.pastille-teinte {
+  width: 18px; height: 18px; border-radius: 4px; display: inline-block;
+  border: 1px solid rgba(255, 255, 255, .18);
+}
 .form-note { color: var(--text-faint); font-size: 11px; line-height: 1.55; }
 .form-section {
   margin: 16px 0 9px;
