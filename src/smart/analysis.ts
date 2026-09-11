@@ -149,6 +149,48 @@ export class RampIndex {
     return new RampIndex(extractRamps(bitmaps))
   }
 
+  /**
+   * Les rampes DEVINEES dans le dessin, corrigees par celles qu'on a
+   * DECLAREES dans la palette.
+   *
+   * ## Pourquoi les deux, et dans cet ordre
+   *
+   * Deviner suffit la plupart du temps, et c'est ce qui permet a l'outil de
+   * marcher sur un dessin qu'on vient d'importer, sans rien preparer. Mais
+   * deviner range les couleurs par TEINTE : le vert d'un feuillage et le vert
+   * d'un pantalon tombent dans la meme famille, et l'ombrage de l'un se met a
+   * puiser dans l'autre.
+   *
+   * Un groupe declare fait donc foi : ses couleurs quittent la rampe devinee
+   * pour rejoindre la sienne. Ce qui n'est dans aucun groupe garde la rampe
+   * devinee — on ne punit pas celui qui n'a rien range.
+   */
+  static fromBitmapsAndGroups(
+    bitmaps: Bitmap[],
+    groupes: { nom: string; couleurs: RGBA[] }[],
+  ): RampIndex {
+    const devinees = extractRamps(bitmaps)
+    if (!groupes.length) return new RampIndex(devinees)
+    const declarees = new Set<RGBA>()
+    for (const g of groupes) for (const c of g.couleurs) declarees.add(c)
+    let id = 1000
+    const rampes: Ramp[] = groupes
+      .filter((g) => g.couleurs.length > 0)
+      .map((g) => ({
+        id: id++,
+        colors: [...g.couleurs].sort((a, b) => luminance(a) - luminance(b)),
+        pixels: 0,
+        hue: null,
+        label: g.nom,
+      }))
+    for (const r of devinees) {
+      // Ce qui reste : les couleurs devinees qu'aucun groupe ne reclame.
+      const restantes = r.colors.filter((c) => !declarees.has(c))
+      if (restantes.length) rampes.push({ ...r, colors: restantes })
+    }
+    return new RampIndex(rampes)
+  }
+
   rampOf(color: RGBA): Ramp | null { return this.map.get(color)?.ramp ?? null }
 
   /** Rampe d'une couleur et son rang dedans, de l'ombre a la lumiere. */

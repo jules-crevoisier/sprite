@@ -55,7 +55,14 @@ interface ProjectJson {
   pivot: { x: number; y: number }
   niveau?: { largeur: number; hauteur: number; tuile: number; cases: number[]; roles: string[] } | null
   frameDurations: number[]
-  palette: { name: string; colors: string[] }
+  /**
+   * La palette, et ses GROUPES.
+   *
+   * Les groupes sont facultatifs : un projet enregistre avant qu'ils existent
+   * n'en a pas, et cela ne doit pas etre une erreur de lecture. C'est la meme
+   * regle que le niveau quelques lignes plus bas.
+   */
+  palette: { name: string; colors: string[]; groupes?: { nom: string; couleurs: string[] }[] }
   tags: (Omit<Tag, 'color'> & { color: string })[]
   slices: (Omit<Slice, 'color'> & { color: string })[]
   layers: LayerJson[]
@@ -74,7 +81,13 @@ export function serializeSprite(sprite: Sprite): string {
     pivot: { ...sprite.pivot },
     niveau: sprite.niveau ? { ...sprite.niveau, cases: [...sprite.niveau.cases], roles: [...sprite.niveau.roles] } : null,
     frameDurations: [...sprite.frameDurations],
-    palette: { name: sprite.palette.name, colors: sprite.palette.toHexList() },
+    palette: {
+      name: sprite.palette.name,
+      colors: sprite.palette.toHexList(),
+      groupes: sprite.palette.groupes.map((g) => ({
+        nom: g.nom, couleurs: g.couleurs.map((c) => toHex(c)),
+      })),
+    },
     tags: sprite.tags.map((t) => ({ ...t, color: toHex(t.color) })),
     slices: sprite.slices.map((s) => ({ ...s, color: toHex(s.color) })),
     rig: {
@@ -130,6 +143,9 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
   if (data.format !== FORMAT) throw new Error('Format de projet inconnu')
 
   const palette = new Palette(data.palette?.name ?? 'Palette', (data.palette?.colors ?? []).map(fromHex))
+  for (const g of data.palette?.groupes ?? []) {
+    palette.creerGroupe(g.nom, (g.couleurs ?? []).map(fromHex))
+  }
   const sprite = new Sprite(data.width, data.height, palette)
   sprite.name = data.name
   sprite.grid = { ...sprite.grid, ...data.grid }

@@ -4,6 +4,7 @@ import {
   rgbaToHsv, hsvToRgba, TRANSPARENT,
 } from '../core/color'
 import { PALETTE_PRESETS, Palette, quantize } from '../core/palette'
+import { extractRamps } from '../smart/analysis'
 import type { Bitmap } from '../core/bitmap'
 import { el, clear, iconButton } from './dom'
 import { icon } from './icons'
@@ -33,6 +34,8 @@ export class ColorPanel {
   private primarySwatch = el('div', { class: 'swatch-big active', title: 'Couleur principale (clic gauche)' }, el('i'))
   private secondarySwatch = el('div', { class: 'swatch-big', title: 'Couleur secondaire (clic droit)' }, el('i'))
   private paletteGrid = el('div', { class: 'palette-grid' })
+  /** Les familles declarees : « herbe », « peau »… Voir `renderGroupes`. */
+  private groupesBox = el('div', { class: 'palette-groupes' })
   /** Mode « retoucher la palette » : le sprite suit le selecteur. */
   private paletteMode = false
   private editToggle = el('button', {
@@ -145,7 +148,7 @@ export class ColorPanel {
 
     ;(this as { pickerContent: HTMLElement }).pickerContent = picker
     ;(this as { paletteContent: HTMLElement }).paletteContent =
-      el('div', { class: 'panel-body tight' }, this.paletteName, this.paletteGrid)
+      el('div', { class: 'panel-body tight' }, this.paletteName, this.paletteGrid, this.groupesBox)
     ;(this as { paletteActions: HTMLElement[] }).paletteActions = [
       iconButton(icon('plus', 14), 'Ajouter la couleur courante', () => this.addCurrent(), { className: 'ghost sm icon-only' }),
       this.editToggle,
@@ -366,9 +369,159 @@ export class ColorPanel {
       // Le double-clic reste le raccourci : il pousse la couleur courante
       // dans l'entree visee, sans passer par le mode retouche.
       sw.addEventListener('dblclick', () => this.replaceColorAt(index))
+      /*
+       * Une pastille se GLISSE dans un groupe. C'est le geste le plus court
+       * pour ranger une famille : on prend le vert, on le lache sur
+       * « herbe ». Le bouton « + » de chaque groupe fait la meme chose pour
+       * qui prefere viser.
+       */
+      sw.draggable = true
+      sw.addEventListener('dragstart', (e) => {
+        e.dataTransfer?.setData('text/plain', String(color))
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'
+      })
       this.paletteGrid.appendChild(sw)
     })
     this.markPaletteSelection()
+    this.renderGroupes()
+  }
+
+  /**
+   * Les GROUPES de la palette : des familles nommees.
+   *
+   * Trente-deux pastilles alignees ne disent rien de ce qu'elles sont. Le
+   * pixel art travaille par familles — l'herbe, la peau, le metal — et chaque
+   * famille est une rampe qu'on parcourt de l'ombre a la lumiere. Les outils
+   * assistes s'en servent ensuite au lieu de deviner : voir
+   * `RampIndex.fromBitmapsAndGroups`.
+   */
+  private renderGroupes(): void {
+    const palette = this.ed.sprite.palette
+    clear(this.groupesBox)
+
+    const titre = el('div', { class: 'palette-groupes-tete' },
+      el('span', null, palette.groupes.length
+        ? `Groupes · ${palette.groupes.length}`
+        : 'Groupes'),
+      iconButton(icon('plus', 12), 'Nouveau groupe, avec la couleur courante',
+        () => this.creerGroupe(), { className: 'ghost sm icon-only' }),
+      iconButton(icon('magic-wand', 12), 'Deviner les familles du dessin et en faire des groupes',
+        () => this.devinerGroupes(), { className: 'ghost sm icon-only' }),
+    )
+    this.groupesBox.appendChild(titre)
+
+    if (!palette.groupes.length) {
+      this.groupesBox.appendChild(el('p', { class: 'palette-groupes-vide' },
+        'Rangez vos teintes par famille — « herbe », « peau » — et l’ombrage comme '
+        + 'le détail puiseront dedans au lieu de deviner. Glissez une pastille sur un groupe.'))
+      return
+    }
+
+    for (const g of palette.groupes) {
+      const ligne = el('div', { class: 'palette-groupe' })
+      const tete = el('div', { class: 'palette-groupe-tete' },
+        el('b', { title: 'Double-clic pour renommer' }, g.nom),
+        el('span', { class: 'palette-groupe-compte' }, `${g.couleurs.length}`),
+        iconButton(icon('plus', 12), 'Y ranger la couleur courante', () => {
+          this.ed.run(`Groupe ${g.nom}`, () => {
+            palette.ajouterAuGroupe(g.nom, this.currentColor())
+          })
+          this.renderPalette()
+        }, { className: 'ghost sm icon-only' }),
+        iconButton(icon('trash', 12), 'Défaire ce groupe — les couleurs restent dans la palette', () => {
+          this.ed.run(`Groupe ${g.nom} défait`, () => palette.retirerGroupe(g.nom))
+          this.renderPalette()
+        }, { className: 'ghost sm icon-only' }),
+      )
+      tete.querySelector('b')?.addEventListener('dblclick', () => {
+        const voulu = window.prompt('Nom du groupe', g.nom)
+        if (!voulu) return
+        this.ed.run('Renommer le groupe', () => {
+          if (!palette.renommerGroupe(g.nom, voulu)) showToast('Ce nom est déjà pris', 'error')
+        })
+        this.renderPalette()
+      })
+      const bande = el('div', { class: 'palette-groupe-bande' })
+      for (const c of g.couleurs) {
+        bande.appendChild(el('div', {
+          class: 'pal-swatch',
+          title: `${toHex(c)} · clic : prendre · clic droit : sortir du groupe`,
+          style: { background: toCss(c) },
+          onclick: () => { this.editing = 'primary'; this.setColor(c) },
+          oncontextmenu: (e: MouseEvent) => {
+            e.preventDefault()
+            this.ed.run(`Sortir de ${g.nom}`, () => palette.retirerDuGroupe(g.nom, c))
+            this.renderPalette()
+          },
+        }))
+      }
+      if (!g.couleurs.length) {
+        bande.appendChild(el('span', { class: 'palette-groupes-vide' },
+          'Vide — glissez une pastille ici.'))
+      }
+      // La LIGNE entiere recoit le glisser : viser une bande vide serait
+      // impossible.
+      ligne.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        ligne.classList.add('cible')
+      })
+      ligne.addEventListener('dragleave', () => ligne.classList.remove('cible'))
+      ligne.addEventListener('drop', (e) => {
+        e.preventDefault()
+        ligne.classList.remove('cible')
+        const brut = e.dataTransfer?.getData('text/plain') ?? ''
+        const c = Number(brut)
+        if (!brut || !Number.isFinite(c)) return
+        this.ed.run(`Groupe ${g.nom}`, () => palette.ajouterAuGroupe(g.nom, c))
+        this.renderPalette()
+      })
+      ligne.append(tete, bande)
+      this.groupesBox.appendChild(ligne)
+    }
+  }
+
+  private creerGroupe(): void {
+    const voulu = window.prompt('Nom du groupe — « herbe », « peau », « métal »…', 'herbe')
+    if (!voulu?.trim()) return
+    const couleur = this.currentColor()
+    this.ed.run('Nouveau groupe', () => {
+      this.ed.sprite.palette.creerGroupe(voulu, getA(couleur) === 0 ? [] : [couleur])
+    })
+    this.renderPalette()
+  }
+
+  /**
+   * Devine les familles du dessin et en fait des groupes.
+   *
+   * Le moteur sait deja regrouper les couleurs d'un sprite par teinte — c'est
+   * ce dont vivent l'ombrage et le detail. Le proposer d'un clic evite de
+   * ranger trente pastilles a la main pour obtenir ce que la machine avait
+   * deja devine ; ensuite, on corrige ce qu'elle a mal range.
+   */
+  private devinerGroupes(): void {
+    const bitmaps: Bitmap[] = []
+    for (const l of this.ed.sprite.layers) {
+      for (const c of l.cels) if (c?.bitmap) bitmaps.push(c.bitmap)
+    }
+    if (!bitmaps.length) { showToast('Rien à deviner : le dessin est vide', 'error'); return }
+    const rampes = extractRamps(bitmaps).filter((r) => r.colors.length > 1)
+    if (!rampes.length) {
+      showToast('Aucune famille trouvée : le dessin n’a pas assez de tons', 'error')
+      return
+    }
+    const palette = this.ed.sprite.palette
+    this.ed.run('Deviner les groupes', () => {
+      for (const r of rampes) {
+        // Le nom devine sert de depart : « verts », « peau », « gris ». On le
+        // renomme en deux clics, et c'est deja mieux que rien.
+        let nom = r.label
+        let n = 2
+        while (palette.groupes.some((g) => g.nom === nom)) nom = `${r.label} ${n++}`
+        palette.creerGroupe(nom, r.colors)
+      }
+    })
+    this.renderPalette()
+    showToast(`${rampes.length} groupe(s) devinés — renommez-les d’un double-clic`, 'success')
   }
 
   private markPaletteSelection(): void {

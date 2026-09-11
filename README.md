@@ -280,6 +280,30 @@ frames en indiquant la taille des cases, l'espacement et la marge.
 `.gpl` et `.hex` (Lospec), tri par luminosité ou par teinte. Remplacer une
 couleur de la palette la remplace dans tout le sprite.
 
+#### Les groupes : « herbe », « peau », « métal »
+
+Trente-deux pastilles alignées ne disent rien de ce qu'elles sont. Le pixel art
+travaille par **familles**, et chaque famille est une rampe qu'on parcourt de
+l'ombre à la lumière — c'est l'unité de travail réelle, et elle n'existait
+nulle part : ni à l'œil, ni pour les outils.
+
+Sous le nuancier, on crée un groupe, on lui donne un nom, et l'on y **glisse
+les pastilles**. Un groupe reste trié de l'ombre à la lumière, parce qu'un
+groupe *est* une rampe. Une couleur n'appartient qu'à un seul groupe : sinon
+les outils choisiraient au hasard lequel des deux fait foi. Défaire un groupe
+ne jette rien — on range, on ne supprime pas.
+
+**Deviner** remplit les groupes d'un clic : le moteur sait déjà regrouper les
+couleurs d'un sprite par teinte, autant le proposer plutôt que de faire ranger
+trente pastilles à la main. On corrige ensuite ce qu'il a mal rangé.
+
+Et surtout : **un groupe déclaré fait foi** pour l'ombrage et pour le détail.
+Deviner range par teinte — le vert d'un feuillage et le vert d'un pantalon
+tombent dans la même famille, et l'ombre de l'un se met à puiser dans l'autre.
+Ce qui n'est dans aucun groupe garde la famille devinée : on ne punit pas celui
+qui n'a rien rangé. Les groupes partent dans le fichier de projet ; un projet
+enregistré avant qu'ils existent se relit sans en avoir.
+
 ## Enregistrer son travail
 
 Trois rangements, du plus automatique au plus définitif.
@@ -454,10 +478,25 @@ Deux choix structurants :
 
 ```bash
 npm run typecheck
-npm run test          # les deux bancs
+npm run test          # tous les bancs
 npm run test:smoke    # nécessite Chromium : npx playwright install chromium
 npm run test:rotation # géométrie de la rotation par relief
+npm run test:detail   # ce que « Ajouter du détail » fait d'un aplat
+npm run test:palette  # les groupes de palette, et ce qu'ils imposent aux outils
 ```
+
+Le banc du **détail** garde les deux bouts d'une même règle : la teinte se
+fabrique quand la rampe n'en a pas — sans cela l'outil ne faisait rien du tout
+sur une forme peinte d'un seul ton, ce qui est justement le moment où l'on
+demande du détail — et elle ne se fabrique **pas** quand le dessin a déjà sa
+rampe. Le second point est le plus important : sans lui, l'outil se mettrait à
+inventer des couleurs dans un sprite qui avait sa palette, et la cohérence
+promise ne serait plus qu'un commentaire.
+
+Le banc des **groupes de palette** vérifie qu'une couleur n'est que dans un
+groupe, qu'un groupe reste trié de l'ombre à la lumière, qu'un groupe déclaré
+prime sur la famille devinée *pour ses couleurs seulement*, et que l'aller-retour
+par le fichier de projet les rend intacts.
 
 Le test de bout en bout ouvre l'application dans un vrai navigateur et vérifie
 le dessin, l'historique, les cinq dispositions de planche (aucun chevauchement,

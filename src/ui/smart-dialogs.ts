@@ -316,7 +316,12 @@ export function detailDialog(ed: Editor): void {
     ed.resetStroke()
     const target = ed.peekCel()
     if (!target) return
-    const index = RampIndex.fromBitmaps([target.bitmap])
+    /*
+     * Les GROUPES de la palette font foi quand il y en a : c'est vous qui
+     * avez dit quel vert va avec quel vert. Sans groupe, on devine comme
+     * avant — voir `fromBitmapsAndGroups`.
+     */
+    const index = RampIndex.fromBitmapsAndGroups([target.bitmap], ed.sprite.palette.groupes)
     const within = onlySelection && ed.selection.active ? ed.selection.mask : null
     /*
      * Les teintes FABRIQUEES sont recensees : un dessin a plat n'a pas de
@@ -465,7 +470,10 @@ export function shadeDialog(ed: Editor): void {
     ed.resetStroke()
     const target = ed.peekCel()
     if (!target) return
-    const ramps = extractRamps([target.bitmap])
+    // Les groupes declares priment ici aussi : l'ombrage puise dans la
+    // famille que vous avez nommee, pas dans celle qu'il devine.
+    const ramps = RampIndex.fromBitmapsAndGroups(
+      [target.bitmap], ed.sprite.palette.groupes).ramps
     const bilan = autoShade(target.bitmap, ramps, options)
     const lisses = lissage > 0 ? antiAlias(target.bitmap, ramps, lissage) : 0
     ed.events.emit('doc', undefined)

@@ -15,10 +15,38 @@ export const PALETTE_PRESETS: Record<string, string[]> = {
   'Journey 64': ['050914','110524','3b063a','691749','9c3247','d46453','f5a15d','ffcf8e','ff7a7d','ff417d','d61a88','94007a','680048','4b0038','2d0032','000000','5d275d','b13e53','ef7d57','ffcd75','a7f070','38b764','257179','29366f','3b5dc9','41a6f6','73eff7','f4f4f4','94b0c2','566c86','333c57','1a1c2c'],
 }
 
+/**
+ * Un GROUPE de palette : des couleurs qui vont ensemble, sous un nom.
+ *
+ * ## Pourquoi une palette a besoin de groupes
+ *
+ * Trente-deux pastilles alignees ne disent rien de ce qu'elles sont. Le
+ * pixel art travaille par FAMILLES — l'herbe, la peau, le metal, le ciel — et
+ * chaque famille est une rampe qu'on parcourt de l'ombre a la lumiere. C'est
+ * l'unite de travail reelle, et elle n'existait nulle part : ni a l'oeil, ni
+ * pour les outils.
+ *
+ * Un groupe est donc une rampe NOMMEE, et c'est deliberement la meme chose
+ * que ce que `extractRamps` devine dans un dessin. La difference tient en un
+ * mot : ici, c'est vous qui le dites. Les outils assistes — le detail,
+ * l'ombrage — s'en servent alors au lieu de deviner, et cessent de se
+ * tromper sur un vert de mousse qu'ils rangeaient avec le vert du pantalon.
+ */
+export interface GroupePalette {
+  nom: string
+  /** Les couleurs, de l'ombre a la lumiere. C'est l'ordre d'une rampe. */
+  couleurs: RGBA[]
+}
+
 /** Ensemble ordonne de couleurs, avec ou sans doublons (l'index compte). */
 export class Palette {
   name: string
   colors: RGBA[]
+  /**
+   * Les familles declarees. Vide : personne n'a encore rien range, et les
+   * outils devinent comme avant.
+   */
+  groupes: GroupePalette[] = []
 
   constructor(name: string, colors: RGBA[]) {
     this.name = name
@@ -40,7 +68,87 @@ export class Palette {
 
   get size(): number { return this.colors.length }
 
-  clone(): Palette { return new Palette(this.name, [...this.colors]) }
+  clone(): Palette {
+    const p = new Palette(this.name, [...this.colors])
+    p.groupes = this.groupes.map((g) => ({ nom: g.nom, couleurs: [...g.couleurs] }))
+    return p
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Les groupes                                                       */
+  /* ---------------------------------------------------------------- */
+
+  /** Le groupe qui contient cette couleur, ou null. */
+  groupeDe(c: RGBA): GroupePalette | null {
+    return this.groupes.find((g) => g.couleurs.includes(c)) ?? null
+  }
+
+  /**
+   * Cree un groupe, ou rend celui qui porte deja ce nom.
+   *
+   * Deux groupes du meme nom rendraient « lequel ? » sans reponse — la meme
+   * regle que partout ailleurs ici.
+   */
+  creerGroupe(nom: string, couleurs: RGBA[] = []): GroupePalette {
+    const propre = nom.trim() || 'groupe'
+    const deja = this.groupes.find((g) => g.nom === propre)
+    if (deja) {
+      for (const c of couleurs) this.ajouterAuGroupe(propre, c)
+      return deja
+    }
+    const g: GroupePalette = { nom: propre, couleurs: [] }
+    this.groupes.push(g)
+    for (const c of couleurs) this.ajouterAuGroupe(propre, c)
+    return g
+  }
+
+  /**
+   * Range une couleur dans un groupe.
+   *
+   * Une couleur n'appartient qu'a UN groupe : elle quitte l'ancien. Sans
+   * cette regle, un vert range a la fois dans « herbe » et dans « pantalon »
+   * laisserait les outils choisir au hasard lequel des deux fait foi.
+   *
+   * Et le groupe reste trie par luminance : un groupe EST une rampe, et une
+   * rampe se parcourt de l'ombre a la lumiere. Y ajouter une couleur au bout
+   * ferait une rampe ou le cran suivant serait parfois plus sombre.
+   */
+  ajouterAuGroupe(nom: string, c: RGBA): void {
+    const g = this.groupes.find((q) => q.nom === nom)
+    if (!g) return
+    for (const autre of this.groupes) {
+      if (autre === g) continue
+      const i = autre.couleurs.indexOf(c)
+      if (i >= 0) autre.couleurs.splice(i, 1)
+    }
+    if (!g.couleurs.includes(c)) g.couleurs.push(c)
+    g.couleurs.sort((a, b) => luminance(a) - luminance(b))
+    // La couleur entre aussi dans la palette : ranger une teinte qui n'y est
+    // pas ferait un groupe qui montre ce que la palette ignore.
+    this.add(c)
+  }
+
+  retirerDuGroupe(nom: string, c: RGBA): void {
+    const g = this.groupes.find((q) => q.nom === nom)
+    if (!g) return
+    const i = g.couleurs.indexOf(c)
+    if (i >= 0) g.couleurs.splice(i, 1)
+  }
+
+  renommerGroupe(nom: string, neuf: string): boolean {
+    const propre = neuf.trim()
+    if (!propre || this.groupes.some((g) => g.nom === propre)) return false
+    const g = this.groupes.find((q) => q.nom === nom)
+    if (!g) return false
+    g.nom = propre
+    return true
+  }
+
+  /** Defait un groupe. Les couleurs restent dans la palette : on range, on ne jette pas. */
+  retirerGroupe(nom: string): void {
+    const i = this.groupes.findIndex((g) => g.nom === nom)
+    if (i >= 0) this.groupes.splice(i, 1)
+  }
 
   indexOf(c: RGBA): number { return this.colors.indexOf(c) }
 
