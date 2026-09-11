@@ -121,6 +121,25 @@ déplacement, main et loupe.
   réaligne le résultat sur la palette du sprite.
 - 19 modes de fusion de calque, opacité par calque et par case.
 
+#### Le calque de référence
+
+**Calque → Calque de référence…** pose une image sous le dessin pour la
+décalquer : une photo, un croquis scanné, une planche trouvée ailleurs. Elle
+est **ramenée dans le cadre**, proportions gardées et centrée — collée au coin
+comme le ferait un import ordinaire, on n'en verrait qu'un morceau de
+trente-deux pixels. Elle arrive à demi transparente, tout en bas de la pile :
+on dessine par-dessus.
+
+Deux choses la distinguent d'un calque ordinaire, et les deux sont vérifiées au
+banc : elle **ne se peint pas** — le refus vit dans la porte par laquelle tous
+les outils passent, pas dans chacun d'eux — et elle **ne s'exporte pas**, ni
+dans le PNG, ni dans la planche, ni dans le JSON. La ligne du panneau le dit
+(`réf.`), sinon on cherche le cadenas qui bloque le crayon.
+
+C'est le seul endroit de l'éditeur où l'interpolation est permise : une
+référence n'est pas du dessin, et une photo réduite au plus proche voisin
+devient illisible.
+
 ### Animer
 
 - Timeline calques × frames avec vignettes, durée par frame, réordonnancement.
@@ -481,8 +500,9 @@ npm run typecheck
 npm run test          # tous les bancs
 npm run test:smoke    # nécessite Chromium : npx playwright install chromium
 npm run test:rotation # géométrie de la rotation par relief
-npm run test:detail   # ce que « Ajouter du détail » fait d'un aplat
-npm run test:palette  # les groupes de palette, et ce qu'ils imposent aux outils
+npm run test:detail    # ce que « Ajouter du détail » fait d'un aplat
+npm run test:palette   # les groupes de palette, et ce qu'ils imposent aux outils
+npm run test:reference # le calque de référence : cadré, non peint, non exporté
 ```
 
 Le banc du **détail** garde les deux bouts d'une même règle : la teinte se

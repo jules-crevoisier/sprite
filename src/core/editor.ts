@@ -209,6 +209,16 @@ export class Editor {
   currentCel(): Cel | null {
     const layer = this.layer
     if (!layer || layer.locked || !layer.visible) return null
+    /*
+     * Un calque de REFERENCE ne se peint pas.
+     *
+     * C'est une image qu'on garde sous les yeux pour decalquer : elle ne part
+     * pas dans l'export, et peindre dedans reviendrait a dessiner dans
+     * quelque chose que personne ne verra jamais. Le refus vit ici, a la
+     * porte par laquelle tous les outils passent, et non dans chacun d'eux —
+     * le prochain outil ajoute n'aurait pas pense a le poser.
+     */
+    if (layer.reference) return null
     return this.sprite.ensureCel(this.activeLayer, this.activeFrame)
   }
 
@@ -240,7 +250,11 @@ export class Editor {
   beginStroke(label: string): Cel | null {
     const cel = this.currentCel()
     if (!cel) {
-      this.toast('Calque verrouille ou masque', 'error')
+      // Dire LAQUELLE des trois raisons : « calque verrouille ou masque »
+      // devant une reference envoie chercher un cadenas qui n'existe pas.
+      this.toast(this.layer?.reference
+        ? 'Calque de référence : on dessine par-dessus, pas dedans'
+        : 'Calque verrouille ou masque', 'error')
       return null
     }
     this.stroke = { label, cel, before: cel.bitmap.clone() }

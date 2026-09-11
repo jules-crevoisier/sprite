@@ -50,7 +50,7 @@ const MENUS: { label: string; items: string[] }[] = [
   {
     label: 'Calque',
     items: [
-      'layer.new', 'layer.duplicate', 'layer.delete', '---',
+      'layer.new', 'layer.duplicate', 'layer.delete', 'layer.reference', '---',
       'layer.fx-ombre-portee', 'layer.fx-ombre-interne', 'layer.fx-lueur-externe',
       'layer.fx-lueur-interne', 'layer.fx-contour', 'layer.fx-biseau',
       'layer.fx-teinte', 'layer.fx-degrade',

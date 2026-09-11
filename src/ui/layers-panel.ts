@@ -93,6 +93,19 @@ export class LayersPanel {
         thumb,
         el('span', { class: 'lname', ondblclick: () => this.rename(index) }, layer.name),
       )
+      /*
+       * La marque « réf. » : un calque de reference ne se peint pas et ne
+       * s'exporte pas. Sans marque, on cherche pourquoi le crayon refuse
+       * d'ecrire — et la reponse n'est ni le cadenas ni l'oeil, les deux
+       * seules choses que la ligne montrait.
+       */
+      if (layer.reference) {
+        row.classList.add('reference')
+        row.appendChild(el('span', {
+          class: 'layer-ref',
+          title: 'Calque de référence : on dessine par-dessus, et il ne part pas dans l’export',
+        }, 'réf.'))
+      }
       this.list.appendChild(row)
     })
 

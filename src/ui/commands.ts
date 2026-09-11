@@ -545,6 +545,11 @@ export function buildCommands(app: App): Command[] {
     },
   })
   add({
+    // Une image a decalquer : elle ne se peint pas et ne s'exporte pas.
+    id: 'layer.reference', label: 'Calque de référence…', group: 'Calque', icon: 'upload',
+    run: () => { void dlg.referenceLayerDialog(ed) },
+  })
+  add({
     id: 'layer.duplicate', label: 'Dupliquer le calque', group: 'Calque', keys: 'Ctrl+J', icon: 'duplicate',
     run: () => {
       ed.run('Dupliquer le calque', () => { ed.sprite.duplicateLayer(ed.activeLayer) })

@@ -1046,6 +1046,15 @@ input[type="range"]::-moz-range-thumb {
 .form-grid > label { color: var(--text-dim); font-size: 12px; }
 .form-grid .full { grid-column: 1 / -1; }
 .form-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Un calque de REFERENCE : une image qu'on decalque. Il ne se peint pas et ne
+   s'exporte pas — la ligne le dit, sinon on cherche le cadenas qui bloque. */
+.layer-ref {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--text-faint); border: 1px solid var(--line, rgba(255,255,255,.14));
+  border-radius: 4px; padding: 0 4px; flex: none;
+}
+.layer-row.reference .lname { font-style: italic; color: var(--text-faint); }
+
 /* Les GROUPES de palette : des familles nommees, sous le nuancier.
    Trente-deux pastilles alignees ne disent rien de ce qu'elles sont ; une
    famille nommee dit « ces quatre verts vont ensemble », et les outils

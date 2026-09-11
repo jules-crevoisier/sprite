@@ -7,7 +7,7 @@ import {
   DEFAULT_SHEET_OPTIONS, buildExport, exportPackage, exportSheetPng,
   type ExportRequest, type SheetLayout,
 } from '../export'
-import { spriteFromImage, layerFromImage } from '../io/import'
+import { spriteFromImage, layerFromImage, referenceLayerFromImage } from '../io/import'
 import { download, downloadText, loadImageBitmap, pickFiles, safeName } from '../export/files'
 import { FORMATS_PALETTE, ecrirePalette } from '../io/formats/palettes'
 import { el, checkbox, numberInput, select, slider } from './dom'
@@ -330,6 +330,29 @@ export function outlineDialog(ed: Editor): void {
 /* ------------------------------------------------------------------ */
 /* Import d'image                                                      */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Ajoute une image comme CALQUE DE RÉFÉRENCE : on décalque par-dessus.
+ *
+ * Le calque part tout en bas de la pile, a demi transparent, et il est marque
+ * « reference » : les outils refusent d'y peindre, et l'export l'ignore. C'est
+ * la difference entre une reference et un calque ordinaire — celui-ci part
+ * dans le PNG final, celle-la jamais.
+ */
+export async function referenceLayerDialog(ed: Editor): Promise<void> {
+  const files = await pickFiles('image/png,image/jpeg,image/gif,image/webp,image/bmp')
+  if (!files.length) return
+  const img = await loadImageBitmap(files[0])
+  const nom = files[0].name.replace(/\.[^.]+$/, '')
+  ed.run('Calque de référence', () => {
+    // Tout en BAS : on dessine par-dessus une reference, pas dessous.
+    ed.sprite.layers.unshift(referenceLayerFromImage(ed.sprite, img, nom))
+  })
+  // Le calque actif a glisse d'un cran : sans ce decalage, le trait suivant
+  // irait dans le calque d'a cote — celui qu'on croyait quitter.
+  ed.setActiveLayer(Math.min(ed.sprite.layers.length - 1, ed.activeLayer + 1))
+  showToast(`« ${nom} » posée en référence — on dessine par-dessus`, 'success')
+}
 
 export async function importImageDialog(ed: Editor, asLayer: boolean): Promise<void> {
   const files = await pickFiles('image/png,image/jpeg,image/gif,image/webp,image/bmp')

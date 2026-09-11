@@ -82,6 +82,59 @@ export function spriteFromImage(
 }
 
 /** Ajoute une image comme nouveau calque du sprite courant. */
+/**
+ * Un CALQUE DE RÉFÉRENCE : une image qu'on garde sous les yeux pour décalquer.
+ *
+ * ## Pourquoi elle est mise a l'echelle, et pas collee telle quelle
+ *
+ * Une reference est presque toujours plus grande que le sprite — une photo,
+ * un croquis scanne, un dessin trouve ailleurs. Collee au coin superieur
+ * gauche comme le fait l'import ordinaire, on n'en voit qu'un morceau de
+ * trente-deux pixels : autant dire rien. Elle est donc RAMENEE dans le cadre,
+ * proportions gardees, et centree.
+ *
+ * ## Pourquoi le lissage est autorise ICI, et seulement ici
+ *
+ * Tout le reste de l'editeur refuse l'interpolation — c'est du pixel art, une
+ * couleur inventee entre deux pixels est une faute. Une reference, elle, n'est
+ * pas du dessin : elle ne s'exporte pas, elle ne se peint pas, elle sert a
+ * l'oeil. Une photo reduite au plus proche voisin devient illisible ; reduite
+ * en douceur, elle garde ses formes, et c'est tout ce qu'on lui demande.
+ */
+export function referenceLayerFromImage(
+  sprite: Sprite, img: HTMLImageElement, name: string,
+): Layer {
+  const l = Math.max(1, img.naturalWidth)
+  const h = Math.max(1, img.naturalHeight)
+  const facteur = Math.min(sprite.width / l, sprite.height / h)
+  const dl = Math.max(1, Math.round(l * facteur))
+  const dh = Math.max(1, Math.round(h * facteur))
+  const canevas = document.createElement('canvas')
+  canevas.width = sprite.width
+  canevas.height = sprite.height
+  const ctx = canevas.getContext('2d')
+  if (ctx) {
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(img, Math.floor((sprite.width - dl) / 2), Math.floor((sprite.height - dh) / 2), dl, dh)
+  }
+  const bitmap = Bitmap.fromImageData(
+    ctx?.getImageData(0, 0, sprite.width, sprite.height)
+      ?? new ImageData(sprite.width, sprite.height),
+  )
+  const layer = new Layer(name, sprite.frameCount)
+  layer.reference = true
+  // A demi transparente : on dessine PAR-DESSUS, et une reference opaque
+  // cacherait le trait qu'on est en train de poser.
+  layer.opacity = 128
+  // La meme image sur toutes les frames : une reference qui disparaitrait a
+  // la frame deux ne servirait a rien pour animer.
+  for (let f = 0; f < sprite.frameCount; f++) {
+    layer.cels[f] = { bitmap: f === 0 ? bitmap : bitmap.clone(), opacity: 255 }
+  }
+  return layer
+}
+
 export function layerFromImage(sprite: Sprite, img: HTMLImageElement, name: string): Layer {
   const bm = imageToBitmap(img)
   const layer = new Layer(name, sprite.frameCount)
