@@ -1,5 +1,5 @@
 import type { Editor } from '../core/editor'
-import { beginMove, applyMove, endMove, toolByShortcut } from '../tools'
+import { beginMove, applyMove, endMove, toolByShortcut, toolById } from '../tools'
 import type { Command } from './commands'
 
 /** Combinaison canonique : modificateurs tries puis touche en minuscule. */
@@ -114,6 +114,21 @@ export function installShortcuts(host: ShortcutHost, commands: () => Command[]):
 
   const onKey = (e: KeyboardEvent) => {
     if (isTyping(e.target)) return
+
+    /*
+     * L'OUTIL ACTIF PASSE AVANT LES RACCOURCIS.
+     *
+     * Toutes les lettres sont prises : « b » est le crayon, « e » la gomme.
+     * Un outil qui recoit du texte doit donc pouvoir retenir la frappe, sans
+     * quoi ecrire « bonjour » change sept fois d'outil au lieu d'ecrire un
+     * mot. Il ne retient que ce qu'il consomme reellement : Echap et Ctrl+Z
+     * lui echappent, et continuent de faire ce qu'ils font partout.
+     */
+    if (toolById(ed.settings.tool).clavier?.(ed, e)) {
+      e.preventDefault()
+      return
+    }
+
     const combo = comboOf(e)
 
     // Echap annule le geste en cours ; a defaut il deselectionne.

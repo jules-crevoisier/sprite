@@ -324,8 +324,11 @@ export class App {
 
   setTool(id: ToolId): void {
     if (this.ed.settings.tool === id) return
-    // On annule proprement une forme ou une courbe encore en cours.
-    toolById(this.ed.settings.tool).cancel?.(this.ed)
+    // On annule proprement une forme ou une courbe encore en cours ; un outil
+    // qui tient quelque chose de non grave le pose au lieu de le perdre.
+    const sortant = toolById(this.ed.settings.tool)
+    if (sortant.quitter) sortant.quitter(this.ed)
+    else sortant.cancel?.(this.ed)
     this.ed.updateSettings({ tool: id })
     this.renderTools()
     this.renderOptions()

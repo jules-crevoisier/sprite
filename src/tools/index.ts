@@ -5,6 +5,7 @@ import {
   sprayTool, blurTool, shadingTool, gradientTool,
 } from './draw-tools'
 import { lineTool, rectangleTool, ellipseTool, contourTool, curveTool } from './shape-tools'
+import { textTool } from './text-tool'
 import {
   selectRectTool, selectEllipseTool, lassoTool, magicWandTool,
   moveTool, handTool, zoomTool,
@@ -13,6 +14,7 @@ import { rigBoneTool, rigPoseTool, rigWeightTool } from './rig-tool'
 
 export * from './types'
 export { beginMove, applyMove, endMove } from './select-tools'
+export { graverTexte, texteEnAttente, boiteTexte, reglagesTexte } from './text-tool'
 export {
   rigState, refreshPose, seamSettings, bonePoints, syncRestFromCanvas,
   invalidateBake, activePart, writePoseToFrame,
@@ -21,7 +23,7 @@ export {
 /** Outils du mode dessin, dans l'ordre de la barre d'outils. */
 export const DRAW_TOOLS: Tool[] = [
   pencilTool, eraserTool, bucketTool, eyedropperTool,
-  lineTool, curveTool, rectangleTool, ellipseTool, contourTool,
+  lineTool, curveTool, rectangleTool, ellipseTool, contourTool, textTool,
   gradientTool, shadingTool, blurTool, sprayTool,
   selectRectTool, selectEllipseTool, lassoTool, magicWandTool, moveTool,
   handTool, zoomTool,

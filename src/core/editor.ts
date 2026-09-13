@@ -10,7 +10,7 @@ import type { EasingId } from '../smart/easing'
 
 export type ToolId =
   | 'pencil' | 'eraser' | 'bucket' | 'eyedropper'
-  | 'line' | 'rectangle' | 'ellipse' | 'contour' | 'curve'
+  | 'line' | 'rectangle' | 'ellipse' | 'contour' | 'curve' | 'text'
   | 'select-rect' | 'select-ellipse' | 'lasso' | 'magic-wand'
   | 'move' | 'hand' | 'zoom'
   | 'shading' | 'blur' | 'spray' | 'gradient'
@@ -84,6 +84,15 @@ export interface EditorEvents {
   documents: void
   /** Le mode de travail a change. */
   mode: EditorMode
+  /**
+   * L'apercu d'un outil a bouge : la vue doit se redessiner, rien d'autre.
+   *
+   * `doc` recomposerait les calques et relancerait la sauvegarde automatique
+   * a chaque lettre tapee, pour des pixels qui ne sont pas encore dans le
+   * document. `cursor` reconstruirait la timeline et le panneau des calques.
+   * Un texte se tape vite : il lui faut l'evenement le moins cher.
+   */
+  apercu: void
 }
 
 interface StrokeState {

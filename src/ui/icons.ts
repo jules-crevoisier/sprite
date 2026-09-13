@@ -18,7 +18,7 @@ import {
   PanelBottom, PanelRight, PanelLeft, Columns2, Sparkles, Bone, PersonStanding,
   Shuffle, SlidersHorizontal, Image as ImageIcon, Package, Scissors,
   ClipboardPaste, Leaf, Dices, RefreshCw, Maximize2, Group, ZoomOut, Scan,
-  FolderTree,
+  FolderTree, Type,
   FolderOpen, HardDriveDownload,
   Swords,
 } from 'lucide'
@@ -38,6 +38,7 @@ const SOURCE: Record<string, IconNode> = {
   ellipse: Circle as IconNode,
   contour: PenTool as IconNode,
   curve: Spline as IconNode,
+  text: Type as IconNode,
   gradient: Blend as IconNode,
   shading: Contrast as IconNode,
   blur: Droplet as IconNode,

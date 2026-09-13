@@ -103,6 +103,7 @@ export class Viewport {
     editor.events.on('selection', () => this.invalidate())
     editor.events.on('settings', () => this.invalidate())
     editor.events.on('cursor', () => this.invalidate())
+    editor.events.on('apercu', () => this.invalidate())
     editor.events.on('reload', () => { this.fit(); this.invalidate() })
 
     const loop = () => {
@@ -719,6 +720,10 @@ export class Viewport {
     const ed = this.ed
     const tool = toolById(ed.settings.tool)
     if (tool.group === 'nav' || tool.group === 'select') return
+    // L'outil Texte ne pose pas une brosse mais une ligne de texte : montrer
+    // une pastille de vingt pixels de large annoncerait un geste qui n'aura
+    // pas lieu. Son propre apercu dit deja ou le texte commencera.
+    if (tool.id === 'text') return
     const z = ed.view.zoom
     if (z < 2) return
     const px = Math.floor(c.x), py = Math.floor(c.y)

@@ -48,13 +48,30 @@ export interface Tool {
   hover?(ed: Editor, p: PointerInfo): void
   /** Annulation au clavier (Echap). */
   cancel?(ed: Editor): void
+  /**
+   * On quitte cet outil pour un autre.
+   *
+   * Ce n'est PAS `cancel` : un outil qui tient quelque chose d'invisible dans
+   * le document — un texte tape mais pas encore grave — doit pouvoir le poser
+   * plutot que le perdre. Echap veut dire « laisse tomber », changer d'outil
+   * ne veut pas dire cela.
+   */
+  quitter?(ed: Editor): void
+  /**
+   * La frappe, avant les raccourcis globaux. Rend true si elle est consommee.
+   *
+   * Sans cette prise, un outil qui recoit du texte est inutilisable : chaque
+   * lettre est deja le raccourci d'un autre outil, et taper « bonjour »
+   * changerait sept fois d'outil.
+   */
+  clavier?(ed: Editor, e: KeyboardEvent): boolean
   overlay?(ed: Editor, o: OverlayContext, p: PointerInfo | null): void
 }
 
 export type ToolOption =
   | 'brush' | 'opacity' | 'paintMode' | 'pixelPerfect' | 'dither'
   | 'tolerance' | 'contiguous' | 'fillShapes' | 'strength' | 'sprayDensity'
-  | 'selectionMode' | 'gradientDither' | 'weightBrush' | 'seam'
+  | 'selectionMode' | 'gradientDither' | 'weightBrush' | 'seam' | 'texte'
 
 /** Couleur active selon le bouton de la souris (droit = couleur secondaire). */
 export function activeColor(ed: Editor, p: PointerInfo): RGBA {

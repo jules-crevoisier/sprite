@@ -104,10 +104,10 @@ bucket, sans configuration.
 
 ### Dessiner
 
-20 outils : crayon, gomme, pot de peinture, pipette, ligne, courbe de Bézier,
-rectangle, ellipse, contour libre, dégradé, ombrage, flou, aérographe, les
-quatre modes de sélection (rectangle, ellipse, lasso, baguette magique),
-déplacement, main et loupe.
+21 outils : crayon, gomme, pot de peinture, pipette, ligne, courbe de Bézier,
+rectangle, ellipse, contour libre, **texte**, dégradé, ombrage, flou,
+aérographe, les quatre modes de sélection (rectangle, ellipse, lasso, baguette
+magique), déplacement, main et loupe.
 
 - **Pixel perfect** : le filtre anti-coins d'Aseprite, actif par défaut sur les
   traits de 1 px.
@@ -120,6 +120,41 @@ déplacement, main et loupe.
 - **Ombrage** : éclaircit au clic gauche, assombrit au clic droit, et
   réaligne le résultat sur la palette du sprite.
 - 19 modes de fusion de calque, opacité par calque et par case.
+
+#### Le texte — <kbd>T</kbd>
+
+Deux fontes **dessinées pixel par pixel**, jamais une police du système. Une
+police du système donne du texte anticrénelé — des gris sur les bords — dans un
+dessin où chaque pixel est une couleur choisie ; et elle n'est pas la même
+partout, donc un texte cadré au pixel près chez soi déborde chez quelqu'un
+d'autre.
+
+- **5×7** : deux casses, chiffres, ponctuation, et **tous les accents
+  français**, capitales comprises. C'est la fonte par défaut.
+- **3×5** : capitales seulement, pour les jauges et les étiquettes. Le `M` et
+  le `W` y prennent **cinq** colonnes, le `I` et le `1` une seule : en trois
+  colonnes, un `M` n'est qu'un `H` dont la barre a changé de rangée, et
+  « MAMAN » se lit « HAHAN » — constaté à l'œil avant d'élargir la lettre.
+  Les accents y **tombent** (`É` → `E`) : cinq rangées ne laissent pas la
+  place d'un accent détaché, et un accent collé à la lettre fait une tache
+  qu'on ne relit pas.
+
+On clique, on tape, on relit — le texte reste **en attente** au-dessus du
+dessin — puis <kbd>Ctrl</kbd>+<kbd>Entrée</kbd> le grave en **un seul geste**
+d'historique. <kbd>Échap</kbd> l'abandonne ; <kbd>Entrée</kbd> saute une ligne ;
+on tire la boîte pour la déplacer, et les flèches déplacent le curseur de
+frappe. Changer d'outil **grave** au lieu d'abandonner : le texte en attente
+n'existe nulle part ailleurs, et le perdre parce qu'on a pris la pipette pour
+vérifier une couleur serait une perte sèche.
+
+L'échelle (×1 à ×8) **duplique** les pixels — le seul agrandissement permis
+ici. Ce qui déborde de la toile s'affiche en **fantôme** : la gravure s'arrête
+au cadre, et sans ce signal on voit un titre entier pour n'obtenir que trois
+lettres.
+
+Un caractère absent de la fonte sort en **rectangle plein**. Le rendre en blanc
+se lirait presque normalement, et l'on garderait son dessin sans voir que la
+moitié d'un mot manque.
 
 #### Les images de référence
 
@@ -453,7 +488,7 @@ courante est restaurée au chargement suivant.
 
 | | |
 |---|---|
-| Outils | `B` crayon · `E` gomme · `G` pot · `I` pipette · `L` ligne · `U` rectangle · `Maj+U` ellipse · `Q` contour · `R` dégradé · `D` ombrage · `M` sélection · `W` baguette · `V` déplacer · `Z` loupe |
+| Outils | `B` crayon · `E` gomme · `G` pot · `I` pipette · `L` ligne · `U` rectangle · `Maj+U` ellipse · `Q` contour · `T` texte · `R` dégradé · `D` ombrage · `M` sélection · `W` baguette · `V` déplacer · `Z` loupe |
 | Pinceau | `[` `]` taille · **Alt + molette** sur la toile · le curseur de la barre d'options se tire jusqu'au bout |
 | Aperçus des dialogues | molette : zoom · glisser : déplacer · double-clic : ajuster |
 | Souris | clic droit = couleur secondaire · `Alt`+clic = pipette · `Espace`+glisser = déplacer la vue · molette = zoom |
@@ -463,6 +498,7 @@ courante est restaurée au chargement suivant.
 | Assistant | `Maj+K` mode squelette · `Ctrl+Maj+V` variantes · `Ctrl+Maj+D` détail |
 | Mode squelette | `K` créer des os · `J` poser · `N` pondérer |
 | Aide | `Maj+F1` tutoriels · `F1` raccourcis · `Ctrl+K` commandes |
+| Texte | `T` outil · `Entrée` nouvelle ligne · `Ctrl+Entrée` grave · `Échap` abandonne · flèches : curseur de frappe |
 | Divers | `X` permute les couleurs · `[` `]` taille de brosse · `Échap` annule le geste puis désélectionne |
 
 ## Sous le capot
@@ -510,6 +546,7 @@ npm run test:detail    # ce que « Ajouter du détail » fait d'un aplat
 npm run test:palette   # les groupes de palette, et ce qu'ils imposent aux outils
 npm run test:reference # les images de référence : poignées, proportions, export
 npm run test:zoom      # la molette, sur un grand sprite
+npm run test:texte     # les fontes pixel, et la frappe qui ne pilote pas l'éditeur
 ```
 
 Le banc du **zoom** travaille sur un sprite de 512 — pas par goût des grands
@@ -525,6 +562,17 @@ demande du détail — et elle ne se fabrique **pas** quand le dessin a déjà s
 rampe. Le second point est le plus important : sans lui, l'outil se mettrait à
 inventer des couleurs dans un sprite qui avait sa palette, et la cohérence
 promise ne serait plus qu'un commentaire.
+
+Le banc du **texte** tape un mot dans la vraie fenêtre. C'est là qu'est le
+piège : dans cet éditeur chaque lettre est déjà le raccourci d'un outil — `b`
+le crayon, `e` la gomme, `j` la pose du squelette — donc un outil de texte qui
+ne retient pas la frappe est pire qu'absent, « bonjour » pilote l'éditeur au
+lieu de s'écrire. Il vérifie aussi ce qu'un programme peut juger d'une fonte,
+faute de pouvoir dire qu'un `M` est laid : qu'aucune lettre, aucun chiffre,
+aucun signe ne manque, que tous les glyphes ont la hauteur de la fonte, que
+rien ne sort de la boîte annoncée, et qu'un `×3` donne exactement neuf fois
+plus de pixels — un seul pixel interpolé et le texte n'appartient plus au
+dessin.
 
 Le banc des **groupes de palette** vérifie qu'une couleur n'est que dans un
 groupe, qu'un groupe reste trié de l'ombre à la lumière, qu'un groupe déclaré

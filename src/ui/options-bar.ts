@@ -2,7 +2,8 @@ import type { Editor } from '../core/editor'
 import { getA, toCss } from '../core/color'
 import { DITHER_PATTERNS, brushOffsets, dither, type BrushShape } from '../tools/algorithms'
 import type { PaintMode } from '../tools/painter'
-import { rigState, refreshPose, toolById } from '../tools'
+import { rigState, refreshPose, toolById, reglagesTexte } from '../tools'
+import { FONTES } from '../core/fontes'
 import { el, clear, slider, checkbox, select, segmented } from './dom'
 import { icon } from './icons'
 
@@ -244,6 +245,33 @@ export function renderOptionsBar(container: HTMLElement, ed: Editor, refresh: ()
     add(el('div', { class: 'opt' },
       checkbox('Tramage du dégradé', s.gradientDither, (v) => ed.updateSettings({ gradientDither: v })),
     ))
+  }
+
+  if (opts.has('texte')) {
+    // Le changement de fonte ou d'echelle doit se voir TOUT DE SUITE sur le
+    // texte deja tape : c'est en le voyant qu'on choisit, pas en lisant le
+    // nom de la fonte dans une liste.
+    const revoir = () => { ed.events.emit('apercu', undefined) }
+    add(el('div', { class: 'opt' },
+      el('label', null, 'Fonte'),
+      select(FONTES.map((f) => ({ value: f.id, label: f.nom })), reglagesTexte.fonte,
+        (v) => { reglagesTexte.fonte = v; revoir(); refresh() }),
+    ))
+    add(el('div', { class: 'opt' },
+      el('label', null, 'Échelle'),
+      slider(1, 8, reglagesTexte.echelle, 1,
+        (v) => { reglagesTexte.echelle = v; revoir() },
+        (v) => `×${v}`),
+    ))
+    add(el('div', { class: 'opt' },
+      el('label', null, 'Aligné'),
+      select([
+        { value: 'gauche' as const, label: 'Gauche' },
+        { value: 'centre' as const, label: 'Centre' },
+        { value: 'droite' as const, label: 'Droite' },
+      ], reglagesTexte.alignement, (v) => { reglagesTexte.alignement = v; revoir(); refresh() }),
+    ))
+    add(el('div', { class: 'opt-note' }, 'Ctrl+Entrée grave · Échap abandonne'))
   }
 
   if (opts.has('tolerance')) {

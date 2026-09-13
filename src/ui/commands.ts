@@ -1,6 +1,7 @@
 import type { App } from './app'
 import * as ops from '../core/operations'
 import { normaliserTouches } from './shortcuts'
+import { TOOL_LIST } from '../tools'
 import * as dlg from './dialogs'
 import {
   variantsDialog, detailDialog, shadeDialog, rampDialog, rotationDialog, comblerDialog,
@@ -843,16 +844,13 @@ function shortcutGroups(commands: Command[]): { title: string; items: [string, s
     groups.set(c.group, arr)
   }
   const out = [...groups.entries()].map(([title, items]) => ({ title, items }))
+  // La liste se DEDUIT des outils. Ecrite a la main, elle divergeait des le
+  // premier outil ajoute — et une fenetre d'aide qui oublie un outil est pire
+  // qu'une fenetre d'aide absente : on cherche le raccourci, on ne le trouve
+  // pas, on conclut qu'il n'y en a pas.
   out.push({
     title: 'Outils',
-    items: [
-      ['Crayon', 'B'], ['Gomme', 'E'], ['Pot de peinture', 'G'], ['Pipette', 'I'],
-      ['Ligne', 'L'], ['Rectangle', 'U'], ['Ellipse', 'Maj+U'], ['Contour', 'Q'],
-      ['Courbe', 'Maj+C'], ['Dégradé', 'R'], ['Ombrage', 'D'], ['Flou', 'Y'],
-      ['Aerographe', 'A'], ['Sélection rect.', 'M'], ['Sélection ellipse', 'Maj+M'],
-      ['Lasso', 'Maj+L'], ['Baguette magique', 'W'], ['Déplacer', 'V'],
-      ['Main', 'H'], ['Loupe', 'Z'],
-    ],
+    items: TOOL_LIST.map((t) => [t.name, normaliserTouches(t.shortcut)] as [string, string]),
   })
   out.push({
     title: 'Souris et modificateurs',
