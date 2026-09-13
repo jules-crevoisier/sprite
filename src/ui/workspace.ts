@@ -56,13 +56,23 @@ const MAX_PANEL = 1400
 const MIN_DOCK = 240
 const MAX_DOCK = 520
 
+/*
+ * Chaque disposition NOMME les panneaux qu'elle range.
+ *
+ * Un panneau absent de toutes les listes n'apparait nulle part sur un
+ * navigateur qui n'a encore rien enregistre : le rattrapage « un panneau
+ * ajoute par une mise a jour doit apparaitre quelque part » ne joue que sur
+ * une disposition DEJA sauvegardee. C'est ainsi que « Références » est reste
+ * invisible a son premier essai — le panneau existait, monte, vivant, et
+ * personne ne pouvait le voir.
+ */
 /** Dispositions proposees dans le menu, adaptees a une facon de travailler. */
 export const PRESETS: Record<string, { label: string; hint: string; layout: () => LayoutState }> = {
   complet: {
     label: 'Complet',
     hint: 'Tous les panneaux a droite',
     layout: () => ({
-      docks: { left: [], right: ['preview', 'layers', 'color', 'palette', 'rig'] },
+      docks: { left: [], right: ['preview', 'layers', 'references', 'color', 'palette', 'rig'] },
       hidden: ['rig'],
       collapsed: [],
       widths: { left: 260, right: 264 },
@@ -74,7 +84,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     label: 'Dessin',
     hint: 'Couleur et palette, grande toile',
     layout: () => ({
-      docks: { left: [], right: ['color', 'palette', 'layers'] },
+      docks: { left: [], right: ['color', 'palette', 'layers', 'references'] },
       hidden: ['preview', 'rig'],
       collapsed: [],
       widths: { left: 260, right: 250 },
@@ -86,7 +96,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     label: 'Animation',
     hint: 'Aperçu et calques, timeline en avant',
     layout: () => ({
-      docks: { left: [], right: ['preview', 'layers', 'rig'] },
+      docks: { left: [], right: ['preview', 'layers', 'references', 'rig'] },
       hidden: ['color', 'palette'],
       collapsed: [],
       widths: { left: 260, right: 264 },
@@ -98,7 +108,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     label: 'Deux colonnes',
     hint: 'Outils a gauche, couleurs a droite',
     layout: () => ({
-      docks: { left: ['preview', 'layers'], right: ['color', 'palette'] },
+      docks: { left: ['preview', 'layers'], right: ['color', 'palette', 'references'] },
       hidden: ['rig'],
       collapsed: [],
       widths: { left: 232, right: 246 },
@@ -111,7 +121,7 @@ export const PRESETS: Record<string, { label: string; hint: string; layout: () =
     hint: 'Rien que la toile',
     layout: () => ({
       docks: { left: [], right: ['palette'] },
-      hidden: ['preview', 'layers', 'color', 'rig'],
+      hidden: ['preview', 'layers', 'color', 'rig', 'references'],
       collapsed: [],
       widths: { left: 260, right: 200 },
       heights: {},

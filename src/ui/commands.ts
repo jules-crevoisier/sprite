@@ -545,9 +545,15 @@ export function buildCommands(app: App): Command[] {
     },
   })
   add({
-    // Une image a decalquer : elle ne se peint pas et ne s'exporte pas.
-    id: 'layer.reference', label: 'Calque de référence…', group: 'Calque', icon: 'upload',
-    run: () => { void dlg.referenceLayerDialog(ed) },
+    /*
+     * Une image a DECALQUER. Ce n'est pas un calque : elle se pose dans la
+     * vue, se deplace et se dimensionne a la souris, garde sa definition
+     * d'origine, et ne part jamais dans l'export. La premiere version en
+     * faisait un calque de pixels ramene a la taille du sprite — autant dire
+     * detruite, et immobile.
+     */
+    id: 'layer.reference', label: 'Image de référence…', group: 'Calque', icon: 'image',
+    run: () => { void app.referencesPanel.ajouter() },
   })
   add({
     id: 'layer.duplicate', label: 'Dupliquer le calque', group: 'Calque', keys: 'Ctrl+J', icon: 'duplicate',

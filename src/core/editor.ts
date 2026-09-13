@@ -206,6 +206,15 @@ export class Editor {
   get frameCount() { return this.sprite.frameCount }
 
   /** Case active, creee si besoin. Retourne null si le calque est verrouille. */
+  /**
+   * La reference qu'on manipule, ou null.
+   *
+   * Elle vit ici et non dans le panneau : la VUE dessine ses poignees et la
+   * souris les saisit, et deux endroits pour la meme verite finiraient par
+   * ne plus dire la meme chose.
+   */
+  referenceActive: number | null = null
+
   currentCel(): Cel | null {
     const layer = this.layer
     if (!layer || layer.locked || !layer.visible) return null

@@ -4,6 +4,7 @@ import { renderEffects, type LayerEffect } from './effects'
 import type { RGBA } from './color'
 import { Palette } from './palette'
 import { emptyRig, type Rig } from '../smart/rig'
+import type { Reference } from './reference'
 
 let nextId = 1
 export const genId = (): number => nextId++
@@ -70,6 +71,15 @@ export class Sprite {
   width: number
   height: number
   layers: Layer[] = []
+  /**
+   * Les images de REFERENCE : posees dans la vue, jamais dans le dessin.
+   *
+   * Elles ne sont pas des calques — voir `core/reference.ts`. Elles vivent
+   * ici parce qu'elles appartiennent au document : on rouvre son projet avec
+   * le modele qu'on avait sous les yeux, sinon le dessin arrive sans ce qui
+   * l'explique.
+   */
+  references: Reference[] = []
   /** Duree de chaque frame en millisecondes. */
   frameDurations: number[] = []
   tags: Tag[] = []

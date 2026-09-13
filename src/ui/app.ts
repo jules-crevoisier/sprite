@@ -21,6 +21,7 @@ import { DocTabs } from './doc-tabs'
 import { DossierPanel } from './dossier-panel'
 import { ColorPanel } from './color-panel'
 import { LayersPanel } from './layers-panel'
+import { ReferencesPanel } from './references-panel'
 import { PreviewPanel } from './preview'
 import { RigPanel } from './rig-panel'
 import { TimelinePanel } from './timeline'
@@ -47,6 +48,7 @@ export class App {
   readonly timeline: TimelinePanel
   readonly colorPanel: ColorPanel
   readonly layersPanel: LayersPanel
+  readonly referencesPanel: ReferencesPanel
   readonly preview: PreviewPanel
   readonly rigPanel: RigPanel
   readonly status: StatusBar
@@ -90,6 +92,7 @@ export class App {
 
     this.colorPanel = new ColorPanel(this.ed)
     this.layersPanel = new LayersPanel(this.ed)
+    this.referencesPanel = new ReferencesPanel(this.ed)
     this.preview = new PreviewPanel(this.ed)
     this.rigPanel = new RigPanel(this.ed)
     this.dossierPanel = new DossierPanel(this)
@@ -147,6 +150,10 @@ export class App {
         id: 'palette', title: 'Palette', icon: 'sliders',
         content: this.colorPanel.paletteContent, actions: this.colorPanel.paletteActions,
         grow: true, minHeight: 104,
+      },
+      {
+        id: 'references', title: 'Références', icon: 'image',
+        content: this.referencesPanel.content, actions: this.referencesPanel.actions,
       },
       {
         id: 'rig', title: 'Squelette', icon: 'rig',

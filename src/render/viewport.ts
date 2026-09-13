@@ -8,6 +8,9 @@ import { brushOffsets } from '../tools/algorithms'
 import { deform, boneColor, partFor } from '../smart/rig'
 import { rigState, seamSettings } from '../tools'
 import { fromHex, getR, getG, getB, toCss } from '../core/color'
+import {
+  imageDeReference, poigneeRef, tirerRef, CURSEUR_POIGNEE, type PoigneeRef,
+} from '../core/reference'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 64
@@ -32,6 +35,8 @@ const MAX_ZOOM = 64
  * haut, ou l'on travaille au pixel.
  */
 const PALIERS = [0.25, 0.33, 0.5, 0.67, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
+/** Cote d'une poignee de reference, en pixels d'ecran. */
+const TAILLE_POIGNEE = 9
 
 /**
  * Vue du sprite : gere la camera (zoom/pan), le rendu de la scene
@@ -61,6 +66,13 @@ export class Viewport {
    * a faire, plutot que de le decrire.
    */
   gesture: { from: [number, number]; to: [number, number]; label?: string } | null = null
+  /** Le geste en cours sur une reference : deplacement ou redimensionnement. */
+  private gesteRef: {
+    poignee: PoigneeRef
+    depart: { x: number; y: number; l: number; h: number }
+    px: number
+    py: number
+  } | null = null
 
   /** Position du curseur en coordonnees sprite, ou null hors toile. */
   cursor: { x: number; y: number } | null = null
@@ -153,6 +165,20 @@ export class Viewport {
     v.panY = cy - before.y * v.zoom
     this.ed.events.emit('settings', undefined)
     this.invalidate()
+  }
+
+  /**
+   * La poignee de la reference choisie sous un point, ou null.
+   *
+   * La marge est donnee en pixels d'ECRAN puis ramenee en pixels du sprite :
+   * une poignee doit se saisir aussi facilement a 1x qu'a 32x.
+   */
+  private poigneeSousLeCurseur(px: number, py: number): PoigneeRef | null {
+    const ed = this.ed
+    if (ed.referenceActive === null || ed.mode === 'rig') return null
+    const r = ed.sprite.references.find((q) => q.id === ed.referenceActive)
+    if (!r || !r.visible || r.verrouille) return null
+    return poigneeRef(r, px, py, (TAILLE_POIGNEE / 1.6) / ed.view.zoom)
   }
 
   private toSpriteFromCanvas(cx: number, cy: number): { x: number; y: number } {
@@ -302,7 +328,13 @@ export class Viewport {
 
     if (ed.onion.enabled && !ed.playing) this.drawOnionSkin(ctx, ox, oy, dw, dh)
 
+    // Les references SOUS le dessin : le cas ordinaire, on decalque par-dessus.
+    this.drawReferences(ctx, ox, oy, v.zoom, true)
+
     ctx.drawImage(this.frameCanvas, ox, oy, dw, dh)
+
+    // Et celles qu'on a mises par-dessus, pour comparer son trait au modele.
+    this.drawReferences(ctx, ox, oy, v.zoom, false)
 
     // En mode squelette, l'influence des os se lit directement sur le dessin.
     // La carte d'influence sert a ponderer : elle sort avec le pinceau
@@ -332,6 +364,75 @@ export class Viewport {
     ctx.strokeStyle = 'rgba(255,255,255,0.22)'
     ctx.lineWidth = 1
     ctx.strokeRect(ox - 0.5, oy - 0.5, dw + 1, dh + 1)
+
+    // Les poignees de la reference choisie, PAR-DESSUS tout : elles servent a
+    // la saisir, et une poignee cachee par le dessin ne se saisit pas.
+    this.drawReferenceHandles(ctx, ox, oy, v.zoom)
+  }
+
+  /**
+   * Les images de REFERENCE, dessinees a leur definition d'origine.
+   *
+   * Elles ne passent pas par le tampon du sprite : elles ne sont pas des
+   * pixels du dessin, et les y graver reviendrait a les detruire — une photo
+   * de quatre cents pixels ramenee dans un cadre de trente-deux ne montre
+   * plus rien. Dessinees ici, dans l'espace de l'ECRAN, elles gardent leur
+   * finesse : au zoom huit on voit la photo en grand, pas huit fois le meme
+   * gros pixel.
+   *
+   * C'est le seul endroit de l'editeur ou l'interpolation est permise. Une
+   * reference n'est pas du dessin : elle ne s'exporte pas, elle ne se peint
+   * pas, elle sert a l'oeil.
+   */
+  private drawReferences(
+    ctx: CanvasRenderingContext2D, ox: number, oy: number, zoom: number, dessous: boolean,
+  ): void {
+    const refs = this.ed.sprite.references
+    if (!refs.length) return
+    ctx.save()
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    for (const r of refs) {
+      if (!r.visible || r.dessous !== dessous) continue
+      const img = imageDeReference(r.source, () => this.invalidate())
+      if (!img) continue
+      ctx.globalAlpha = Math.max(0, Math.min(1, r.opacite))
+      ctx.drawImage(img, ox + r.x * zoom, oy + r.y * zoom, r.l * zoom, r.h * zoom)
+    }
+    ctx.restore()
+    ctx.imageSmoothingEnabled = false
+  }
+
+  /**
+   * Le cadre et les poignees de la reference choisie.
+   *
+   * Elles se dessinent en pixels d'ECRAN et gardent la meme taille a tous les
+   * zooms : une poignee qui grandirait avec le zoom couvrirait l'image
+   * entiere a 32x, et une qui rapetisserait deviendrait inattrapable a 1x.
+   */
+  private drawReferenceHandles(ctx: CanvasRenderingContext2D, ox: number, oy: number, zoom: number): void {
+    const r = this.ed.sprite.references.find((q) => q.id === this.ed.referenceActive)
+    if (!r || !r.visible || r.verrouille) return
+    const x = ox + r.x * zoom
+    const y = oy + r.y * zoom
+    const l = r.l * zoom
+    const h = r.h * zoom
+    ctx.save()
+    ctx.strokeStyle = '#6ea8fe'
+    ctx.lineWidth = 1
+    ctx.setLineDash([4, 3])
+    ctx.strokeRect(x + 0.5, y + 0.5, l - 1, h - 1)
+    ctx.setLineDash([])
+    ctx.fillStyle = '#6ea8fe'
+    const t = TAILLE_POIGNEE
+    for (const [px, py] of [
+      [x, y], [x + l / 2, y], [x + l, y],
+      [x, y + h / 2], [x + l, y + h / 2],
+      [x, y + h], [x + l / 2, y + h], [x + l, y + h],
+    ]) {
+      ctx.fillRect(Math.round(px - t / 2), Math.round(py - t / 2), t, t)
+    }
+    ctx.restore()
   }
 
   private drawBackdrop(ctx: CanvasRenderingContext2D, ox: number, oy: number, dw: number, dh: number): void {
@@ -668,6 +769,28 @@ export class Viewport {
       const ed = this.ed
       const sp = this.toSprite(e.clientX, e.clientY)
 
+      /*
+       * LA REFERENCE CHOISIE PASSE AVANT LES OUTILS.
+       *
+       * Elle n'est pas du dessin : aucun outil n'a rien a en faire, et la
+       * saisir doit marcher quel que soit l'outil courant — comme dans
+       * Blender ou Photoshop, ou l'on deplace un fond sans changer de mode.
+       * On la verrouille quand on ne veut plus y toucher.
+       */
+      const saisie = this.poigneeSousLeCurseur(sp.x, sp.y)
+      if (saisie && e.button === 0) {
+        const r = ed.sprite.references.find((q) => q.id === ed.referenceActive)
+        if (r) {
+          this.gesteRef = {
+            poignee: saisie,
+            depart: { x: r.x, y: r.y, l: r.l, h: r.h },
+            px: sp.x,
+            py: sp.y,
+          }
+          return
+        }
+      }
+
       // Pan : bouton du milieu, ou barre espace, ou outil Main.
       if (e.button === 1 || this.spaceDown || ed.settings.tool === 'hand') {
         this.panning = true
@@ -696,6 +819,23 @@ export class Viewport {
     cv.addEventListener('pointermove', (e) => {
       const ed = this.ed
       const sp = this.toSprite(e.clientX, e.clientY)
+
+      if (this.gesteRef) {
+        const r = ed.sprite.references.find((q) => q.id === ed.referenceActive)
+        if (r) {
+          const g = this.gesteRef
+          const apres = tirerRef(g.depart, g.poignee, sp.x - g.px, sp.y - g.py, e.shiftKey)
+          Object.assign(r, apres)
+          this.ed.events.emit('doc', undefined)
+          this.invalidate()
+        }
+        return
+      }
+      // Le curseur ANNONCE ce que le clic fera : sans lui, on ne devine pas
+      // qu'un bord de reference se tire.
+      const survol = this.poigneeSousLeCurseur(sp.x, sp.y)
+      if (survol) cv.style.cursor = CURSEUR_POIGNEE[survol]
+      else if (!this.dragging && !this.panning) this.updateCursorStyle()
       this.cursor = sp.x >= 0 && sp.y >= 0 && sp.x < ed.sprite.width && sp.y < ed.sprite.height
         ? sp
         : null
@@ -719,6 +859,14 @@ export class Viewport {
     })
 
     const finish = (e: PointerEvent) => {
+      if (this.gesteRef) {
+        this.gesteRef = null
+        this.updateCursorStyle()
+        // Une reference deplacee doit rester deplacee quand on rouvre le
+        // projet : c'est un changement du document, pas de la vue.
+        this.ed.events.emit('doc', undefined)
+        return
+      }
       if (this.panning) {
         this.panning = false
         this.updateCursorStyle()

@@ -725,12 +725,15 @@ input[type="range"]::-moz-range-thumb {
   font-size: 10px; color: var(--text-faint);
 }
 .layer-row.hidden-layer .lname { opacity: .42; text-decoration: line-through; }
-.layer-row .mini {
+/* Les petits boutons d'une ligne — oeil, cadenas, corbeille. La regle vaut
+   pour toute ligne qui en porte : elle etait ecrite pour les calques seuls, et
+   le panneau des references heritait de boutons sans style, carres et vides. */
+.layer-row .mini, .ref-tete .mini {
   width: 20px; height: 20px; display: grid; place-items: center;
   border-radius: var(--radius-xs); border: 0; background: transparent; color: var(--text-faint);
 }
-.layer-row .mini:hover { background: var(--bg-4); color: var(--text); }
-.layer-row .mini.on { color: var(--text); }
+.layer-row .mini:hover, .ref-tete .mini:hover { background: var(--bg-4); color: var(--text); }
+.layer-row .mini.on, .ref-tete .mini.on { color: var(--text); }
 .layer-thumb {
   width: 26px; height: 26px; border-radius: var(--radius-xs); flex: none;
   background: #0d0f14; border: 1px solid var(--line);
@@ -1046,6 +1049,24 @@ input[type="range"]::-moz-range-thumb {
 .form-grid > label { color: var(--text-dim); font-size: 12px; }
 .form-grid .full { grid-column: 1 / -1; }
 .form-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Le panneau des REFERENCES : les images qu'on garde sous les yeux. Elles ne
+   sont pas des calques — elles ne portent pas de pixels du sprite, ne
+   s'exportent pas, et se deplacent librement dans la vue. */
+.refs-liste { display: flex; flex-direction: column; gap: 5px; }
+.refs-vide { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin: 4px 0 0; }
+.ref-ligne {
+  border: 1px solid var(--line, rgba(255,255,255,.08)); border-radius: 6px;
+  padding: 4px 5px; cursor: pointer;
+}
+.ref-ligne.active { border-color: #6ea8fe; background: rgba(110, 168, 254, .08); }
+.ref-tete { display: flex; align-items: center; gap: 4px; }
+.ref-nom { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ref-reglages {
+  display: grid; grid-template-columns: auto 1fr; gap: 5px 8px; align-items: center;
+  margin-top: 6px; font-size: 11px; color: var(--text-faint);
+}
+.ref-boutons { display: flex; gap: 5px; flex-wrap: wrap; }
+
 /* Un calque de REFERENCE : une image qu'on decalque. Il ne se peint pas et ne
    s'exporte pas — la ligne le dit, sinon on cherche le cadenas qui bloque. */
 .layer-ref {

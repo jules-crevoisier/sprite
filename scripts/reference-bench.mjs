@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 /**
- * Le banc du CALQUE DE RÉFÉRENCE.
+ * Le banc des IMAGES DE RÉFÉRENCE.
  *
- * Une image qu'on garde sous les yeux pour décalquer — une photo, un croquis
- * scanné, un dessin trouvé ailleurs. Trois choses la distinguent d'un calque
- * ordinaire, et les trois comptent :
+ * ## Le défaut qu'il garde
  *
- * 1. elle est **ramenée dans le cadre**, proportions gardées. Collée au coin
- *    comme le fait l'import ordinaire, on n'en voit qu'un morceau de
- *    trente-deux pixels : autant dire rien ;
- * 2. elle **ne se peint pas**. Peindre dedans, ce serait dessiner dans
- *    quelque chose que personne ne verra jamais ;
- * 3. elle **ne s'exporte pas** — ni dans le PNG, ni dans la planche, ni dans
- *    le JSON. C'est la différence entre une référence et un calque.
+ * La première version en faisait un calque de pixels : l'image était réduite à
+ * la taille du sprite, gravée dans un bitmap, et posée là. Autant dire
+ * détruite — une photo de quatre cents pixels de large ramenée dans un cadre
+ * de trente-deux perd tout ce qui en faisait une référence — et surtout elle
+ * ne bougeait plus. « C'est complètement moche », et c'était vrai.
+ *
+ * Une référence est donc une image posée DANS LA VUE, avec sa propre position
+ * et sa propre échelle, comme un fond dans Blender ou un calque libre dans
+ * Photoshop. Ce banc tient la géométrie de cette manipulation : les poignées,
+ * le déplacement, le redimensionnement, les proportions — et le fait qu'elle
+ * ne touche jamais au dessin.
  */
 import { spawn } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -56,129 +58,159 @@ await page.goto(URL, { waitUntil: 'networkidle' })
 const m = await page.evaluate(async () => {
   const { Sprite } = await import('/src/core/document.ts')
   const { Palette } = await import('/src/core/palette.ts')
-  const { referenceLayerFromImage } = await import('/src/io/import.ts')
   const { compositeFrame } = await import('/src/render/composite.ts')
-  const { Editor } = await import('/src/core/editor.ts')
   const { getA, rgba } = await import('/src/core/color.ts')
-
-  /** Une image large et basse : la mise a l'echelle doit garder ses proportions. */
-  const image = async (l, h) => {
-    const c = document.createElement('canvas')
-    c.width = l
-    c.height = h
-    const ctx = c.getContext('2d')
-    ctx.fillStyle = '#c03030'
-    ctx.fillRect(0, 0, l, h)
-    const img = new Image()
-    img.src = c.toDataURL('image/png')
-    await img.decode()
-    return img
-  }
+  const {
+    referenceDepuisImage, poigneeRef, tirerRef, REF_MIN,
+  } = await import('/src/core/reference.ts')
+  const { serializeSprite, deserializeSprite } = await import('/src/io/project.ts')
 
   const out = {}
-  const sprite = new Sprite(32, 32, new Palette('p', []))
-  sprite.addLayer('Calque 1')
-  const img = await image(400, 100)
-  const ref = referenceLayerFromImage(sprite, img, 'photo')
 
-  /* 1. Ramenee dans le cadre, proportions gardees, centree. */
+  /* 1. Cadrage d'entree : l'image entiere, centree, proportions gardees. */
   {
-    const bm = ref.cels[0].bitmap
-    let minX = 99, maxX = -1, minY = 99, maxY = -1
-    for (let y = 0; y < 32; y++) {
-      for (let x = 0; x < 32; x++) {
-        if (getA(bm.u32[y * 32 + x]) === 0) continue
-        if (x < minX) minX = x
-        if (x > maxX) maxX = x
-        if (y < minY) minY = y
-        if (y > maxY) maxY = y
-      }
-    }
-    out.cadre = {
-      taille: [bm.width, bm.height],
-      large: maxX - minX + 1,
-      haut: maxY - minY + 1,
-      // Centree : autant de vide en haut qu'en bas.
-      centree: Math.abs(minY - (31 - maxY)) <= 1,
-      marque: ref.reference,
-      opacite: ref.opacity,
+    const large = referenceDepuisImage('data:,', 'photo', 400, 100, 32, 32)
+    const petite = referenceDepuisImage('data:,', 'timbre', 8, 8, 32, 32)
+    out.entree = {
+      large: [large.l, large.h, large.x, large.y],
+      // Une image plus petite que le cadre garde sa taille : l'agrandir
+      // d'office ferait croire a une image floue.
+      petite: [petite.l, petite.h],
+      opacite: large.opacite,
+      dessous: large.dessous,
     }
   }
 
-  /* 2. Sur TOUTES les frames : une reference qui disparait a la frame deux
-   *    ne sert a rien pour animer. */
+  /* 2. Les poignees. */
   {
-    const anime = new Sprite(32, 32, new Palette('p', []))
-    anime.addLayer('Calque 1')
-    anime.addFrame()
-    anime.addFrame()
-    const r2 = referenceLayerFromImage(anime, img, 'photo')
-    out.frames = {
-      combien: r2.cels.filter(Boolean).length,
-      total: anime.frameCount,
-      // Chaque frame a SON bitmap : un seul partage ferait qu'effacer l'une
-      // les effacerait toutes.
-      distincts: new Set(r2.cels.filter(Boolean).map((c) => c.bitmap)).size,
+    const r = { x: 10, y: 10, l: 20, h: 12 }
+    const p = (x, y) => poigneeRef(r, x, y, 1)
+    out.poignees = {
+      hors: p(2, 2),
+      corps: p(20, 16),
+      no: p(10, 10), ne: p(30, 10), so: p(10, 22), se: p(30, 22),
+      n: p(20, 10), s: p(20, 22), o: p(10, 16), e: p(30, 16),
     }
   }
 
-  /* 3. Elle ne s'exporte pas, mais elle se VOIT dans l'editeur. */
+  /* 3. Deplacer et redimensionner. */
   {
-    sprite.layers.unshift(ref)
-    const dessus = sprite.layers[1]
-    dessus.cels[0] = { bitmap: dessus.cels[0]?.bitmap ?? null, opacity: 255 }
-    const exporte = compositeFrame(sprite, 0)
-    const vue = compositeFrame(sprite, 0, { includeReference: true })
-    const compte = (bm) => bm.u32.reduce((n, c) => n + (getA(c) ? 1 : 0), 0)
-    out.export = { sansRef: compte(exporte), avecRef: compte(vue) }
-  }
-
-  /* 4. Elle ne se peint pas. */
-  {
-    const ed = new Editor(sprite)
-    ed.setActiveLayer(0)
-    out.peinture = {
-      cel: ed.currentCel() === null,
-      trait: ed.beginStroke('essai') === null,
+    const r = { x: 10, y: 10, l: 20, h: 10 }
+    out.tirer = {
+      corps: tirerRef(r, 'corps', 5, -3),
+      est: tirerRef(r, 'e', 6, 0, true),
+      ouest: tirerRef(r, 'o', 4, 0, true),
+      // Un coin garde les proportions : 2 pour 1 au depart, 2 pour 1 apres.
+      coin: tirerRef(r, 'se', 10, 0),
+      // Maj : on deforme volontairement.
+      libre: tirerRef(r, 'se', 10, 0, true),
+      // Le coin nord-ouest ancre le coin oppose.
+      ancre: tirerRef(r, 'no', -10, 0),
+      // Et rien ne descend sous le minimum.
+      ecrase: tirerRef(r, 'o', 1000, 0, true),
     }
-    // Le calque d'a cote, lui, se peint toujours.
-    ed.setActiveLayer(1)
-    out.peinture.voisin = ed.beginStroke('essai') !== null
-    ed.cancelStroke()
   }
 
+  /* 4. Elle ne touche pas au dessin, et ne s'exporte pas. */
+  {
+    const sprite = new Sprite(16, 16, new Palette('p', []))
+    sprite.addLayer('Calque 1')
+    const cel = sprite.ensureCel(0, 0)
+    cel.bitmap.set(3, 3, rgba(255, 0, 0, 255))
+    const avant = compositeFrame(sprite, 0).u32.reduce((n, c) => n + (getA(c) ? 1 : 0), 0)
+    const calquesAvant = sprite.layers.length
+    sprite.references.push(referenceDepuisImage('data:,', 'photo', 400, 100, 16, 16))
+    const apres = compositeFrame(sprite, 0).u32.reduce((n, c) => n + (getA(c) ? 1 : 0), 0)
+    out.export = { avant, apres, calquesAvant, calques: sprite.layers.length }
+  }
+
+  /* 5. L'aller-retour par le fichier de projet. */
+  {
+    const sprite = new Sprite(16, 16, new Palette('p', []))
+    sprite.addLayer('Calque 1')
+    const r = referenceDepuisImage('data:image/png;base64,AAAA', 'photo', 40, 20, 16, 16)
+    r.x = 3.5
+    r.opacite = 0.25
+    r.dessous = false
+    sprite.references.push(r)
+    const relu = await deserializeSprite(serializeSprite(sprite))
+    const q = relu.references[0]
+    out.fichier = {
+      combien: relu.references.length,
+      memeSource: q?.source === r.source,
+      memeX: q?.x === 3.5,
+      memeOpacite: q?.opacite === 0.25,
+      memeCote: q?.dessous === false,
+    }
+    const vieux = JSON.parse(serializeSprite(sprite))
+    delete vieux.references
+    out.fichier.ancien = (await deserializeSprite(JSON.stringify(vieux))).references.length
+  }
+
+  out.min = REF_MIN
   return out
 })
 
-console.log('\n--- l\'image entre dans le cadre ---')
-check('elle est ramenée à la taille du sprite',
-  m.cadre.taille[0] === 32 && m.cadre.taille[1] === 32, m.cadre.taille.join('×'))
-check('ses proportions sont gardées',
-  m.cadre.large === 32 && m.cadre.haut === 8,
-  `${m.cadre.large}×${m.cadre.haut} pour une image 400×100 — collée telle quelle, `
-  + 'on n\'en aurait vu qu\'un coin')
-check('et elle est centrée', m.cadre.centree)
-check('le calque est marqué « référence », à demi transparent',
-  m.cadre.marque && m.cadre.opacite === 128,
-  'une référence opaque cacherait le trait qu\'on est en train de poser')
+console.log('\n--- l\'image entre dans la vue ---')
+check('une image plus grande que le cadre y entre entière, centrée',
+  m.entree.large[0] === 32 && m.entree.large[1] === 8
+  && m.entree.large[2] === 0 && m.entree.large[3] === 12,
+  `${m.entree.large[0]}×${m.entree.large[1]} en ${m.entree.large[2]},${m.entree.large[3]} `
+  + 'pour une image 400×100 — proportions gardées')
+check('une image plus petite garde sa taille',
+  m.entree.petite[0] === 8 && m.entree.petite[1] === 8,
+  'l\'agrandir d\'office ferait croire à une image floue')
+check('elle arrive à demi transparente et sous le dessin',
+  m.entree.opacite === 0.5 && m.entree.dessous === true,
+  'on décalque par-dessus')
 
-console.log('\n--- sur toutes les frames ---')
-check('la référence est posée sur chaque frame',
-  m.frames.combien === m.frames.total, `${m.frames.combien}/${m.frames.total}`)
-check('avec un bitmap par frame, pas un seul partagé',
-  m.frames.distincts === m.frames.total,
-  'sinon effacer l\'une les effacerait toutes')
+console.log('\n--- les poignées ---')
+check('hors de l\'image, aucune poignée', m.poignees.hors === null)
+check('au milieu, on déplace', m.poignees.corps === 'corps')
+check('les quatre coins se distinguent',
+  m.poignees.no === 'no' && m.poignees.ne === 'ne'
+  && m.poignees.so === 'so' && m.poignees.se === 'se',
+  [m.poignees.no, m.poignees.ne, m.poignees.so, m.poignees.se].join(' '))
+check('et les quatre bords aussi',
+  m.poignees.n === 'n' && m.poignees.s === 's'
+  && m.poignees.o === 'o' && m.poignees.e === 'e',
+  [m.poignees.n, m.poignees.s, m.poignees.o, m.poignees.e].join(' '))
 
-console.log('\n--- elle se voit, et ne s\'exporte pas ---')
-check('l\'export l\'ignore', m.export.sansRef === 0, `${m.export.sansRef} pixels exportés`)
-check('l\'éditeur la montre', m.export.avecRef > 0, `${m.export.avecRef} pixels à l\'écran`)
+console.log('\n--- déplacer, dimensionner ---')
+check('tirer le corps déplace, sans redimensionner',
+  m.tirer.corps.x === 15 && m.tirer.corps.y === 7
+  && m.tirer.corps.l === 20 && m.tirer.corps.h === 10)
+check('le bord est change la largeur, pas l\'origine',
+  m.tirer.est.l === 26 && m.tirer.est.x === 10)
+check('le bord ouest déplace l\'origine ET la largeur',
+  m.tirer.ouest.x === 14 && m.tirer.ouest.l === 16,
+  'sinon le bord gauche tiré vers la droite emmènerait toute l\'image')
+check('un coin garde les proportions',
+  Math.abs(m.tirer.coin.l / m.tirer.coin.h - 2) < 1e-6,
+  `${m.tirer.coin.l}×${m.tirer.coin.h} — une référence déformée ne sert plus à rien`)
+check('et Maj les libère, quand on le veut vraiment',
+  m.tirer.libre.l === 30 && m.tirer.libre.h === 10)
+check('le coin opposé reste ancré',
+  Math.abs(m.tirer.ancre.x + m.tirer.ancre.l - 30) < 1e-6,
+  `bord droit à ${m.tirer.ancre.x + m.tirer.ancre.l} — il était à 30`)
+check('rien ne descend sous la taille minimale',
+  m.tirer.ecrase.l === m.min, `${m.tirer.ecrase.l} px`)
 
-console.log('\n--- elle ne se peint pas ---')
-check('aucune case à peindre sur un calque de référence', m.peinture.cel)
-check('et le trait est refusé', m.peinture.trait,
-  'peindre dedans, ce serait dessiner dans ce que personne ne verra')
-check('le calque d\'à côté se peint toujours', m.peinture.voisin,
-  'un refus trop large vaudrait mieux que pas de refus, mais pas de beaucoup')
+console.log('\n--- elle ne touche pas au dessin ---')
+check('l\'export ne change pas d\'un pixel',
+  m.export.avant === m.export.apres && m.export.avant === 1,
+  `${m.export.avant} pixel exporté avant, ${m.export.apres} après`)
+check('et elle n\'ajoute aucun calque',
+  m.export.calques === m.export.calquesAvant,
+  `${m.export.calquesAvant} calque(s) avant et après — une référence n'est pas un calque`)
+
+console.log('\n--- l\'aller-retour par le fichier ---')
+check('la référence part dans le projet et en revient entière',
+  m.fichier.combien === 1 && m.fichier.memeSource && m.fichier.memeX
+  && m.fichier.memeOpacite && m.fichier.memeCote,
+  'on rouvre son dessin avec le modèle qui l\'explique')
+check('un projet enregistré avant qu\'elles existent se relit sans erreur',
+  m.fichier.ancien === 0)
 
 check('aucune erreur JavaScript', erreurs.length === 0, erreurs.join(' | '))
 

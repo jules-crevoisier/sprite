@@ -2,6 +2,7 @@ import { Bitmap } from '../core/bitmap'
 import { fromHex, toHex } from '../core/color'
 import { Sprite, Layer, genId, seedIds, type Slice, type Tag } from '../core/document'
 import { Palette } from '../core/palette'
+import type { Reference } from '../core/reference'
 import type { BlendMode } from '../core/blend'
 import { newEffectId, type LayerEffect } from '../core/effects'
 import { emptyRig, seedBoneIds, type Bone } from '../smart/rig'
@@ -67,6 +68,12 @@ interface ProjectJson {
   slices: (Omit<Slice, 'color'> & { color: string })[]
   layers: LayerJson[]
   rig?: RigJson
+  /**
+   * Les images de reference : posees dans la vue, jamais dans le dessin.
+   *
+   * Facultatives — un projet enregistre avant qu'elles existent n'en a pas.
+   */
+  references?: Reference[]
 }
 
 /** Serialise le sprite. Les pixels sont stockes en PNG base64, donc compresses. */
@@ -100,6 +107,7 @@ export function serializeSprite(sprite: Sprite): string {
         weights: bytesToBase64(p.weights),
       })).filter((p) => p.layer >= 0),
     },
+    references: sprite.references.map((r) => ({ ...r })),
     layers: sprite.layers.map((l) => ({
       name: l.name,
       visible: l.visible,
@@ -153,6 +161,7 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
   // Un projet enregistre avant l'editeur de niveaux n'en a pas : c'est un
   // champ facultatif, pas une erreur de lecture.
   sprite.niveau = data.niveau && Array.isArray(data.niveau.cases) ? data.niveau : null
+  sprite.references = (data.references ?? []).map((r) => ({ ...r }))
   sprite.frameDurations = [...data.frameDurations]
   sprite.tags = (data.tags ?? []).map((t) => ({ ...t, id: genId(), color: fromHex(t.color) }))
   sprite.slices = (data.slices ?? []).map((s) => ({ ...s, id: genId(), color: fromHex(s.color) }))

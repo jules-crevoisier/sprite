@@ -121,22 +121,28 @@ déplacement, main et loupe.
   réaligne le résultat sur la palette du sprite.
 - 19 modes de fusion de calque, opacité par calque et par case.
 
-#### Le calque de référence
+#### Les images de référence
 
-**Calque → Calque de référence…** pose une image sous le dessin pour la
-décalquer : une photo, un croquis scanné, une planche trouvée ailleurs. Elle
-est **ramenée dans le cadre**, proportions gardées et centrée — collée au coin
-comme le ferait un import ordinaire, on n'en verrait qu'un morceau de
-trente-deux pixels. Elle arrive à demi transparente, tout en bas de la pile :
-on dessine par-dessus.
+Le panneau **Références** pose une image *dans la vue* pour la décalquer : une
+photo, un croquis scanné, une planche trouvée ailleurs. On la **déplace** en la
+tirant, on la **dimensionne** par ses huit poignées — les coins gardent les
+proportions, <kbd>Maj</kbd> les libère — et elle passe **sous** le dessin ou
+par-dessus, à l'opacité qu'on veut.
 
-Deux choses la distinguent d'un calque ordinaire, et les deux sont vérifiées au
-banc : elle **ne se peint pas** — le refus vit dans la porte par laquelle tous
-les outils passent, pas dans chacun d'eux — et elle **ne s'exporte pas**, ni
-dans le PNG, ni dans la planche, ni dans le JSON. La ligne du panneau le dit
-(`réf.`), sinon on cherche le cadenas qui bloque le crayon.
+Ce n'est **pas un calque**, et c'est tout l'intérêt. Une première version en
+faisait un : l'image était réduite à la taille du sprite, gravée dans un
+bitmap, posée là. Autant dire détruite — une photo de quatre cents pixels de
+large ramenée dans un cadre de trente-deux ne montre plus rien — et surtout
+elle ne bougeait plus. Une référence garde donc sa **définition d'origine** :
+au zoom huit on voit la photo en grand, pas huit fois le même gros pixel. Elle
+déborde librement du cadre, puisqu'on cadre le morceau qui intéresse.
 
-C'est le seul endroit de l'éditeur où l'interpolation est permise : une
+Elle ne se peint pas — il n'y a rien à peindre, ce ne sont pas des pixels du
+sprite — et elle ne s'exporte pas : ni dans le PNG, ni dans la planche, ni dans
+le JSON. Elle part dans le fichier de projet, en revanche : on rouvre son
+dessin avec le modèle qui l'explique.
+
+C'est le seul endroit de l'éditeur où l'interpolation est permise. Une
 référence n'est pas du dessin, et une photo réduite au plus proche voisin
 devient illisible.
 
@@ -502,7 +508,7 @@ npm run test:smoke    # nécessite Chromium : npx playwright install chromium
 npm run test:rotation # géométrie de la rotation par relief
 npm run test:detail    # ce que « Ajouter du détail » fait d'un aplat
 npm run test:palette   # les groupes de palette, et ce qu'ils imposent aux outils
-npm run test:reference # le calque de référence : cadré, non peint, non exporté
+npm run test:reference # les images de référence : poignées, proportions, export
 npm run test:zoom      # la molette, sur un grand sprite
 ```
 
