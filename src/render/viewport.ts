@@ -13,6 +13,27 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 64
 
 /**
+ * Les PALIERS de zoom.
+ *
+ * ## Pourquoi une echelle et non une multiplication
+ *
+ * Le zoom multipliait par 1,15 a chaque cran de molette, puis arrondissait a
+ * l'entier au-dessus de 1x — l'arrondi etant la bonne regle, un pixel du
+ * sprite doit occuper un nombre entier de pixels d'ecran. Mais 1 x 1,15 fait
+ * 1,15, qui s'arrondit a 1 : la molette ne sortait JAMAIS de 1x. Ni de 2x
+ * (2,3 arrondi a 2), ni de 3x. Il fallait un sprite assez grand pour s'ouvrir
+ * a 1x — un 512 par exemple — et l'on se retrouvait enferme, incapable de voir
+ * un seul pixel. Sur un sprite de trente-deux, qui s'ouvre a 20x, personne ne
+ * pouvait s'en apercevoir.
+ *
+ * Une echelle de paliers supprime la classe entiere de ce defaut : un cran
+ * monte d'un palier, quel que soit le point de depart, et l'on ne peut pas
+ * rester sur place. Elle est resserree en bas — la ou l'on cadre — et large en
+ * haut, ou l'on travaille au pixel.
+ */
+const PALIERS = [0.25, 0.33, 0.5, 0.67, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
+
+/**
  * Vue du sprite : gere la camera (zoom/pan), le rendu de la scene
  * (damier, onion skin, grilles, selection) et la traduction des evenements
  * pointeur en actions d'outil.
@@ -96,14 +117,38 @@ export class Viewport {
     }
   }
 
+  /**
+   * Le palier au-dessus ou au-dessous du zoom courant.
+   *
+   * On cherche le premier palier STRICTEMENT plus grand (ou plus petit) : un
+   * zoom pose entre deux paliers par l'ajustement automatique — 0,87 sur un
+   * grand sprite — doit monter au palier suivant, pas y rester.
+   */
+  private palier(zoom: number, monte: boolean): number {
+    if (monte) return PALIERS.find((p) => p > zoom + 1e-6) ?? MAX_ZOOM
+    for (let i = PALIERS.length - 1; i >= 0; i--) if (PALIERS[i] < zoom - 1e-6) return PALIERS[i]
+    return MIN_ZOOM
+  }
+
   /** Zoome en gardant le point (cx,cy) ecran immobile. */
   zoomAt(factor: number, cx: number, cy: number): void {
+    if (factor === 1) return
+    this.poserZoom(this.palier(this.ed.view.zoom, factor > 1), cx, cy)
+  }
+
+  /**
+   * Pose un zoom precis en gardant le point (cx,cy) ecran immobile.
+   *
+   * Au-dela de 1x le zoom reste ENTIER : chaque pixel du sprite occupe un
+   * nombre entier de pixels d'ecran, donc pas de bavure ni de colonnes de
+   * largeurs inegales. En dessous, la fraction est necessaire — c'est le seul
+   * moyen de voir un sprite plus grand que la fenetre.
+   */
+  private poserZoom(zoom: number, cx: number, cy: number): void {
     const v = this.ed.view
     const before = this.toSpriteFromCanvas(cx, cy)
-    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom * factor))
-    // Au-dela de 1x, on reste sur des entiers : chaque pixel du sprite
-    // occupe un nombre entier de pixels ecran, donc pas de bavure.
-    v.zoom = next >= 1 ? Math.round(next) : next
+    const borne = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
+    v.zoom = borne >= 1 ? Math.round(borne) : borne
     v.panX = cx - before.x * v.zoom
     v.panY = cy - before.y * v.zoom
     this.ed.events.emit('settings', undefined)
@@ -115,9 +160,15 @@ export class Viewport {
     return { x: (cx - v.panX) / v.zoom, y: (cy - v.panY) / v.zoom }
   }
 
+  /**
+   * Pose un zoom demande — « 100 % », « x2 » du menu.
+   *
+   * Il ne passe PAS par les paliers : « Zoom 100 % » doit donner 1x et non le
+   * palier le plus proche, sinon la commande ment sur ce qu'elle fait.
+   */
   setZoom(z: number): void {
     const r = this.canvas.getBoundingClientRect()
-    this.zoomAt(z / this.ed.view.zoom, r.width / 2, r.height / 2)
+    this.poserZoom(z, r.width / 2, r.height / 2)
   }
 
   /** Ajuste le zoom pour que le sprite occupe la vue avec une marge. */

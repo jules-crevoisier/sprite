@@ -503,7 +503,14 @@ npm run test:rotation # géométrie de la rotation par relief
 npm run test:detail    # ce que « Ajouter du détail » fait d'un aplat
 npm run test:palette   # les groupes de palette, et ce qu'ils imposent aux outils
 npm run test:reference # le calque de référence : cadré, non peint, non exporté
+npm run test:zoom      # la molette, sur un grand sprite
 ```
+
+Le banc du **zoom** travaille sur un sprite de 512 — pas par goût des grands
+nombres : c'est la seule taille qui révélait le défaut. Le zoom multipliait par
+1,15 puis arrondissait à l'entier au-dessus de 1×, et `1 × 1,15 = 1,15`
+s'arrondit à 1. La molette ne sortait donc jamais de 1×, ni de 2×, ni de 3×.
+Sur un sprite de 32, qui s'ouvre à 20×, le défaut était invisible.
 
 Le banc du **détail** garde les deux bouts d'une même règle : la teinte se
 fabrique quand la rampe n'en a pas — sans cela l'outil ne faisait rien du tout
