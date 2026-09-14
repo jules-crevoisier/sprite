@@ -58,7 +58,18 @@ export class ReferencesPanel {
   async ajouter(): Promise<void> {
     const fichiers = await pickFiles('image/png,image/jpeg,image/gif,image/webp,image/bmp')
     if (!fichiers.length) return
-    const fichier = fichiers[0]
+    await this.poserDepuisFichier(fichiers[0])
+  }
+
+  /**
+   * Pose une image comme reference. Le chemin unique : bouton, menu, ou
+   * glisser-deposer.
+   *
+   * Trois copies de ce code existaient en puissance — une par facon d'ajouter
+   * une image — et c'est ainsi qu'une seule d'entre elles finit par choisir la
+   * reference posee, ou par le dire.
+   */
+  async poserDepuisFichier(fichier: File): Promise<void> {
     const source = await new Promise<string>((resoudre, rejeter) => {
       const lecteur = new FileReader()
       lecteur.onload = () => resoudre(String(lecteur.result))
@@ -76,7 +87,11 @@ export class ReferencesPanel {
     this.ed.run('Image de référence', () => { s.references.push(ref) })
     this.ed.choisirReference(ref.id)
     this.render()
-    showToast(`« ${ref.nom} » posée — tirez-la pour la placer, sa poignée ronde pour la tourner`, 'success')
+    showToast(
+      `« ${ref.nom} » posée sous le dessin, à 50 % — tirez ses bords pour la placer, `
+      + 'ou l’outil Déplacer (V) pour la saisir partout',
+      'success',
+    )
   }
 
   private appliquer(_r: Reference, quoi: string, f: () => void): void {
@@ -112,10 +127,12 @@ export class ReferencesPanel {
     purgerImages(refs.map((r) => r.source))
 
     if (!refs.length) {
+      // Court : ce texte occupe le panneau en permanence, et la colonne de
+      // droite se partage une hauteur fixe — quatre lignes ici, c'est un
+      // panneau voisin qui ne peut plus s'agrandir.
       this.corps.appendChild(el('p', { class: 'refs-vide' },
-        'Aucune référence. Le « + » pose une image sous le dessin — une photo, un croquis, '
-        + 'une planche — qu’on déplace, tourne et redimensionne à la souris, et qui ne part '
-        + 'jamais dans l’export.'))
+        'Aucune référence. Le « + » pose une image sous le dessin — ou glissez-la '
+        + 'dans la fenêtre. On dessine par-dessus ; elle ne part jamais dans l’export.'))
       return
     }
 
@@ -297,9 +314,10 @@ export class ReferencesPanel {
     // Court exprès : les detours sont dans les infobulles des boutons. Un
     // paragraphe de six lignes sous les reglages finit par ne plus se lire.
     reglages.appendChild(el('p', { class: 'refs-vide' },
-      'Coins : dimensionner (Maj libre, Alt depuis le centre). Poignée ronde : tourner '
-      + '(Maj par 15°). Ctrl coupe l’aimantation, les flèches déplacent au pixel, '
-      + 'Échap lâche l’image.'))
+      'Le crayon dessine par-dessus, toujours : pour déplacer l’image, tirez son cadre, '
+      + 'prenez l’outil Déplacer (V), ou servez-vous des flèches. Coins : dimensionner '
+      + '(Maj libre, Alt depuis le centre). Poignée ronde : tourner (Maj par 15°). '
+      + 'Ctrl coupe l’aimantation, Échap lâche l’image.'))
     return reglages
   }
 }

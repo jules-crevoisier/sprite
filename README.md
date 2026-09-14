@@ -158,8 +158,21 @@ moitié d'un mot manque.
 
 #### Les images de référence
 
-Le panneau **Références** pose une image *dans la vue* pour la décalquer : une
-photo, un croquis scanné, une planche trouvée ailleurs.
+**Glissez l'image dans la fenêtre** : sur un dessin en cours, elle se pose
+aussitôt comme référence, sous le dessin, à 50 %. Sinon, le panneau
+**Références** (colonne de droite) et le menu **Calque → Image de référence…**
+font la même chose. Ce geste ouvrait l'image *à la place* du dessin — le
+travail en cours disparaissait de l'écran pour laisser la photo. Sur un
+document vierge il l'ouvre toujours, parce qu'il n'y a rien à perdre et que
+c'est le « j'ouvre ce PNG pour le retoucher ».
+
+**Le dessin gagne toujours sur l'image.** Le crayon écrit par-dessus, même en
+plein milieu de la référence : le corps de l'image ne se saisit qu'avec l'outil
+**Déplacer** (<kbd>V</kbd>), comme un calque ailleurs. Avant, une photo posée
+sur toute la toile rendait le crayon inutilisable — on déplaçait le modèle en
+croyant tracer un trait. Ses poignées, elles, restent saisissables avec
+n'importe quel outil : elles sont sur le cadre, et c'est la seule chose qui
+désigne la référence à l'œil.
 
 **On la manipule comme dans les grands logiciels.** On la **déplace** en la
 tirant, on la **dimensionne** par ses huit poignées — les coins gardent les

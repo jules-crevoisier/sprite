@@ -452,6 +452,125 @@ check('un projet d\'avant l\'angle se relit droit, pas cassé',
   m.angleFichier.ancienAngle === 0 && m.angleFichier.ancienMiroir === false,
   'une image tournée de `undefined` disparaîtrait sans un mot')
 
+/* ---------------------------------------------------------------- */
+/* Dans la vraie fenetre : deposer, puis dessiner par-dessus          */
+/* ---------------------------------------------------------------- */
+
+const sleep = (ms) => page.waitForTimeout(ms)
+await page.getByRole('button', { name: 'Plus tard' }).click().catch(() => {})
+await sleep(300)
+
+/** Depose une image sur la zone de dessin, comme un glisser-deposer. */
+const deposer = () => page.evaluate(async () => {
+  const c = document.createElement('canvas')
+  c.width = 120; c.height = 80
+  const g = c.getContext('2d')
+  g.fillStyle = '#4ab0e0'; g.fillRect(0, 0, 120, 80)
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png'))
+  const dt = new DataTransfer()
+  dt.items.add(new File([blob], 'modele.png', { type: 'image/png' }))
+  const zone = document.getElementById('canvas-area')
+  zone.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }))
+  zone.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }))
+  await new Promise((r) => setTimeout(r, 900))
+  const ed = window.pixelforge.ed
+  let pixels = 0
+  const bm = ed.peekCel().bitmap
+  for (let i = 3; i < bm.data.length; i += 4) if (bm.data[i]) pixels++
+  return {
+    references: ed.sprite.references.length,
+    dessous: ed.sprite.references[0]?.dessous ?? null,
+    opacite: ed.sprite.references[0]?.opacite ?? null,
+    choisie: ed.referenceActive !== null,
+    pixels,
+    calques: ed.sprite.layers.length,
+  }
+})
+
+const boite = await page.locator('#canvas').boundingBox()
+
+// Un trait : desormais il y a du travail a perdre.
+await page.mouse.move(boite.x + 420, boite.y + 300)
+await page.mouse.down()
+for (let i = 0; i < 12; i++) await page.mouse.move(boite.x + 420 + i * 14, boite.y + 300 + i * 8)
+await page.mouse.up()
+await sleep(200)
+const dessinAvant = await page.evaluate(() => {
+  const bm = window.pixelforge.ed.peekCel().bitmap
+  let n = 0
+  for (let i = 3; i < bm.data.length; i += 4) if (bm.data[i]) n++
+  return n
+})
+
+const depot = await deposer()
+
+console.log('\n--- glisser une image sur un dessin en cours ---')
+check('elle devient une référence, pas un nouveau document',
+  depot.references === 1,
+  'le geste ouvrait l\'image A LA PLACE du dessin : le travail disparaissait de l\'écran')
+check('le dessin n\'a pas bougé d\'un pixel',
+  depot.pixels === dessinAvant && depot.calques === 1,
+  `${dessinAvant} pixels avant, ${depot.pixels} après, ${depot.calques} calque`)
+check('elle arrive sous le dessin, à demi transparente, et déjà choisie',
+  depot.dessous === true && depot.opacite === 0.5 && depot.choisie,
+  'prête à être placée, sans un clic de plus')
+
+// Le crayon doit gagner AU MILIEU de l'image.
+const milieu = await page.evaluate(() => {
+  const ed = window.pixelforge.ed, r = ed.sprite.references[0], v = ed.view
+  const b = document.getElementById('canvas').getBoundingClientRect()
+  return { x: b.x + v.panX + (r.x + r.l / 2) * v.zoom, y: b.y + v.panY + (r.y + r.h / 2) * v.zoom }
+})
+const refAvant = await page.evaluate(() => ({ ...window.pixelforge.ed.sprite.references[0] }))
+await page.mouse.move(milieu.x, milieu.y)
+await page.mouse.down()
+for (let i = 0; i < 10; i++) await page.mouse.move(milieu.x + i * 10, milieu.y + i * 4)
+await page.mouse.up()
+await sleep(250)
+const trait = await page.evaluate((av) => {
+  const ed = window.pixelforge.ed
+  const bm = ed.peekCel().bitmap
+  let n = 0
+  for (let i = 3; i < bm.data.length; i += 4) if (bm.data[i]) n++
+  const r = ed.sprite.references[0]
+  return { pixels: n, bougee: r.x !== av.x || r.y !== av.y }
+}, refAvant)
+
+console.log('\n--- le dessin gagne toujours sur l\'image ---')
+check('le crayon écrit en plein milieu de la référence',
+  trait.pixels > depot.pixels,
+  `${depot.pixels} → ${trait.pixels} pixels — une photo posée sur toute la toile `
+  + 'rendait le crayon inutilisable')
+check('et la référence n\'a pas bougé pendant le trait',
+  !trait.bougee, 'on déplaçait le modèle en croyant tracer')
+
+// Avec Deplacer (V), le corps se saisit de nouveau.
+await page.keyboard.press('v')
+await sleep(150)
+await page.mouse.move(milieu.x, milieu.y)
+await page.mouse.down()
+await page.mouse.move(milieu.x + 60, milieu.y + 30, { steps: 8 })
+await page.mouse.up()
+await sleep(200)
+const avecDeplacer = await page.evaluate((av) => {
+  const ed = window.pixelforge.ed
+  const r = ed.sprite.references[0]
+  return {
+    bougee: Math.abs(r.x - av.x) > 0.5 || Math.abs(r.y - av.y) > 0.5,
+    annulable: ed.history.undoLabel,
+  }
+}, refAvant)
+check('l\'outil Déplacer (V) la saisit partout, lui',
+  avecDeplacer.bougee, 'sinon il n\'y aurait plus aucun moyen de la prendre au milieu')
+check('et ce déplacement s\'annule',
+  avecDeplacer.annulable === 'Déplacer la référence', String(avecDeplacer.annulable))
+
+// Echap la lache : la vue revient au dessin.
+await page.keyboard.press('Escape')
+await sleep(150)
+check('Échap lâche la référence',
+  await page.evaluate(() => window.pixelforge.ed.referenceActive === null))
+
 check('aucune erreur JavaScript', erreurs.length === 0, erreurs.join(' | '))
 
 await browser.close()

@@ -132,7 +132,7 @@ export function carteAccueilPixl(app: App): HTMLElement {
     el('ul', { class: 'pixl-accueil-liste' },
       raccourci('Ctrl+K', 'toutes les commandes'),
       raccourci('F1', 'les raccourcis'),
-      raccourci('Glisser', 'importer une image'),
+      raccourci('Glisser', 'une image devient référence'),
     ),
     el('div', { class: 'pixl-accueil-pied' },
       el('button', {

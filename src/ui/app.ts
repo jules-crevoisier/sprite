@@ -41,6 +41,20 @@ import { carteAccueilPixl } from './mascot-ui'
 const AUTOSAVE_INTERVAL = 45_000
 
 /** Assemble l'application : etat, vue, panneaux, commandes et raccourcis. */
+/**
+ * Une image fixe et ordinaire — celle qu'on depose pour decalquer.
+ *
+ * Le GIF en est exclu a dessein : ici, c'est une ANIMATION qu'on importe en
+ * frames, et une reference ne s'anime pas. Le prendre pour un modele
+ * perdrait tout ce qui interesse dans un GIF.
+ */
+function estImageSimple(fichier: File): boolean {
+  const ext = (/\.([^.]+)$/.exec(fichier.name)?.[1] ?? '').toLowerCase()
+  if (ext === 'gif' || fichier.type === 'image/gif') return false
+  return fichier.type.startsWith('image/')
+    || ['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)
+}
+
 export class App {
   readonly ed = new Editor(defaultSprite())
   readonly viewport: Viewport
@@ -256,6 +270,31 @@ export class App {
       e.preventDefault()
       const file = (e as DragEvent).dataTransfer?.files?.[0]
       if (!file) return
+
+      /*
+       * UNE IMAGE DEPOSEE SUR UN DESSIN EN COURS DEVIENT UNE REFERENCE.
+       *
+       * C'est le geste que tout le monde fait pour poser un modele, et il
+       * OUVRAIT l'image a la place du dessin : le travail en cours disparaissait
+       * de l'ecran pour laisser la photo. Techniquement annulable, et
+       * parfaitement decourageant.
+       *
+       * La regle ne demande rien et ne peut rien detruire : sur un document
+       * vierge, deposer une image l'ouvre — c'est le « j'ouvre ce PNG pour le
+       * retoucher », et il n'y a rien a perdre. Des qu'il y a du travail, la
+       * meme image se pose en reference, sous le dessin, a demi transparente.
+       * Les autres formats — projet, Aseprite, GIF, Piskel, palette — ne sont
+       * pas ambigus et s'ouvrent comme avant.
+       */
+      if (estImageSimple(file) && this.travailEnCours()) {
+        try {
+          await this.referencesPanel.poserDepuisFichier(file)
+        } catch (err) {
+          showToast(`Image non posée : ${(err as Error).message}`, 'error')
+        }
+        return
+      }
+
       // Un seul chemin pour tous les formats : projet, Aseprite, GIF, Piskel,
       // image ou palette. Deposer un fichier et s'entendre repondre « format
       // inconnu » alors qu'il s'ouvre par le menu serait incomprehensible.
@@ -320,6 +359,30 @@ export class App {
     this.renderTop()
     this.viewport.updateCursorStyle()
     this.viewport.invalidate()
+  }
+
+  /**
+   * Y a-t-il du travail dans ce document ?
+   *
+   * La question decide du sort d'une image deposee, et elle doit etre PRUDENTE :
+   * en cas de doute, on considere qu'il y a du travail — poser une reference de
+   * trop se defait d'un Ctrl+Z, remplacer un dessin par une photo se paie plus
+   * cher. On regarde donc large : un pixel pose, une reference deja la, un
+   * calque ou une frame ajoutes, ou simplement quelque chose a annuler.
+   */
+  travailEnCours(): boolean {
+    const s = this.ed.sprite
+    if (this.ed.history.canUndo) return true
+    if (s.references.length) return true
+    if (s.layers.length > 1 || s.frameCount > 1) return true
+    for (const layer of s.layers) {
+      for (const cel of layer.cels) {
+        if (!cel) continue
+        const px = cel.bitmap.data
+        for (let i = 3; i < px.length; i += 4) if (px[i]) return true
+      }
+    }
+    return false
   }
 
   setTool(id: ToolId): void {

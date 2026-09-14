@@ -192,11 +192,32 @@ export class Viewport {
     if (ed.referenceActive === null || ed.mode === 'rig') return null
     const r = ed.sprite.references.find((q) => q.id === ed.referenceActive)
     if (!r || !r.visible || r.verrouille) return null
-    return poigneeRef(
+    const poignee = poigneeRef(
       r, px, py,
       (TAILLE_POIGNEE / 1.6) / ed.view.zoom,
       RECUL_ROTATION / ed.view.zoom,
     )
+
+    /*
+     * LE DESSIN GAGNE TOUJOURS SUR L'IMAGE.
+     *
+     * Le CORPS de la reference captait le glisser quel que soit l'outil : une
+     * photo posee sur toute la toile rendait le crayon inutilisable, et l'on
+     * deplacait le modele en croyant tracer un trait. C'est le contraire de ce
+     * qu'on lui demande — une reference est la pour qu'on dessine PAR-DESSUS.
+     *
+     * Le corps ne se saisit donc qu'avec l'outil DEPLACER, comme un calque ne
+     * se deplace qu'avec l'outil de deplacement partout ailleurs. Les
+     * poignees, elles, restent saisissables : elles sont sur le cadre, larges
+     * de neuf pixels d'ecran, et elles sont la seule chose qui DESIGNE la
+     * reference a l'oeil.
+     *
+     * La Main en est exclue, et ce n'est pas un oubli : elle deplace la VUE,
+     * et la saisie des references passant avant elle, on aurait deplace
+     * l'image chaque fois qu'on aurait voulu faire glisser le cadre.
+     */
+    if (poignee === 'corps' && ed.settings.tool !== 'move') return null
+    return poignee
   }
 
   /** La reference choisie, si elle est saisissable. */
