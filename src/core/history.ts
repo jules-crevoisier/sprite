@@ -1,6 +1,7 @@
 import { Bitmap, type Rect } from './bitmap'
 import type { Cel, Layer, Sprite, Slice, Tag } from './document'
 import type { Bone, RigPart } from '../smart/rig'
+import type { Reference } from './reference'
 import type { BlendMode } from './blend'
 
 export interface Command {
@@ -160,6 +161,18 @@ export interface StructureSnapshot {
    * qui sont copies pour rester independants.
    */
   rigParts: RigPart[]
+  /**
+   * Les images de reference : position, taille, angle.
+   *
+   * Elles manquaient ici, et le defaut ne se voyait pas tout de suite : le
+   * panneau passait bien par `run`, donc une commande partait dans
+   * l'historique — mais elle ne photographiait pas les references, et
+   * l'annulation les laissait ou elles etaient. Poser une image puis faire
+   * Ctrl+Z ne la retirait pas ; la tirer de travers ne se rattrapait plus.
+   * La chaine de caracteres de l'image est partagee par reference, donc cette
+   * copie ne coute rien : c'est un pointeur, pas une photo dupliquee.
+   */
+  references: Reference[]
 }
 
 /**
@@ -190,6 +203,7 @@ export function snapshotStructure(sprite: Sprite): StructureSnapshot {
     paletteName: sprite.palette.name,
     bones: sprite.rig.bones.map((b) => ({ ...b })),
     rigParts: sprite.rig.parts.map((p) => ({ ...p, weights: new Uint8Array(p.weights) })),
+    references: sprite.references.map((r) => ({ ...r })),
   }
 }
 
@@ -213,6 +227,7 @@ export function restoreStructure(sprite: Sprite, snap: StructureSnapshot): void 
   sprite.palette.name = snap.paletteName
   sprite.rig.bones = snap.bones.map((b) => ({ ...b }))
   sprite.rig.parts = snap.rigParts.map((p) => ({ ...p, weights: new Uint8Array(p.weights) }))
+  sprite.references = snap.references.map((r) => ({ ...r }))
 }
 
 /**

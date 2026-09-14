@@ -159,10 +159,36 @@ moitié d'un mot manque.
 #### Les images de référence
 
 Le panneau **Références** pose une image *dans la vue* pour la décalquer : une
-photo, un croquis scanné, une planche trouvée ailleurs. On la **déplace** en la
+photo, un croquis scanné, une planche trouvée ailleurs.
+
+**On la manipule comme dans les grands logiciels.** On la **déplace** en la
 tirant, on la **dimensionne** par ses huit poignées — les coins gardent les
-proportions, <kbd>Maj</kbd> les libère — et elle passe **sous** le dessin ou
-par-dessus, à l'opacité qu'on veut.
+proportions, <kbd>Maj</kbd> les libère, <kbd>Alt</kbd> dimensionne depuis le
+centre — et on la **tourne** par la poignée ronde au-dessus du bord haut,
+<kbd>Maj</kbd> par crans de 15°. Une photo prise de travers se redresse donc au
+lieu d'obliger à dessiner de travers pour lui coller.
+
+- **Aimantation** : les bords et le centre de l'image se collent à ceux du
+  cadre, avec une ligne de rappel rose qui dit à quoi — <kbd>Ctrl</kbd> la
+  coupe. Centrer une référence à la main revenait à viser un demi-pixel.
+- **Mesure en direct** pendant le geste : la position, la taille ou l'angle
+  s'affichent sous la boîte, et restent dans la vue même quand l'image en sort.
+- **Champs numériques** : X, Y, largeur, hauteur, angle, opacité. La souris
+  pour chercher, les nombres pour retrouver — aligner deux références ou revenir
+  à un angle rond ne se vise pas à la main.
+- **Cadrages** : *Contenir* (l'image entière tient), *Remplir* (le cadre est
+  couvert), *1:1* (un pixel de l'image pour un pixel du sprite), *Centrer*.
+- **Miroirs** horizontal et vertical : un profil sert à dessiner les deux.
+- Les **flèches** la déplacent au pixel quand sa ligne a le focus, <kbd>Maj</kbd>
+  par dix. <kbd>Échap</kbd> la lâche — tant qu'une référence est choisie, le
+  glisser la déplace au lieu de dessiner, il faut donc une façon évidente de
+  rendre la vue au crayon.
+
+Tout cela **s'annule**. Ce n'était pas le cas au début, et le défaut se cachait
+bien : le panneau passait par l'historique, mais l'instantané de structure ne
+photographiait pas les références — poser une image puis faire <kbd>Ctrl</kbd>+<kbd>Z</kbd>
+ne la retirait pas, et une image tirée de travers ne se rattrapait plus. Un
+geste entier fait **une** entrée d'historique, posée au relâchement.
 
 Ce n'est **pas un calque**, et c'est tout l'intérêt. Une première version en
 faisait un : l'image était réduite à la taille du sprite, gravée dans un
@@ -175,7 +201,7 @@ déborde librement du cadre, puisqu'on cadre le morceau qui intéresse.
 Elle ne se peint pas — il n'y a rien à peindre, ce ne sont pas des pixels du
 sprite — et elle ne s'exporte pas : ni dans le PNG, ni dans la planche, ni dans
 le JSON. Elle part dans le fichier de projet, en revanche : on rouvre son
-dessin avec le modèle qui l'explique.
+dessin avec le modèle qui l'explique, angle et miroirs compris.
 
 C'est le seul endroit de l'éditeur où l'interpolation est permise. Une
 référence n'est pas du dessin, et une photo réduite au plus proche voisin
@@ -498,6 +524,7 @@ courante est restaurée au chargement suivant.
 | Assistant | `Maj+K` mode squelette · `Ctrl+Maj+V` variantes · `Ctrl+Maj+D` détail |
 | Mode squelette | `K` créer des os · `J` poser · `N` pondérer |
 | Aide | `Maj+F1` tutoriels · `F1` raccourcis · `Ctrl+K` commandes |
+| Références | poignées : déplacer, dimensionner (`Maj` libre, `Alt` depuis le centre) · poignée ronde : tourner (`Maj` par 15°) · `Ctrl` coupe l'aimantation · flèches : au pixel · `Échap` lâche l'image |
 | Texte | `T` outil · `Entrée` nouvelle ligne · `Ctrl+Entrée` grave · `Échap` abandonne · flèches : curseur de frappe |
 | Divers | `X` permute les couleurs · `[` `]` taille de brosse · `Échap` annule le geste puis désélectionne |
 
@@ -562,6 +589,15 @@ demande du détail — et elle ne se fabrique **pas** quand le dessin a déjà s
 rampe. Le second point est le plus important : sans lui, l'outil se mettrait à
 inventer des couleurs dans un sprite qui avait sa palette, et la cohérence
 promise ne serait plus qu'un commentaire.
+
+Le banc des **références** tient la géométrie de la manipulation : qu'un point
+fasse l'aller-retour exact dans le repère de l'image tournée — tout le reste en
+dépend, poignées comprises — que tirer un bord d'une image de travers la
+dimensionne le long de *son* axe sans faire bouger le bord opposé d'un pixel,
+que l'aimantation colle ce qu'il faut et rien d'autre, et que poser, déplacer
+et retirer une référence s'annulent. Ce dernier point est celui qui manquait :
+il ne se voyait qu'en faisant <kbd>Ctrl</kbd>+<kbd>Z</kbd> après avoir posé une
+image, et en la voyant rester.
 
 Le banc du **texte** tape un mot dans la vraie fenêtre. C'est là qu'est le
 piège : dans cet éditeur chaque lettre est déjà le raccourci d'un outil — `b`

@@ -7,6 +7,7 @@ import { Emitter } from './events'
 import type { BrushShape, DitherPattern } from '../tools/algorithms'
 import type { PaintMode } from '../tools/painter'
 import type { EasingId } from '../smart/easing'
+import type { BoiteRef } from './reference'
 
 export type ToolId =
   | 'pencil' | 'eraser' | 'bucket' | 'eyedropper'
@@ -84,6 +85,15 @@ export interface EditorEvents {
   documents: void
   /** Le mode de travail a change. */
   mode: EditorMode
+  /**
+   * L'image de reference choisie a change.
+   *
+   * Un evenement a elle : `settings` reconstruit la barre d'options ET le
+   * panneau, ce qui arracherait le champ ou l'on est en train de taper une
+   * position ; `doc` relancerait la sauvegarde automatique pour un simple
+   * changement de selection.
+   */
+  references: void
   /**
    * L'apercu d'un outil a bouge : la vue doit se redessiner, rien d'autre.
    *
@@ -321,6 +331,55 @@ export class Editor {
     const cmd = celDiffCommand(label, befores)
     if (cmd) this.history.push(cmd)
     this.events.emit('doc', undefined)
+  }
+
+  /**
+   * Enregistre un geste sur une image de reference : avant, apres, annulable.
+   *
+   * Le geste a DEJA eu lieu — la reference a suivi la souris pendant tout le
+   * glisser — et l'on ne pose ici que de quoi revenir en arriere. Passer par
+   * `run`, qui photographie la structure entiere avant et apres, marcherait
+   * aussi et couterait une photographie complete a chaque relachement ; cinq
+   * nombres suffisent.
+   *
+   * La reference est retrouvee par son IDENTIFIANT a chaque annulation, jamais
+   * gardee par reference : entre le geste et le Ctrl+Z, une autre commande a
+   * pu reconstruire le tableau des references, et l'on ecrirait alors dans un
+   * objet que plus personne ne regarde.
+   */
+  /**
+   * Choisit l'image de reference a manipuler, ou n'en choisit aucune.
+   *
+   * C'est ce choix qui fait apparaitre les poignees — et qui rend la vue a
+   * l'outil de dessin quand on n'en choisit plus : tant qu'une reference est
+   * choisie, le glisser la deplace au lieu de dessiner, et il faut donc une
+   * facon evidente de la lacher.
+   */
+  choisirReference(id: number | null): void {
+    if (this.referenceActive === id) return
+    this.referenceActive = id
+    this.events.emit('references', undefined)
+  }
+
+  poserGesteReference(
+    id: number, avant: BoiteRef, apres: BoiteRef, label: string,
+  ): void {
+    const memes = (a: BoiteRef, b: BoiteRef): boolean =>
+      a.x === b.x && a.y === b.y && a.l === b.l && a.h === b.h
+      && (a.rotation ?? 0) === (b.rotation ?? 0)
+    if (memes(avant, apres)) return
+    const ecrire = (boite: BoiteRef) => {
+      const r = this.sprite.references.find((q) => q.id === id)
+      if (!r) return
+      r.x = boite.x; r.y = boite.y; r.l = boite.l; r.h = boite.h
+      r.rotation = boite.rotation ?? 0
+      this.events.emit('doc', undefined)
+    }
+    this.history.push({
+      label,
+      undo: () => ecrire(avant),
+      redo: () => ecrire(apres),
+    })
   }
 
   pushCommand(cmd: Command): void {

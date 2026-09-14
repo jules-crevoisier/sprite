@@ -133,7 +133,12 @@ export function installShortcuts(host: ShortcutHost, commands: () => Command[]):
 
     // Echap annule le geste en cours ; a defaut il deselectionne.
     if (combo === 'esc') {
-      if (!host.cancelActive() && ed.selection.active) host.runCommand('edit.deselect')
+      if (host.cancelActive()) return
+      // Une reference choisie capte le glisser : tant qu'on ne l'a pas lachee,
+      // on deplace l'image au lieu de dessiner. Echap la lache d'abord — c'est
+      // la touche qu'on essaie quand quelque chose « ne repond plus ».
+      if (ed.referenceActive !== null) { ed.choisirReference(null); return }
+      if (ed.selection.active) host.runCommand('edit.deselect')
       return
     }
 

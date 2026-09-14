@@ -161,7 +161,15 @@ export async function deserializeSprite(json: string): Promise<Sprite> {
   // Un projet enregistre avant l'editeur de niveaux n'en a pas : c'est un
   // champ facultatif, pas une erreur de lecture.
   sprite.niveau = data.niveau && Array.isArray(data.niveau.cases) ? data.niveau : null
-  sprite.references = (data.references ?? []).map((r) => ({ ...r }))
+  // L'angle et les miroirs sont arrives apres : un projet enregistre avant
+  // eux n'en a pas, et `undefined` ferait tourner l'image d'un angle qui n'est
+  // pas un nombre — elle disparaitrait sans un mot.
+  sprite.references = (data.references ?? []).map((r) => ({
+    ...r,
+    rotation: Number.isFinite(r.rotation) ? r.rotation : 0,
+    miroirX: r.miroirX ?? false,
+    miroirY: r.miroirY ?? false,
+  }))
   sprite.frameDurations = [...data.frameDurations]
   sprite.tags = (data.tags ?? []).map((t) => ({ ...t, id: genId(), color: fromHex(t.color) }))
   sprite.slices = (data.slices ?? []).map((s) => ({ ...s, id: genId(), color: fromHex(s.color) }))

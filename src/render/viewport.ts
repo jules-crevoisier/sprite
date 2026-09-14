@@ -9,7 +9,9 @@ import { deform, boneColor, partFor } from '../smart/rig'
 import { rigState, seamSettings } from '../tools'
 import { fromHex, getR, getG, getB, toCss } from '../core/color'
 import {
-  imageDeReference, poigneeRef, tirerRef, CURSEUR_POIGNEE, type PoigneeRef,
+  imageDeReference, poigneeRef, tirerRef, tournerRef, aimanterRef, coinsRef,
+  centreRef, versMonde, curseurPoignee, RECUL_ROTATION,
+  type PoigneeRef, type BoiteRef, type Aimant, type Reference,
 } from '../core/reference'
 
 const MIN_ZOOM = 0.25
@@ -66,13 +68,23 @@ export class Viewport {
    * a faire, plutot que de le decrire.
    */
   gesture: { from: [number, number]; to: [number, number]; label?: string } | null = null
-  /** Le geste en cours sur une reference : deplacement ou redimensionnement. */
+  /**
+   * Le geste en cours sur une reference : deplacer, dimensionner, tourner.
+   *
+   * `depart` sert a deux choses : calculer la boite courante a partir du
+   * deplacement total — et non cran par cran, ce qui derive — et remplir
+   * l'annulation au relachement. Un geste entier fait UNE entree d'historique,
+   * pas une par pixel parcouru.
+   */
   private gesteRef: {
     poignee: PoigneeRef
-    depart: { x: number; y: number; l: number; h: number }
+    depart: BoiteRef
     px: number
     py: number
+    bouge: boolean
   } | null = null
+  /** Les lignes de rappel de l'aimantation, le temps du geste. */
+  private aimants: Aimant[] = []
 
   /** Position du curseur en coordonnees sprite, ou null hors toile. */
   cursor: { x: number; y: number } | null = null
@@ -104,6 +116,7 @@ export class Viewport {
     editor.events.on('settings', () => this.invalidate())
     editor.events.on('cursor', () => this.invalidate())
     editor.events.on('apercu', () => this.invalidate())
+    editor.events.on('references', () => this.invalidate())
     editor.events.on('reload', () => { this.fit(); this.invalidate() })
 
     const loop = () => {
@@ -179,7 +192,18 @@ export class Viewport {
     if (ed.referenceActive === null || ed.mode === 'rig') return null
     const r = ed.sprite.references.find((q) => q.id === ed.referenceActive)
     if (!r || !r.visible || r.verrouille) return null
-    return poigneeRef(r, px, py, (TAILLE_POIGNEE / 1.6) / ed.view.zoom)
+    return poigneeRef(
+      r, px, py,
+      (TAILLE_POIGNEE / 1.6) / ed.view.zoom,
+      RECUL_ROTATION / ed.view.zoom,
+    )
+  }
+
+  /** La reference choisie, si elle est saisissable. */
+  private refActive(): Reference | null {
+    const ed = this.ed
+    if (ed.referenceActive === null) return null
+    return ed.sprite.references.find((q) => q.id === ed.referenceActive) ?? null
   }
 
   private toSpriteFromCanvas(cx: number, cy: number): { x: number; y: number } {
@@ -398,7 +422,16 @@ export class Viewport {
       const img = imageDeReference(r.source, () => this.invalidate())
       if (!img) continue
       ctx.globalAlpha = Math.max(0, Math.min(1, r.opacite))
-      ctx.drawImage(img, ox + r.x * zoom, oy + r.y * zoom, r.l * zoom, r.h * zoom)
+      const l = r.l * zoom, h = r.h * zoom
+      // Tout se fait autour du CENTRE : c'est le seul point qui ne bouge ni en
+      // tournant, ni en retournant. Poser l'image par son coin obligerait a
+      // corriger la position apres chaque rotation, et l'image glisserait.
+      ctx.save()
+      ctx.translate(ox + (r.x + r.l / 2) * zoom, oy + (r.y + r.h / 2) * zoom)
+      if (r.rotation) ctx.rotate(r.rotation * Math.PI / 180)
+      if (r.miroirX || r.miroirY) ctx.scale(r.miroirX ? -1 : 1, r.miroirY ? -1 : 1)
+      ctx.drawImage(img, -l / 2, -h / 2, l, h)
+      ctx.restore()
     }
     ctx.restore()
     ctx.imageSmoothingEnabled = false
@@ -412,27 +445,117 @@ export class Viewport {
    * entiere a 32x, et une qui rapetisserait deviendrait inattrapable a 1x.
    */
   private drawReferenceHandles(ctx: CanvasRenderingContext2D, ox: number, oy: number, zoom: number): void {
-    const r = this.ed.sprite.references.find((q) => q.id === this.ed.referenceActive)
+    const r = this.refActive()
     if (!r || !r.visible || r.verrouille) return
-    const x = ox + r.x * zoom
-    const y = oy + r.y * zoom
-    const l = r.l * zoom
-    const h = r.h * zoom
+    const ecran = (p: { x: number; y: number }) => ({ x: ox + p.x * zoom, y: oy + p.y * zoom })
+    const coins = coinsRef(r).map(ecran)
+
     ctx.save()
-    ctx.strokeStyle = '#6ea8fe'
-    ctx.lineWidth = 1
-    ctx.setLineDash([4, 3])
-    ctx.strokeRect(x + 0.5, y + 0.5, l - 1, h - 1)
-    ctx.setLineDash([])
-    ctx.fillStyle = '#6ea8fe'
-    const t = TAILLE_POIGNEE
-    for (const [px, py] of [
-      [x, y], [x + l / 2, y], [x + l, y],
-      [x, y + h / 2], [x + l, y + h / 2],
-      [x, y + h], [x + l / 2, y + h], [x + l, y + h],
-    ]) {
-      ctx.fillRect(Math.round(px - t / 2), Math.round(py - t / 2), t, t)
+
+    // Les lignes de rappel de l'aimantation, sous le cadre : elles disent a
+    // quoi la boite vient de se coller. Sans elles, on croit avoir mal vise.
+    for (const a of this.aimants) {
+      ctx.strokeStyle = 'rgba(255,120,190,0.9)'
+      ctx.lineWidth = 1
+      ctx.setLineDash([2, 2])
+      ctx.beginPath()
+      if (a.axe === 'x') {
+        const x = Math.round(ox + a.ou * zoom) + 0.5
+        ctx.moveTo(x, 0); ctx.lineTo(x, this.canvas.height)
+      } else {
+        const y = Math.round(oy + a.ou * zoom) + 0.5
+        ctx.moveTo(0, y); ctx.lineTo(this.canvas.width, y)
+      }
+      ctx.stroke()
+      ctx.setLineDash([])
     }
+
+    // Le cadre suit l'image tournee : un rectangle droit autour d'une image de
+    // travers designerait une boite que personne ne manipule.
+    //
+    // Il est trace DEUX FOIS, sombre dessous et clair dessus. Un liere bleu
+    // d'un pixel sur une photo coloree est invisible une fois sur deux — et un
+    // cadre qu'on ne voit pas revient a ne pas en avoir.
+    ctx.beginPath()
+    coins.forEach((c, i) => (i ? ctx.lineTo(c.x, c.y) : ctx.moveTo(c.x, c.y)))
+    ctx.closePath()
+    ctx.strokeStyle = 'rgba(10,14,24,0.75)'
+    ctx.lineWidth = 3
+    ctx.setLineDash([])
+    ctx.stroke()
+    ctx.strokeStyle = '#8ec0ff'
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([4, 3])
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    const t = TAILLE_POIGNEE
+    const poser = (p: { x: number; y: number }, rond = false) => {
+      ctx.beginPath()
+      if (rond) ctx.arc(p.x, p.y, t / 2, 0, Math.PI * 2)
+      else ctx.rect(Math.round(p.x - t / 2), Math.round(p.y - t / 2), t, t)
+      ctx.fill()
+      ctx.stroke()
+    }
+    ctx.fillStyle = '#6ea8fe'
+    ctx.strokeStyle = 'rgba(10,14,24,0.85)'
+    ctx.lineWidth = 1
+    for (const [lx, ly] of [
+      [0, 0], [r.l / 2, 0], [r.l, 0],
+      [0, r.h / 2], [r.l, r.h / 2],
+      [0, r.h], [r.l / 2, r.h], [r.l, r.h],
+    ]) poser(ecran(versMonde(r, lx, ly)))
+
+    // La poignee de ROTATION, au bout d'une tige au-dessus du bord haut —
+    // comme partout ailleurs. La mettre SUR un coin la rendrait indiscernable
+    // du redimensionnement, qui est le geste voisin et le plus frequent.
+    const hautMilieu = ecran(versMonde(r, r.l / 2, 0))
+    const centre = ecran(centreRef(r))
+    const dx = hautMilieu.x - centre.x, dy = hautMilieu.y - centre.y
+    const norme = Math.hypot(dx, dy) || 1
+    const tige = {
+      x: hautMilieu.x + (dx / norme) * RECUL_ROTATION,
+      y: hautMilieu.y + (dy / norme) * RECUL_ROTATION,
+    }
+    ctx.strokeStyle = '#6ea8fe'
+    ctx.beginPath()
+    ctx.moveTo(hautMilieu.x, hautMilieu.y)
+    ctx.lineTo(tige.x, tige.y)
+    ctx.stroke()
+    ctx.strokeStyle = 'rgba(10,14,24,0.85)'
+    poser(tige, true)
+
+    // Pendant le geste, la mesure en cours. C'est ce que montrent les barres
+    // de transformation des grands logiciels, et pour la meme raison : sans
+    // chiffre, on tire jusqu'a ce que « ca ait l'air bon », et on recommence
+    // le lendemain.
+    const g = this.gesteRef
+    if (g && g.bouge) {
+      const texte = g.poignee === 'rotation'
+        ? `${Math.round(r.rotation)}°`
+        : g.poignee === 'corps'
+          ? `${Math.round(r.x)}, ${Math.round(r.y)}`
+          : `${Math.round(r.l)} × ${Math.round(r.h)} px`
+      ctx.font = '600 11px ui-monospace, monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const large = ctx.measureText(texte).width + 12
+      // La mesure se pose sous la boite — mais JAMAIS hors de la vue. Une
+      // image posee en bas de l'ecran l'envoyait sous le bord, et le chiffre
+      // qu'on regarde pendant le geste etait justement absent au moment ou
+      // l'on en avait besoin.
+      const bas = Math.max(...coins.map((c) => c.y))
+      const milieu = coins.reduce((t2, c) => t2 + c.x, 0) / coins.length
+      const dpr = window.devicePixelRatio || 1
+      const largeurVue = this.canvas.width / dpr, hauteurVue = this.canvas.height / dpr
+      const bx = Math.min(Math.max(large / 2 + 4, milieu), largeurVue - large / 2 - 4)
+      const by = Math.min(bas + 8, hauteurVue - 26)
+      ctx.fillStyle = 'rgba(10,14,24,0.86)'
+      ctx.fillRect(bx - large / 2, by, large, 18)
+      ctx.fillStyle = '#dbe6ff'
+      ctx.fillText(texte, bx, by + 9)
+    }
+
     ctx.restore()
   }
 
@@ -784,13 +907,14 @@ export class Viewport {
        */
       const saisie = this.poigneeSousLeCurseur(sp.x, sp.y)
       if (saisie && e.button === 0) {
-        const r = ed.sprite.references.find((q) => q.id === ed.referenceActive)
+        const r = this.refActive()
         if (r) {
           this.gesteRef = {
             poignee: saisie,
-            depart: { x: r.x, y: r.y, l: r.l, h: r.h },
+            depart: { x: r.x, y: r.y, l: r.l, h: r.h, rotation: r.rotation },
             px: sp.x,
             py: sp.y,
+            bouge: false,
           }
           return
         }
@@ -826,10 +950,32 @@ export class Viewport {
       const sp = this.toSprite(e.clientX, e.clientY)
 
       if (this.gesteRef) {
-        const r = ed.sprite.references.find((q) => q.id === ed.referenceActive)
+        const r = this.refActive()
         if (r) {
           const g = this.gesteRef
-          const apres = tirerRef(g.depart, g.poignee, sp.x - g.px, sp.y - g.py, e.shiftKey)
+          g.bouge = true
+          let apres: BoiteRef
+          if (g.poignee === 'rotation') {
+            // Maj : par crans de quinze degres. C'est le pas de tous les
+            // logiciels de dessin, et celui des angles qu'on vise vraiment.
+            apres = tournerRef(g.depart, sp.x, sp.y, g.px, g.py, e.shiftKey ? 15 : 0)
+            this.aimants = []
+          } else {
+            apres = tirerRef(g.depart, g.poignee, sp.x - g.px, sp.y - g.py, {
+              libre: e.shiftKey,
+              centre: e.altKey,
+            })
+            // Ctrl coupe l'aimantation : il faut pouvoir poser une image a
+            // deux pixels d'un bord sans qu'elle y saute.
+            if (e.ctrlKey || e.metaKey) this.aimants = []
+            else {
+              const colle = aimanterRef(
+                apres, ed.sprite.width, ed.sprite.height, 6 / ed.view.zoom,
+              )
+              apres = colle.boite
+              this.aimants = colle.aimants
+            }
+          }
           Object.assign(r, apres)
           this.ed.events.emit('doc', undefined)
           this.invalidate()
@@ -839,7 +985,7 @@ export class Viewport {
       // Le curseur ANNONCE ce que le clic fera : sans lui, on ne devine pas
       // qu'un bord de reference se tire.
       const survol = this.poigneeSousLeCurseur(sp.x, sp.y)
-      if (survol) cv.style.cursor = CURSEUR_POIGNEE[survol]
+      if (survol) cv.style.cursor = curseurPoignee(survol, this.refActive()?.rotation ?? 0)
       else if (!this.dragging && !this.panning) this.updateCursorStyle()
       this.cursor = sp.x >= 0 && sp.y >= 0 && sp.x < ed.sprite.width && sp.y < ed.sprite.height
         ? sp
@@ -865,8 +1011,24 @@ export class Viewport {
 
     const finish = (e: PointerEvent) => {
       if (this.gesteRef) {
+        const g = this.gesteRef
         this.gesteRef = null
+        this.aimants = []
         this.updateCursorStyle()
+        // Le geste ENTIER fait une entree d'historique, posee au relachement.
+        // Sans elle, une reference tiree de travers ne se rattrapait pas : le
+        // Ctrl+Z sautait par-dessus et defaisait le trait d'avant, ce qui est
+        // la pire facon de ne pas annuler. En poser une par pixel parcouru
+        // remplirait l'historique d'un seul deplacement.
+        const r = this.refActive()
+        if (r && g.bouge) {
+          const nom = g.poignee === 'rotation'
+            ? 'Tourner la référence'
+            : g.poignee === 'corps' ? 'Déplacer la référence' : 'Dimensionner la référence'
+          this.ed.poserGesteReference(r.id, g.depart, {
+            x: r.x, y: r.y, l: r.l, h: r.h, rotation: r.rotation,
+          }, nom)
+        }
         // Une reference deplacee doit rester deplacee quand on rouvre le
         // projet : c'est un changement du document, pas de la vue.
         this.ed.events.emit('doc', undefined)

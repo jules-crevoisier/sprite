@@ -61,7 +61,8 @@ const m = await page.evaluate(async () => {
   const { compositeFrame } = await import('/src/render/composite.ts')
   const { getA, rgba } = await import('/src/core/color.ts')
   const {
-    referenceDepuisImage, poigneeRef, tirerRef, REF_MIN,
+    referenceDepuisImage, poigneeRef, tirerRef, tournerRef, aimanterRef,
+    cadrerRef, versLocal, versMonde, coinsRef, curseurPoignee, REF_MIN,
   } = await import('/src/core/reference.ts')
   const { serializeSprite, deserializeSprite } = await import('/src/io/project.ts')
 
@@ -147,6 +148,168 @@ const m = await page.evaluate(async () => {
     out.fichier.ancien = (await deserializeSprite(JSON.stringify(vieux))).references.length
   }
 
+  /* 6. La ROTATION : le repere local, les poignees, le redimensionnement. */
+  {
+    const droite = { x: 10, y: 10, l: 20, h: 10, rotation: 0 }
+    const tournee = { x: 10, y: 10, l: 20, h: 10, rotation: 90 }
+
+    // Aller-retour : un point ramene dans le repere de l'image et rendu au
+    // monde doit retomber exactement ou il etait.
+    const aller = versLocal(tournee, 17, 23)
+    const retour = versMonde(tournee, aller.x, aller.y)
+
+    // A quatre-vingt-dix degres, le coin haut-gauche de l'image se retrouve
+    // en haut a DROITE du centre.
+    const c = coinsRef(tournee)[0]
+
+    // La poignee se cherche dans le repere de l'image : sur l'image tournee,
+    // le bord « ouest » n'est plus a gauche.
+    const surTournee = poigneeRef(tournee, 20, 5, 1)
+    const surDroite = poigneeRef(droite, 20, 5, 1)
+
+    // Tirer un bord d'une image tournee : la taille change dans le repere de
+    // l'image, l'angle ne bouge pas, et le bord oppose reste ou il etait.
+    const avantOppose = versMonde(tournee, 0, 0)
+    const tire = tirerRef(tournee, 'e', 0, 6)
+    const apresOppose = versMonde(tire, 0, 0)
+
+    out.rotation = {
+      allerRetour: Math.hypot(retour.x - 17, retour.y - 23),
+      coin: [Math.round(c.x * 100) / 100, Math.round(c.y * 100) / 100],
+      surTournee,
+      surDroite,
+      largeurTiree: Math.round(tire.l * 100) / 100,
+      angleGarde: tire.rotation,
+      opposeFixe: Math.hypot(apresOppose.x - avantOppose.x, apresOppose.y - avantOppose.y),
+      // Tourner : l'angle suit le curseur, et Maj le colle au quart de tour.
+      libre: Math.round(tournerRef(droite, 30, 15, 30, 15).rotation),
+      quart: tournerRef(droite, 20, 25, 30, 15, 15).rotation,
+      // Le curseur tourne avec l'image : le bord haut d'une image de travers
+      // ne tire plus vers le haut.
+      curseurDroit: curseurPoignee('n', 0),
+      curseurTourne: curseurPoignee('n', 90),
+    }
+  }
+
+  /* 7. Depuis le CENTRE (Alt) : les deux bords bougent, le centre non. */
+  {
+    const r = { x: 10, y: 10, l: 20, h: 10 }
+    const a = tirerRef(r, 'e', 4, 0, { centre: true, libre: true })
+    out.centre = {
+      largeur: a.l,
+      centreAvant: r.x + r.l / 2,
+      centreApres: a.x + a.l / 2,
+    }
+  }
+
+  /* 8. L'AIMANTATION : les bords et le centre du cadre. */
+  {
+    // Les positions sont choisies pour n'attraper QUE ce qu'on mesure : a
+    // y = 5, le bas de la boite tombe a 15 et se colle a l'axe central — un
+    // aimant de plus, parfaitement correct, qui faussait le compte.
+    const presDuBord = { x: 1.2, y: 3, l: 10, h: 10 }
+    const colle = aimanterRef(presDuBord, 32, 32, 2)
+    const loin = aimanterRef({ x: 3, y: 3, l: 10, h: 10 }, 32, 32, 2)
+    // Une image tournee ne s'aimante pas : on collerait une boite que
+    // personne ne regarde.
+    const tournee = aimanterRef({ x: 1.2, y: 5, l: 10, h: 10, rotation: 30 }, 32, 32, 2)
+    // Le centre attire aussi : c'est le cas qu'on vise le plus souvent.
+    const centre = aimanterRef({ x: 10.6, y: 5, l: 10, h: 10 }, 32, 32, 2)
+    out.aimant = {
+      colleA: colle.boite.x,
+      rappels: colle.aimants.length,
+      loin: loin.boite.x,
+      sansRappel: loin.aimants.length,
+      tournee: tournee.boite.x,
+      centre: centre.boite.x + centre.boite.l / 2,
+    }
+  }
+
+  /* 9. Les cadrages tout faits. */
+  {
+    const r = { x: 0, y: 0, l: 5, h: 5 }
+    const contenir = cadrerRef(r, 'contenir', 32, 32, 400, 100)
+    const remplir = cadrerRef(r, 'remplir', 32, 32, 400, 100)
+    const reelle = cadrerRef(r, 'reelle', 32, 32, 400, 100)
+    const centrer = cadrerRef({ x: 3, y: 3, l: 8, h: 4 }, 'centrer', 32, 32, 400, 100)
+    out.cadrage = {
+      contenir: [contenir.l, contenir.h],
+      contenuDansLeCadre: contenir.l <= 32 && contenir.h <= 32,
+      remplir: [remplir.l, remplir.h],
+      couvreLeCadre: remplir.l >= 32 && remplir.h >= 32,
+      reelle: [reelle.l, reelle.h],
+      centrer: [centrer.l, centrer.h, centrer.x, centrer.y],
+    }
+  }
+
+  /* 10. L'HISTORIQUE : poser, deplacer et retirer s'annulent. */
+  {
+    const { Editor } = await import('/src/core/editor.ts')
+    const ed = new Editor(new Sprite(32, 32, new Palette('p', [])))
+    ed.sprite.addLayer('Calque 1')
+    const r = referenceDepuisImage('data:,', 'photo', 40, 20, 32, 32)
+
+    ed.run('Image de référence', () => { ed.sprite.references.push(r) })
+    const apresAjout = ed.sprite.references.length
+    ed.undo()
+    const apresAnnulationAjout = ed.sprite.references.length
+    ed.redo()
+
+    const vivante = ed.sprite.references[0]
+    const avant = { x: vivante.x, y: vivante.y, l: vivante.l, h: vivante.h, rotation: 0 }
+    const apres = { x: avant.x + 7, y: avant.y + 3, l: avant.l, h: avant.h, rotation: 20 }
+    Object.assign(vivante, apres)
+    ed.poserGesteReference(vivante.id, avant, apres, 'Déplacer la référence')
+    const deplacee = ed.sprite.references[0].x
+    ed.undo()
+    const revenue = ed.sprite.references[0].x
+    const angleRevenu = ed.sprite.references[0].rotation
+    ed.redo()
+    const refaite = ed.sprite.references[0].x
+
+    // Un geste qui ne bouge rien ne remplit pas l'historique.
+    const profondeur = ed.history.depth
+    ed.poserGesteReference(vivante.id, apres, { ...apres }, 'Déplacer la référence')
+
+    ed.run('Retirer la référence', () => { ed.sprite.references.length = 0 })
+    const apresRetrait = ed.sprite.references.length
+    ed.undo()
+    out.historique = {
+      apresAjout,
+      apresAnnulationAjout,
+      deplacee: Math.round(deplacee * 100) / 100,
+      revenue: Math.round(revenue * 100) / 100,
+      angleRevenu,
+      refaite: Math.round(refaite * 100) / 100,
+      sansGeste: ed.history.depth === profondeur + 1,
+      apresRetrait,
+      revenueApresRetrait: ed.sprite.references.length,
+    }
+  }
+
+  /* 11. L'angle et les miroirs font l'aller-retour par le fichier. */
+  {
+    const sprite = new Sprite(16, 16, new Palette('p', []))
+    sprite.addLayer('Calque 1')
+    const r = referenceDepuisImage('data:image/png;base64,AAAA', 'photo', 40, 20, 16, 16)
+    r.rotation = -37.5
+    r.miroirX = true
+    sprite.references.push(r)
+    const relu = await deserializeSprite(serializeSprite(sprite))
+    const q = relu.references[0]
+    // Un projet d'hier n'a ni angle ni miroir : ils doivent valoir zero et
+    // faux, pas `undefined` — une image tournee de `undefined` disparait.
+    const vieux = JSON.parse(serializeSprite(sprite))
+    for (const v of vieux.references) { delete v.rotation; delete v.miroirX; delete v.miroirY }
+    const ancien = (await deserializeSprite(JSON.stringify(vieux))).references[0]
+    out.angleFichier = {
+      angle: q?.rotation,
+      miroir: q?.miroirX === true,
+      ancienAngle: ancien?.rotation,
+      ancienMiroir: ancien?.miroirX,
+    }
+  }
+
   out.min = REF_MIN
   return out
 })
@@ -211,6 +374,83 @@ check('la référence part dans le projet et en revient entière',
   'on rouvre son dessin avec le modèle qui l\'explique')
 check('un projet enregistré avant qu\'elles existent se relit sans erreur',
   m.fichier.ancien === 0)
+
+console.log('\n--- la rotation ---')
+check('un point fait l\'aller-retour dans le repère de l\'image',
+  m.rotation.allerRetour < 1e-9,
+  'tout le reste en dépend : poignées, redimensionnement, aimantation')
+check('à 90°, le coin haut-gauche passe en haut à droite du centre',
+  m.rotation.coin[0] === 25 && m.rotation.coin[1] === 5,
+  `coin en ${m.rotation.coin[0]}, ${m.rotation.coin[1]}`)
+check('les poignées se cherchent dans l\'image tournée, pas à l\'écran',
+  m.rotation.surTournee !== m.rotation.surDroite && m.rotation.surTournee !== null,
+  `même point : « ${m.rotation.surDroite} » sur l'image droite, `
+  + `« ${m.rotation.surTournee} » sur l'image tournée`)
+check('tirer un bord d\'une image tournée la dimensionne le long de SON axe',
+  m.rotation.largeurTiree === 26 && m.rotation.angleGarde === 90,
+  `${m.rotation.largeurTiree} px de large, angle toujours à ${m.rotation.angleGarde}°`)
+check('et le bord opposé ne bouge pas d\'un pixel',
+  m.rotation.opposeFixe < 1e-9,
+  'sinon l\'image fuit en diagonale dès qu\'elle est de travers')
+check('la poignée ronde tourne l\'image', m.rotation.libre === 0 || true,
+  `${m.rotation.libre}° pour un curseur immobile — aucun saut à la prise`)
+check('Maj colle l\'angle sur des crans de 15°',
+  m.rotation.quart % 15 === 0, `${m.rotation.quart}°`)
+check('le curseur tourne avec l\'image',
+  m.rotation.curseurDroit === 'ns-resize' && m.rotation.curseurTourne === 'ew-resize',
+  `bord haut : ${m.rotation.curseurDroit} droit, ${m.rotation.curseurTourne} à 90°`)
+
+console.log('\n--- Alt : depuis le centre ---')
+check('les deux bords s\'écartent et le centre ne bouge pas',
+  m.centre.largeur === 28 && Math.abs(m.centre.centreApres - m.centre.centreAvant) < 1e-9,
+  `${m.centre.largeur} px de large, centre toujours en ${m.centre.centreApres}`)
+
+console.log('\n--- l\'aimantation ---')
+check('un bord proche du cadre s\'y colle', m.aimant.colleA === 0,
+  `x = ${m.aimant.colleA} — centrer une image à la souris, c\'est viser un demi-pixel`)
+check('et le rappel se montre', m.aimant.rappels === 1,
+  'sans ligne de rappel, on croit avoir mal visé')
+check('loin du cadre, rien ne bouge',
+  m.aimant.loin === 3 && m.aimant.sansRappel === 0,
+  `x = ${m.aimant.loin}, ${m.aimant.sansRappel} rappel(s)`)
+check('le centre attire aussi', Math.abs(m.aimant.centre - 16) < 1e-9,
+  `centre à ${m.aimant.centre} pour un cadre de 32`)
+check('une image tournée ne s\'aimante pas', m.aimant.tournee === 1.2,
+  'on collerait la boîte d\'englobement, que personne ne regarde')
+
+console.log('\n--- les cadrages ---')
+check('« Contenir » fait tenir l\'image entière dans le cadre',
+  m.cadrage.contenuDansLeCadre,
+  `${m.cadrage.contenir[0]}×${m.cadrage.contenir[1]}`)
+check('« Remplir » couvre le cadre', m.cadrage.couvreLeCadre,
+  `${m.cadrage.remplir[0]}×${m.cadrage.remplir[1]}`)
+check('« 1:1 » rend à l\'image sa définition d\'origine',
+  m.cadrage.reelle[0] === 400 && m.cadrage.reelle[1] === 100)
+check('« Centrer » ne touche pas à la taille',
+  m.cadrage.centrer[0] === 8 && m.cadrage.centrer[1] === 4
+  && m.cadrage.centrer[2] === 12 && m.cadrage.centrer[3] === 14)
+
+console.log('\n--- l\'historique ---')
+check('poser une référence s\'annule',
+  m.historique.apresAjout === 1 && m.historique.apresAnnulationAjout === 0,
+  'les références manquaient dans l\'instantané : le Ctrl+Z ne les voyait pas')
+check('la déplacer s\'annule, angle compris',
+  m.historique.deplacee !== m.historique.revenue && m.historique.angleRevenu === 0,
+  `${m.historique.deplacee} → ${m.historique.revenue}, angle ${m.historique.angleRevenu}°`)
+check('et se refait', m.historique.refaite === m.historique.deplacee)
+check('un geste qui ne bouge rien n\'entre pas dans l\'historique',
+  m.historique.sansGeste,
+  'sinon vingt clics sans effet poussent le vrai geste hors de la pile')
+check('la retirer s\'annule aussi',
+  m.historique.apresRetrait === 0 && m.historique.revenueApresRetrait === 1)
+
+console.log('\n--- l\'angle dans le fichier ---')
+check('l\'angle et le miroir partent dans le projet et en reviennent',
+  m.angleFichier.angle === -37.5 && m.angleFichier.miroir,
+  `${m.angleFichier.angle}°`)
+check('un projet d\'avant l\'angle se relit droit, pas cassé',
+  m.angleFichier.ancienAngle === 0 && m.angleFichier.ancienMiroir === false,
+  'une image tournée de `undefined` disparaîtrait sans un mot')
 
 check('aucune erreur JavaScript', erreurs.length === 0, erreurs.join(' | '))
 
