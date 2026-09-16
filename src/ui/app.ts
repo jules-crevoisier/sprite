@@ -246,6 +246,8 @@ export class App {
         runCommand: (id) => this.runCommand(id),
         setTool: (id) => this.setTool(id as ToolId),
         cancelActive: () => this.viewport.cancelActive(),
+        clavierReference: (e) => this.viewport.clavierReference(e),
+        transfoReference: () => this.viewport.transfoEnCours(),
       },
       () => this.commands,
     )

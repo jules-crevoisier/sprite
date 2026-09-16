@@ -10,9 +10,13 @@ import { rigState, seamSettings } from '../tools'
 import { fromHex, getR, getG, getB, toCss } from '../core/color'
 import {
   imageDeReference, poigneeRef, tirerRef, tournerRef, aimanterRef, coinsRef,
-  centreRef, versMonde, curseurPoignee, RECUL_ROTATION,
+  centreRef, versMonde, curseurPoignee, cadrerRef, RECUL_ROTATION,
   type PoigneeRef, type BoiteRef, type Aimant, type Reference,
 } from '../core/reference'
+import {
+  demarrerTransfo, boiteTransformee, toucheTransfo, libelleTransfo, nomTransfo,
+  type EtatTransfo, type ModeTransfo,
+} from '../core/reference-transfo'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 64
@@ -85,6 +89,13 @@ export class Viewport {
   } | null = null
   /** Les lignes de rappel de l'aimantation, le temps du geste. */
   private aimants: Aimant[] = []
+  /**
+   * Le geste modal en cours — G, R ou S — a la maniere de Blender.
+   *
+   * Il n'a pas besoin du bouton de la souris : c'est tout l'interet. Tant
+   * qu'il dure, le curseur pilote l'image et le clic ne fait que valider.
+   */
+  private transfo: EtatTransfo | null = null
 
   /** Position du curseur en coordonnees sprite, ou null hors toile. */
   cursor: { x: number; y: number } | null = null
@@ -465,6 +476,130 @@ export class Viewport {
    * zooms : une poignee qui grandirait avec le zoom couvrirait l'image
    * entiere a 32x, et une qui rapetisserait deviendrait inattrapable a 1x.
    */
+  /* ---------------------------------------------------------------- */
+  /* Le geste modal : G, R, S                                          */
+  /* ---------------------------------------------------------------- */
+
+  /** Un geste modal est-il en cours ? La frappe lui appartient alors. */
+  transfoEnCours(): boolean { return this.transfo !== null }
+
+  /**
+   * Demarre un deplacement, une rotation ou une mise a l'echelle au clavier.
+   *
+   * Le curseur sert de point de depart meme s'il est loin de l'image : on
+   * n'attrape rien, on bouge. C'est ce qui permet de deplacer une reference
+   * entierement hors du cadre, ce qu'aucune poignee ne permet.
+   */
+  demarrerTransfoRef(mode: ModeTransfo): boolean {
+    const r = this.refActive()
+    if (!r || !r.visible || r.verrouille) return false
+    const curseur = this.cursor ?? centreRef(r)
+    this.transfo = demarrerTransfo(mode, { x: r.x, y: r.y, l: r.l, h: r.h, rotation: r.rotation }, curseur)
+    this.appliquerTransfo()
+    return true
+  }
+
+  /** Recalcule la boite depuis l'etat du geste, et la pose sur la reference. */
+  private appliquerTransfo(): void {
+    const etat = this.transfo
+    const r = this.refActive()
+    if (!etat || !r) return
+    const curseur = this.cursor ?? etat.ancre
+    const boite = boiteTransformee(etat, curseur)
+    r.x = boite.x; r.y = boite.y; r.l = boite.l; r.h = boite.h
+    r.rotation = boite.rotation ?? 0
+    this.ed.events.emit('references', undefined)
+    this.invalidate()
+  }
+
+  /**
+   * Termine le geste : on pose, ou l'on remet tout comme avant.
+   *
+   * Annuler REMET l'etat de depart sans rien mettre dans l'historique. Un
+   * geste rate n'est pas une annulation a faire apres coup : c'est un geste
+   * qui n'a pas eu lieu, et c'est la difference qu'on sent le plus en venant
+   * de Blender.
+   */
+  finirTransfo(valide: boolean): void {
+    const etat = this.transfo
+    if (!etat) return
+    this.transfo = null
+    const r = this.refActive()
+    this.updateCursorStyle()
+    if (!r) return
+    if (valide) {
+      this.ed.poserGesteReference(r.id, etat.depart, {
+        x: r.x, y: r.y, l: r.l, h: r.h, rotation: r.rotation,
+      }, nomTransfo(etat.mode))
+    } else {
+      r.x = etat.depart.x; r.y = etat.depart.y
+      r.l = etat.depart.l; r.h = etat.depart.h
+      r.rotation = etat.depart.rotation ?? 0
+    }
+    this.ed.events.emit('doc', undefined)
+    this.invalidate()
+  }
+
+  /**
+   * La frappe, quand elle appartient a la reference. Rend true si consommee.
+   *
+   * Deux temps : pendant un geste, tout lui revient — sinon la touche X
+   * echangerait les couleurs au lieu de contraindre l'axe. Hors geste, seules
+   * G, R, S et leurs variantes Alt comptent, et uniquement quand une
+   * reference est choisie.
+   */
+  clavierReference(e: KeyboardEvent): boolean {
+    if (this.transfo) {
+      // Ctrl et Maj ne sont pas des touches d'action : elles CHANGENT le geste
+      // en cours. On les lit a chaque frappe et a chaque mouvement.
+      this.transfo.crans = e.ctrlKey || e.metaKey
+      this.transfo.lent = e.shiftKey
+      if (e.key === 'Control' || e.key === 'Shift' || e.key === 'Meta' || e.key === 'Alt') {
+        this.appliquerTransfo()
+        return true
+      }
+      const suite = toucheTransfo(this.transfo, e)
+      if (suite === 'ignore') return false
+      if (suite === 'confirme') this.finirTransfo(true)
+      else if (suite === 'annule') this.finirTransfo(false)
+      else this.appliquerTransfo()
+      return true
+    }
+
+    const r = this.refActive()
+    if (!r || this.ed.mode === 'rig') return false
+    const k = e.key.toLowerCase()
+    if (e.ctrlKey || e.metaKey) return false
+
+    if (e.altKey) {
+      // Alt+G, Alt+R, Alt+S : remettre a zero, comme dans Blender.
+      const s2 = this.ed.sprite
+      const img = imageDeReference(r.source)
+      const avant: BoiteRef = { x: r.x, y: r.y, l: r.l, h: r.h, rotation: r.rotation }
+      let apres: BoiteRef | null = null
+      if (k === 'g') apres = cadrerRef(avant, 'centrer', s2.width, s2.height, 0, 0)
+      else if (k === 'r') apres = { ...avant, rotation: 0 }
+      else if (k === 's') {
+        apres = cadrerRef(avant, 'reelle', s2.width, s2.height,
+          img?.naturalWidth ?? 0, img?.naturalHeight ?? 0)
+      }
+      if (!apres) return false
+      r.x = apres.x; r.y = apres.y; r.l = apres.l; r.h = apres.h
+      r.rotation = apres.rotation ?? 0
+      this.ed.poserGesteReference(r.id, avant, apres, nomTransfo(
+        k === 'r' ? 'tourner' : k === 's' ? 'dimensionner' : 'deplacer'))
+      this.ed.events.emit('doc', undefined)
+      this.invalidate()
+      return true
+    }
+
+    if (e.shiftKey) return false
+    if (k === 'g') return this.demarrerTransfoRef('deplacer')
+    if (k === 'r') return this.demarrerTransfoRef('tourner')
+    if (k === 's') return this.demarrerTransfoRef('dimensionner')
+    return false
+  }
+
   private drawReferenceHandles(ctx: CanvasRenderingContext2D, ox: number, oy: number, zoom: number): void {
     const r = this.refActive()
     if (!r || !r.visible || r.verrouille) return
@@ -546,17 +681,37 @@ export class Viewport {
     ctx.strokeStyle = 'rgba(10,14,24,0.85)'
     poser(tige, true)
 
+    // L'AXE CONTRAINT, quand le geste modal en impose un : une ligne qui
+    // traverse la vue en passant par le centre de l'image. Blender la dessine
+    // en rouge pour X et en vert pour Y, et l'on comprend d'un coup d'oeil
+    // pourquoi l'image refuse de monter.
+    const t2 = this.transfo
+    if (t2?.axe) {
+      const c = ecran(centreRef(r))
+      ctx.strokeStyle = t2.axe === 'x' ? 'rgba(240,90,90,0.85)' : 'rgba(110,220,120,0.85)'
+      ctx.lineWidth = 1
+      ctx.setLineDash([6, 4])
+      ctx.beginPath()
+      if (t2.axe === 'x') { ctx.moveTo(0, c.y); ctx.lineTo(this.canvas.width, c.y) }
+      else { ctx.moveTo(c.x, 0); ctx.lineTo(c.x, this.canvas.height) }
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+
     // Pendant le geste, la mesure en cours. C'est ce que montrent les barres
     // de transformation des grands logiciels, et pour la meme raison : sans
     // chiffre, on tire jusqu'a ce que « ca ait l'air bon », et on recommence
     // le lendemain.
     const g = this.gesteRef
-    if (g && g.bouge) {
-      const texte = g.poignee === 'rotation'
-        ? `${Math.round(r.rotation)}°`
-        : g.poignee === 'corps'
-          ? `${Math.round(r.x)}, ${Math.round(r.y)}`
-          : `${Math.round(r.l)} × ${Math.round(r.h)} px`
+    const boiteVivante: BoiteRef = { x: r.x, y: r.y, l: r.l, h: r.h, rotation: r.rotation }
+    if (t2 || (g && g.bouge)) {
+      const texte = t2
+        ? libelleTransfo(t2, boiteVivante)
+        : g?.poignee === 'rotation'
+          ? `${Math.round(r.rotation)}°`
+          : g?.poignee === 'corps'
+            ? `${Math.round(r.x)}, ${Math.round(r.y)}`
+            : `${Math.round(r.l)} × ${Math.round(r.h)} px`
       ctx.font = '600 11px ui-monospace, monospace'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -861,6 +1016,9 @@ export class Viewport {
   private drawBrushCursor(ctx: CanvasRenderingContext2D): void {
     const c = this.cursor
     if (!c) return
+    // Pendant un geste modal, le curseur pilote l'image : montrer la pastille
+    // du pinceau la ferait croire qu'on est en train de dessiner.
+    if (this.transfo) return
     const ed = this.ed
     const tool = toolById(ed.settings.tool)
     if (tool.group === 'nav' || tool.group === 'select') return
@@ -914,6 +1072,13 @@ export class Viewport {
     cv.addEventListener('contextmenu', (e) => e.preventDefault())
 
     cv.addEventListener('pointerdown', (e) => {
+      // Un geste modal est en cours : le clic ne dessine pas, il POSE. C'est la
+      // regle de Blender, et c'est ce qui evite qu'un geste se termine par un
+      // trait involontaire au milieu du dessin.
+      if (this.transfo) {
+        this.finirTransfo(e.button === 0)
+        return
+      }
       cv.setPointerCapture(e.pointerId)
       const ed = this.ed
       const sp = this.toSprite(e.clientX, e.clientY)
@@ -926,6 +1091,23 @@ export class Viewport {
        * Blender ou Photoshop, ou l'on deplace un fond sans changer de mode.
        * On la verrouille quand on ne veut plus y toucher.
        */
+      /*
+       * AVEC DEPLACER, LE CLIC CHOISIT L'IMAGE — comme on clique un objet dans
+       * la vue de Blender, plutot que d'aller le chercher dans une liste.
+       *
+       * Seulement avec cet outil : c'est notre mode objet. Sous le crayon, un
+       * clic est un trait, et rien d'autre. On cherche de la plus recente a la
+       * plus ancienne, puisque c'est dans cet ordre qu'elles se recouvrent.
+       */
+      if (ed.settings.tool === 'move' && e.button === 0 && ed.mode !== 'rig') {
+        const sous = [...ed.sprite.references].reverse().find((q) =>
+          q.visible && !q.verrouille
+          && poigneeRef(q, sp.x, sp.y, (TAILLE_POIGNEE / 1.6) / ed.view.zoom) !== null)
+        if (sous && sous.id !== ed.referenceActive) ed.choisirReference(sous.id)
+        // Cliquer a cote lache l'image, comme un clic dans le vide deselectionne.
+        else if (!sous && ed.referenceActive !== null) ed.choisirReference(null)
+      }
+
       const saisie = this.poigneeSousLeCurseur(sp.x, sp.y)
       if (saisie && e.button === 0) {
         const r = this.refActive()
@@ -969,6 +1151,18 @@ export class Viewport {
     cv.addEventListener('pointermove', (e) => {
       const ed = this.ed
       const sp = this.toSprite(e.clientX, e.clientY)
+
+      // Pendant un geste modal, la souris pilote l'image sans rien tenir : le
+      // curseur suit, l'image suit, et aucun outil n'entend parler de ce
+      // mouvement.
+      if (this.transfo) {
+        this.cursor = sp
+        this.transfo.crans = e.ctrlKey || e.metaKey
+        this.transfo.lent = e.shiftKey
+        this.appliquerTransfo()
+        this.onCursorMove?.(Math.floor(sp.x), Math.floor(sp.y))
+        return
+      }
 
       if (this.gesteRef) {
         const r = this.refActive()
@@ -1072,6 +1266,9 @@ export class Viewport {
     cv.addEventListener('pointercancel', finish)
 
     cv.addEventListener('pointerleave', () => {
+      // Pas pendant un geste modal : oublier le curseur ferait sauter l'image
+      // a son point de depart des qu'on frole le bord de la vue.
+      if (this.transfo) return
       this.cursor = null
       this.invalidate()
     })

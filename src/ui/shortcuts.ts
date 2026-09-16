@@ -106,6 +106,10 @@ export interface ShortcutHost {
   setTool(id: string): void
   /** Retourne true si un geste etait en cours. */
   cancelActive(): boolean
+  /** La frappe destinee a l'image de reference. True si elle est consommee. */
+  clavierReference(e: KeyboardEvent): boolean
+  /** Un geste modal de reference — G, R, S — est-il en cours ? */
+  transfoReference(): boolean
 }
 
 /** Installe la gestion clavier globale. */
@@ -114,6 +118,20 @@ export function installShortcuts(host: ShortcutHost, commands: () => Command[]):
 
   const onKey = (e: KeyboardEvent) => {
     if (isTyping(e.target)) return
+
+    /*
+     * UN GESTE MODAL DE REFERENCE PASSE AVANT TOUT.
+     *
+     * Pendant un G, un R ou un S, la frappe entiere appartient au geste : X
+     * contraint l'axe au lieu d'echanger les couleurs, les chiffres donnent la
+     * valeur, Echap remet l'image ou elle etait. C'est la regle de Blender, et
+     * sans elle ces touches feraient deux choses a la fois.
+     */
+    const modal = host.transfoReference()
+    if (modal && host.clavierReference(e)) {
+      e.preventDefault()
+      return
+    }
 
     /*
      * L'OUTIL ACTIF PASSE AVANT LES RACCOURCIS.
@@ -125,6 +143,13 @@ export function installShortcuts(host: ShortcutHost, commands: () => Command[]):
      * lui echappent, et continuent de faire ce qu'ils font partout.
      */
     if (toolById(ed.settings.tool).clavier?.(ed, e)) {
+      e.preventDefault()
+      return
+    }
+
+    // G, R, S quand une reference est choisie : le geste modal demarre. Hors
+    // de ce cas, ces touches restent le pot, le degrade et le reste.
+    if (!modal && host.clavierReference(e)) {
       e.preventDefault()
       return
     }

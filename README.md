@@ -174,12 +174,30 @@ croyant tracer un trait. Ses poignées, elles, restent saisissables avec
 n'importe quel outil : elles sont sur le cadre, et c'est la seule chose qui
 désigne la référence à l'œil.
 
-**On la manipule comme dans les grands logiciels.** On la **déplace** en la
-tirant, on la **dimensionne** par ses huit poignées — les coins gardent les
-proportions, <kbd>Maj</kbd> les libère, <kbd>Alt</kbd> dimensionne depuis le
-centre — et on la **tourne** par la poignée ronde au-dessus du bord haut,
-<kbd>Maj</kbd> par crans de 15°. Une photo prise de travers se redresse donc au
-lieu d'obliger à dessiner de travers pour lui coller.
+**On la manipule comme dans Blender** : <kbd>G</kbd> déplacer, <kbd>R</kbd>
+tourner, <kbd>S</kbd> dimensionner. On n'attrape rien — on appuie sur la
+touche, on bouge la souris sans tenir de bouton, on clique pour poser.
+<kbd>X</kbd> et <kbd>Y</kbd> contraignent l'axe (une ligne rouge ou verte le
+dit), <kbd>Ctrl</kbd> pose par crans, <kbd>Maj</kbd> ralentit, et les chiffres
+tapés donnent la valeur exacte : `G X 12 ↵` déplace de douze pixels vers la
+droite, `R 45 ↵` tourne de quarante-cinq degrés. <kbd>Échap</kbd> remet tout
+comme avant — un geste raté n'est pas une annulation à faire après coup, c'est
+un geste qui n'a pas eu lieu. <kbd>Alt</kbd>+<kbd>G</kbd> recentre,
+<kbd>Alt</kbd>+<kbd>R</kbd> redresse, <kbd>Alt</kbd>+<kbd>S</kbd> rend la taille
+réelle.
+
+Ce détour par le clavier n'est pas un caprice de puriste : **c'est ce qui sépare
+vraiment la référence du dessin**. Puisque le bouton de la souris ne sert jamais
+à l'attraper, elle ne peut plus voler un clic au crayon ; il n'y a plus de
+poignée à viser, donc on déplace une image entièrement sortie du cadre ; et le
+geste s'abandonne sans laisser de trace.
+
+La souris reste possible pour qui préfère : on la **déplace** en la tirant (avec
+l'outil **Déplacer**, <kbd>V</kbd> — c'est notre mode objet, et un clic y choisit
+l'image comme on clique un objet dans Blender), on la **dimensionne** par ses
+huit poignées — les coins gardent les proportions, <kbd>Maj</kbd> les libère,
+<kbd>Alt</kbd> dimensionne depuis le centre — et on la **tourne** par la poignée
+ronde au-dessus du bord haut.
 
 - **Aimantation** : les bords et le centre de l'image se collent à ceux du
   cadre, avec une ligne de rappel rose qui dit à quoi — <kbd>Ctrl</kbd> la
@@ -537,7 +555,7 @@ courante est restaurée au chargement suivant.
 | Assistant | `Maj+K` mode squelette · `Ctrl+Maj+V` variantes · `Ctrl+Maj+D` détail |
 | Mode squelette | `K` créer des os · `J` poser · `N` pondérer |
 | Aide | `Maj+F1` tutoriels · `F1` raccourcis · `Ctrl+K` commandes |
-| Références | poignées : déplacer, dimensionner (`Maj` libre, `Alt` depuis le centre) · poignée ronde : tourner (`Maj` par 15°) · `Ctrl` coupe l'aimantation · flèches : au pixel · `Échap` lâche l'image |
+| Références | `G` déplacer · `R` tourner · `S` dimensionner, puis clic pour poser ou `Échap` pour annuler · `X` `Y` contraignent l'axe · chiffres tapés = valeur exacte · `Alt+G` recentre, `Alt+R` redresse, `Alt+S` taille réelle · `V` puis clic : choisir l'image · flèches : au pixel · `Échap` la lâche |
 | Texte | `T` outil · `Entrée` nouvelle ligne · `Ctrl+Entrée` grave · `Échap` abandonne · flèches : curseur de frappe |
 | Divers | `X` permute les couleurs · `[` `]` taille de brosse · `Échap` annule le geste puis désélectionne |
 
@@ -603,7 +621,11 @@ rampe. Le second point est le plus important : sans lui, l'outil se mettrait à
 inventer des couleurs dans un sprite qui avait sa palette, et la cohérence
 promise ne serait plus qu'un commentaire.
 
-Le banc des **références** tient la géométrie de la manipulation : qu'un point
+Le banc des **références** tape vraiment `G X 12 ↵` dans la fenêtre, et vérifie
+que l'image bouge de douze pixels sur X et de rien sur Y ; que <kbd>Échap</kbd>
+la remet exactement où elle était sans rien laisser dans l'historique ; et que
+sans référence choisie, `G` reste le pot de peinture — une touche empruntée doit
+être rendue. Il tient aussi la géométrie de la manipulation : qu'un point
 fasse l'aller-retour exact dans le repère de l'image tournée — tout le reste en
 dépend, poignées comprises — que tirer un bord d'une image de travers la
 dimensionne le long de *son* axe sans faire bouger le bord opposé d'un pixel,

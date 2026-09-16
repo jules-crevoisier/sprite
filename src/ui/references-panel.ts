@@ -313,11 +313,13 @@ export class ReferencesPanel {
 
     // Court exprès : les detours sont dans les infobulles des boutons. Un
     // paragraphe de six lignes sous les reglages finit par ne plus se lire.
+    // Les touches d'abord : c'est la façon dont on manipule vraiment l'image,
+    // et celle qu'on ne devine pas. Le reste est dans les infobulles.
     reglages.appendChild(el('p', { class: 'refs-vide' },
-      'Le crayon dessine par-dessus, toujours : pour déplacer l’image, tirez son cadre, '
-      + 'prenez l’outil Déplacer (V), ou servez-vous des flèches. Coins : dimensionner '
-      + '(Maj libre, Alt depuis le centre). Poignée ronde : tourner (Maj par 15°). '
-      + 'Ctrl coupe l’aimantation, Échap lâche l’image.'))
+      'G déplacer · R tourner · S dimensionner — puis la souris, clic pour poser, '
+      + 'Échap pour annuler le geste. X ou Y contraint l’axe, Ctrl pose par crans, '
+      + 'les chiffres tapés donnent la valeur (G X 12 ↵). Alt+G recentre, Alt+R redresse, '
+      + 'Alt+S rend la taille réelle. Le crayon, lui, dessine toujours par-dessus.'))
     return reglages
   }
 }

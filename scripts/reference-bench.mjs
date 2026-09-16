@@ -571,6 +571,104 @@ await sleep(150)
 check('Échap lâche la référence',
   await page.evaluate(() => window.pixelforge.ed.referenceActive === null))
 
+/* ---------------------------------------------------------------- */
+/* G, R, S : les gestes modaux, repris de Blender                     */
+/* ---------------------------------------------------------------- */
+
+const lireRef = () => page.evaluate(() => {
+  const r = window.pixelforge.ed.sprite.references[0]
+  return { x: +r.x.toFixed(2), y: +r.y.toFixed(2), l: +r.l.toFixed(2), h: +r.h.toFixed(2), rot: +r.rotation.toFixed(2) }
+})
+const memeBoite = (a, b) => a.x === b.x && a.y === b.y && a.l === b.l && a.h === b.h && a.rot === b.rot
+
+// On la choisit en CLIQUANT dessus avec Deplacer, comme un objet de Blender.
+await page.keyboard.press('v')
+await sleep(120)
+await page.mouse.move(milieu.x, milieu.y)
+await page.mouse.down()
+await page.mouse.up()
+await sleep(150)
+check('avec Déplacer, cliquer l\'image la choisit',
+  await page.evaluate(() => window.pixelforge.ed.referenceActive !== null),
+  'on clique l\'objet, on ne va pas le chercher dans une liste')
+
+// G : on bouge sans rien tenir, le clic pose.
+const avantG = await lireRef()
+await page.mouse.move(milieu.x, milieu.y)
+await page.keyboard.press('g')
+await page.mouse.move(milieu.x + 100, milieu.y + 60, { steps: 10 })
+await sleep(120)
+const pendantG = await lireRef()
+await page.mouse.down(); await page.mouse.up()
+await sleep(150)
+const apresG = await lireRef()
+check('G déplace l\'image sans qu\'on tienne le bouton',
+  !memeBoite(avantG, pendantG),
+  'on n\'attrape rien : c\'est ce qui l\'empêche de voler un clic au dessin')
+check('et le clic la pose', memeBoite(pendantG, apresG))
+
+// G puis Echap : le geste n'a pas eu lieu.
+await page.keyboard.press('g')
+await page.mouse.move(milieu.x - 120, milieu.y - 90, { steps: 8 })
+await sleep(100)
+await page.keyboard.press('Escape')
+await sleep(150)
+check('Échap remet l\'image exactement où elle était',
+  memeBoite(await lireRef(), apresG),
+  'un geste raté n\'est pas une annulation à faire après coup')
+check('et n\'a rien mis dans l\'historique',
+  await page.evaluate((n) => window.pixelforge.ed.history.undoLabel === n, 'Déplacer la référence'))
+
+// G X 12 Entree : axe contraint et valeur tapee.
+const avantTape = await lireRef()
+await page.keyboard.press('g')
+await page.keyboard.press('x')
+await page.keyboard.type('12')
+await page.keyboard.press('Enter')
+await sleep(150)
+const apresTape = await lireRef()
+check('G X 12 ↵ déplace de douze pixels, sur X seulement',
+  Math.abs(apresTape.x - avantTape.x - 12) < 0.01 && Math.abs(apresTape.y - avantTape.y) < 0.01,
+  `dx = ${(apresTape.x - avantTape.x).toFixed(2)}, dy = ${(apresTape.y - avantTape.y).toFixed(2)}`)
+
+// R 45, S 2, puis les remises a zero.
+await page.keyboard.press('r')
+await page.keyboard.type('45')
+await page.keyboard.press('Enter')
+await sleep(150)
+check('R 45 ↵ tourne de quarante-cinq degrés',
+  Math.abs((await lireRef()).rot - 45) < 0.01)
+
+const avantS = await lireRef()
+await page.keyboard.press('s')
+await page.keyboard.type('2')
+await page.keyboard.press('Enter')
+await sleep(150)
+const apresS = await lireRef()
+check('S 2 ↵ double la taille, autour du centre',
+  Math.abs(apresS.l - avantS.l * 2) < 0.01
+  && Math.abs((apresS.x + apresS.l / 2) - (avantS.x + avantS.l / 2)) < 0.01,
+  `${avantS.l} → ${apresS.l} px, centre inchangé`)
+
+await page.keyboard.press('Alt+r')
+await sleep(150)
+check('Alt+R redresse l\'image', (await lireRef()).rot === 0)
+await page.keyboard.press('Alt+g')
+await sleep(150)
+const recentree = await lireRef()
+check('Alt+G la recentre',
+  Math.abs((recentree.x + recentree.l / 2) - 16) < 0.01,
+  `centre en ${(recentree.x + recentree.l / 2).toFixed(2)} pour un sprite de 32`)
+
+// Hors reference, G reste le pot de peinture : on n'a pas vole la touche.
+await page.keyboard.press('Escape')
+await sleep(120)
+await page.keyboard.press('g')
+await sleep(150)
+check('sans référence choisie, G reste le pot de peinture',
+  await page.evaluate(() => window.pixelforge.ed.settings.tool === 'bucket'),
+  'la touche n\'est prise que pendant qu\'une image est choisie')
+
 check('aucune erreur JavaScript', erreurs.length === 0, erreurs.join(' | '))
 
 await browser.close()
