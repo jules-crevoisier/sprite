@@ -13,11 +13,12 @@
 
 services:
   pixelforge:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: pixelforge:latest
+    # Image construite par GitHub Actions (.github/workflows/deploy.yml).
+    # Construction locale : docker compose -f docker-compose.local.yml up -d --build
+    image: ${SPRITE_IMAGE:-ghcr.io/jules-crevoisier/sprite}:${SPRITE_TAG:-latest}
+    pull_policy: always
     restart: unless-stopped
+    mem_limit: 32m
 
     # Visible uniquement depuis le reseau Docker, jamais depuis l'hote.
     expose:
